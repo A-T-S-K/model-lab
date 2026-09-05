@@ -1,0 +1,125 @@
+# Read the Model Lab code
+
+Model Lab runs a real, very small scalar transformer. Start with the numbers and the model; the browser and trace code can wait. The initial fixture is untrained, uses the characters `a`, `b`, `c` plus BOS, and has **896 parameters**. That count belongs to this configuration: one layer, embedding width 8, two heads, and context 8. It is not a constant for microgpt or transformers generally.
+
+Follow this path:
+
+1. [Reference provenance](reference/PROVENANCE.md), then `forward` in [the independent Python oracle](reference/microgpt_reference.py).
+2. `Value` in [model/value.ts](model/value.ts), then `backward` in [model/autograd.ts](model/autograd.ts).
+3. `forward`, `rmsNorm`, `softmax`, and `loss` in [model/microgpt.ts](model/microgpt.ts).
+4. `adamStep` and `trainStep` in [model/training.ts](model/training.ts).
+5. `snapshotTraining` and `restoreTraining` in [model/state.ts](model/state.ts).
+6. `TraceRecorder` in [trace/recorder.ts](trace/recorder.ts), then `TracePlayer` in [trace/player.ts](trace/player.ts).
+7. `ModelSession` and `attentionDetail` in [app/worker/controller.ts](app/worker/controller.ts), then [the browser application](app/).
+
+The model imports neither the trace implementation nor the application. You can understand and execute its mathematics without either.
+
+## 1. Establish what the numbers mean
+
+Open [canonical.initial.json](fixtures/canonical.initial.json) beside the [fixture format guide](fixtures/README.md). `parameterOrder` defines how matrix entries map to optimizer arrays. Each matrix is stored as output rows by input columns. The input for `abca` is `[BOS, a, b, c, a]`; its targets are `[a, b, c, a, BOS]`. Each prediction is conditioned on the prefix available at that position.
+
+**Real:** committed initialized matrices are actual model parameters. [generate_fixture.py](reference/generate_fixture.py) independently computes the expected forward values, gradients, Adam update, and fixed-input output after that update. It consumes the committed numbers, with no TypeScript dependency or RNG call.
+
+**Simplified:** the dataset is one short canonical example. The fixture captures teacher forcing, so it needs no random sampling state. Its `rngState: null` is not a seed or a promise that stochastic sampling can resume.
+
+**Generalizes:** a checkpoint and a reproducible input make numerical comparisons meaningful. **Does not directly generalize:** this vocabulary and untrained state cannot demonstrate a useful language model or the capabilities of a large pretrained model.
+
+**Try:** inspect `wte[3]`, the BOS embedding, and compare it with the first position's `tokenEmbedding` in [canonical.expected.json](fixtures/canonical.expected.json). Do not manually adjust expected output to fit a changed runtime.
+
+**Tests worth reading:** `test_initial_numeric_state_is_bound_to_expected_evidence`, `test_bos_and_targets_are_authentic_shifted_document`, and `test_fixture_regenerates_byte_for_byte` in [the Python tests](tests/reference/test_reference.py).
+
+The upstream reference is Andrej Karpathy's gist revision `14fb038816c7aae0bb9342c2dbf1a51dd134a5ff`. This repository's Python oracle is independently authored. It was checked against the exact original source using [compare_upstream.py](reference/compare_upstream.py): 3,676 compared values had maximum absolute difference 0.0. The original source is not vendored; [provenance](reference/PROVENANCE.md) preserves attribution, content hash, license-evidence observations, and intentional differences without making a license decision.
+
+## 2. Follow a scalar and its gradient
+
+In `Value.mul`, read `data`, `parents`, and `localDerivatives` together. Multiplication stores its forward result and the local derivatives needed later. `backward` visits graph nodes in reverse topological order and adds each contribution into the parent gradient. A shared node is visited once, but every incoming contribution matters.
+
+**Real:** this is reverse-mode automatic differentiation through the actual forward graph. **Simplified:** each scalar is an individual JavaScript object, and gradients use explicit graph traversal.
+
+**Generalizes:** the chain rule, gradient accumulation, and separating forward computation from backward propagation. **Does not directly generalize:** object-per-scalar execution is not how production GPU tensor libraries achieve throughput.
+
+**Try:** trace `x * x + x * x + x` at `x = 3`. Its value is 21 and its derivative is 13. Removing one repeated derivative edge changes the answer even when the shared node itself remains present.
+
+**Tests worth reading:** “shared autograd paths accumulate repeated edges and shared subexpressions” and “backward handles deep graphs without depending on the JavaScript call stack” in [model conformance tests](tests/model/conformance.test.ts).
+
+## 3. Follow embeddings into causal attention
+
+Read `forward` from its token loop. It selects the token and position embeddings, adds them, and applies embedding RMSNorm. Inside the layer it saves that result as a residual, applies pre-attention RMSNorm, and projects Q, K, and V. **Both normalizations are part of the pinned algorithm.** The saved residual branches before the second normalization, so deleting the first normalization changes the graph and model.
+
+For each head and past/current key position, the attention score is:
+
+```text
+score(query, key) = sum_j(Q[j] * K[j]) / sqrt(head width)
+weights = softmax(scores over available key positions)
+head output[j] = sum_key(weights[key] * V[key][j])
+```
+
+Keys and values from earlier positions remain `Value` objects attached to the graph. Later-position loss can therefore update earlier embeddings through K/V. These arrays are not a detached inference cache. Future positions have no entries: an unavailable attention cell is not an observed score of zero.
+
+**Real:** learned embedding matrices, normalization, Q/K/V projections, causal softmax, and weighted values. **Simplified:** one layer and two small heads, scalar arithmetic, and short explicit sequential execution.
+
+**Generalizes:** prefix conditioning and the mechanics of scaled dot-product attention. **Does not directly generalize:** this exact normalization placement, character tokenizer, and learned position table are not universal transformer design choices.
+
+**Try:** select the last query and an earlier key in the inspector. Multiply each Q/K pair, sum the products, apply the scale, and compare with the captured logit. Then select a future key and look for an unavailable state.
+
+**Tests worth reading:** “forward matches every Python semantic vector,” “attention probabilities sum to one; future positions are absent,” and “last-position loss reaches earlier token embeddings through causal K/V” in [model tests](tests/model/conformance.test.ts).
+
+## 4. Follow the residual stream to a probability
+
+After concatenating heads, `forward` applies the attention output matrix and adds the residual. It normalizes the new stream before the MLP, projects up to four times the embedding width, applies ReLU, projects down, and adds the next residual. The output matrix produces logits directly. **There is no final RMSNorm in this organism.** `softmax` turns those logits into a distribution, and `loss` uses the negative log probability of each target, averaged over positions.
+
+**Real:** matrix products, nonlinear activation, residual connections, a normalized probability distribution, and target cross-entropy. **Simplified:** no biases, dropout, or learned normalization gains; ReLU is the chosen activation.
+
+**Generalizes:** logits, conditional distributions, residual paths, and cross-entropy. **Does not directly generalize:** the largest probability is not evidence that an untrained model understands the input, and probability mass is not a general confidence guarantee.
+
+**Try:** compare `mlpUp` with `mlpRelu` for one position and locate the negative entries that become zero. Follow `mlpResidual` through `lm_head` to the final logits.
+
+**Tests worth reading:** the forward, loss, and gradient comparisons in [model tests](tests/model/conformance.test.ts); `test_captured_loss_uses_target_probability` in [Python tests](tests/reference/test_reference.py).
+
+## 5. Make one actual optimizer update
+
+`trainStep` clears parameter gradients, calculates the real mean loss, calls `backward`, and passes those gradients to `adamStep`. The optimizer records the first and second moments before/after, bias-corrected moments, effective learning rate, parameter values, and actual stored delta. The displayed delta is `after - before`, including floating-point rounding. A fresh `predict` then runs the same fixed input using the updated parameters.
+
+**Real:** genuine one-step optimization, with the gradient and moments actually used by Adam. **Simplified:** one document per update and a short linear learning-rate schedule.
+
+**Generalizes:** gradients inform optimizer updates, and Adam continuation needs moment buffers and step/schedule state. **Does not directly generalize:** a changed distribution, changed top token, or a sampled string is not a blanket improvement claim. A claim about improvement needs a named metric and evaluation data. A changed top token is not required for a valid update.
+
+**Try:** inspect one parameter before/after and verify `before + delta = after`. Reset to the initial state and compare the same fixed input again. Read `snapshotTraining` before trying continuation: parameters alone omit Adam moments, schedule position, dataset cursor, and any current RNG state in use.
+
+**Tests worth reading:** “Adam moments, corrected moments, actual deltas, parameters and post-update forward match Python,” “Learn displays the optimizer gradient and applied delta,” and “serialized complete snapshot resumes the same second Adam update and schedule” in [model tests](tests/model/conformance.test.ts).
+
+## 6. Distinguish execution from evidence
+
+The model's optional observer receives numeric copies after operations have run. `TraceRecorder` copies and freezes that evidence, bounds values and artifact metadata, and labels unavailable capture explicitly. `TracePlayer` can replay saved JSON without importing the model. See [evidence and operations](docs/evidence-and-operations.md) for the precise vocabulary.
+
+**Real:** the displayed semantic vectors originate in model execution. **Simplified:** the recorder captures useful semantic boundaries, not every scalar node and local derivative by default.
+
+**Generalizes:** immutable evidence, explicit provenance, and bounded capture. **Does not directly generalize:** these provisional concept names are not a universal ontology for every neural network.
+
+**Try:** compare semantic and summary capture. A missing Q vector should become `not_captured`, never `[0, 0, ...]`. Replay a JSON recording after changing live parameters and verify that its old values remain unchanged.
+
+**Tests worth reading:** observer invariance in [model tests](tests/model/conformance.test.ts); immutable recordings, missing evidence, runtime-independent replay, and the test-only logistic producer in [trace tests](tests/trace/evidence.test.ts).
+
+## 7. Cross the worker boundary last
+
+`ModelSession` owns the live model/optimizer and records predictions. `attentionDetail` derives multiplication terms from captured Q/K arrays and reports the separately observed logit and probability. `ModelWorkerClient` sends tagged commands to the worker, rejects responses from old sessions/generations, and terminates/restarts the worker on reset. Cancellation uses that same reset path and restores the fixture; it does not retain partially completed training.
+
+**Real:** browser-local model execution occurs in a worker, with batched result objects sent to the page. **Simplified:** work inside one model command is synchronous; cancellation terminates the worker rather than interrupting its scalar loop cooperatively.
+
+**Generalizes:** separating UI responsiveness from computation and rejecting stale responses. **Does not directly generalize:** this small command protocol is not a distributed training service.
+
+**Try:** follow a `predict` request through [client.ts](app/worker/client.ts), [protocol.ts](app/worker/protocol.ts), [worker.ts](app/worker/worker.ts), and `ModelSession.handle`. For a `train` request, distinguish the `learn` before/update/after payload from the semantic recording: that recording describes a prediction using the post-update model.
+
+**Tests worth reading:** start with the fixed-input update and snapshot tests above, then follow the worker/browser checks listed by [package.json](package.json) as integration evolves.
+
+## Numerical acceptance
+
+JavaScript `number` and Python `float` use binary64 in the validated environments. TypeScript-to-Python fixture checks require:
+
+```text
+abs(actual - expected) <= 1e-10 + 1e-9 * abs(expected)
+```
+
+No canonical numbers are rounded for display. This tolerance allows last-bit differences in ordered reductions and transcendental functions; it is not permission to fabricate unavailable values. Finite-difference gradient checks have their own documented tolerances. Python fixture regeneration separately checks exact serialized bytes in the validated environment.
+
+From the Model Lab directory, `npm run test:reference` runs the offline oracle tests and deterministic regeneration, and `npm test` runs the configured TypeScript suites. [package.json](package.json) lists build and browser acceptance commands. Those commands exercise implementation evidence; this guide itself is not an acceptance log.
