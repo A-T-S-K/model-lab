@@ -5,5 +5,5 @@
     "strict": true, "noEmit": true, "resolveJsonModule": true,
     "allowImportingTsExtensions": true, "skipLibCheck": true
   },
-  "include": ["model", "trace", "app", "tests", "*.ts"]
+  "include": ["model", "trace", "app", "examples", "tests", "*.ts"]
 }

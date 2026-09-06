@@ -1,10 +1,10 @@
 {
   "name": "ai-village-model-lab",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
+    "dev": "npm run build && vite preview --host 127.0.0.1",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test tests/model/*.test.ts tests/trace/*.test.ts tests/integration/*.test.ts tests/app/*.test.ts tests/integration/*.test.mjs",
     "test:reference": "python3 -m unittest discover -s tests/reference -v && python3 reference/generate_fixture.py --check",
@@ -17,12 +17,13 @@
     "benchmark:training": "node --expose-gc --import tsx scripts/benchmark-training.ts",
     "benchmark:experiments": "node --import tsx scripts/benchmark-experiments.ts",
     "runtime:identity": "node scripts/runtime-identity.mjs",
-    "predev": "npm run runtime:identity",
     "pretypecheck": "npm run runtime:identity",
     "pretest": "npm run runtime:identity",
     "prebenchmark:capture": "npm run runtime:identity",
     "prebenchmark:training": "npm run runtime:identity",
-    "prebenchmark:experiments": "npm run runtime:identity"
+    "prebenchmark:experiments": "npm run runtime:identity",
+    "example": "node --import tsx examples/predict-teach.ts",
+    "measure:guided": "node --import tsx scripts/measure-guided.ts"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

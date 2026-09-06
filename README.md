@@ -1,6 +1,12 @@
 # Model Lab
 
-An isolated, browser-local scalar GPT teaching experience. Guided introduces the actual prediction. Explore selects semantic values and historical checkpoints. Microscope recursively exposes primitive operations, structural inputs, and actual backward contributions. Learn records an explicit before-state → observed training execution → after-state experiment. The tiny initial model is untrained; changed probabilities alone are not an improvement claim.
+This tiny GPT sees characters and predicts what comes next. Start with `abca`: after seeing `abc`, how likely does it think `a` is? Predict, teach it with real updates, then compare the probability before and after.
+
+Characters become **tokens**: numbered entries in a small vocabulary. Each token ID and its position select vectors of numbers. Attention mixes information from the current and earlier positions; an MLP (a small feed-forward network) transforms those features. The model turns the resulting scores into **probabilities**—shares of the next-token distribution that sum to one.
+
+A **parameter** is an adjustable number used in those calculations. The known next character supplies a target. **Loss** measures how poorly the model predicts the targets; lower loss on this example means it assigned them more probability overall. A **gradient** says how a small parameter change would affect that loss. Training uses the gradients to change parameters, then predicts the same input again.
+
+The model starts untrained and uses only `a`, `b`, `c`, and a shared start/end marker. Fitting this one example demonstrates learning mechanics, not useful language understanding.
 
 ## Run locally
 
@@ -12,7 +18,11 @@ npm ci
 npm run dev
 ```
 
-Open the localhost URL printed by Vite. Enter up to seven characters from `a`, `b`, and `c`. BOS is added automatically. Select a token, model stage, attention head, and causal cell to inspect evidence. Learn trains on the displayed document with shifted character targets and terminal BOS. Reset model restores the selected or canonical snapshot and preserves the archive. Cancel terminates current work and restores the last completed live snapshot. Clear session clears both workers, runs, experiments and comparisons; kiosk inactivity invokes Clear session.
+Open the localhost URL printed by Vite. `npm run dev` builds and serves fixed local assets. After editing source, stop and restart it to rebuild; automatic source hot-reloading is disabled so running workers and their recorded runtime revision stay aligned. Guided follows **Predict → Teach → See What Changed**. Its canonical example follows the prefix `abc` and target `a`, using 10 real updates selected from a [fixed deterministic measurement](docs/guided-measurement.md). The numbers shown come from your actual run.
+
+Enter up to seven characters from `a`, `b`, and `c`. The START / END marker is added automatically; the same marker is called BOS in the technical views. Edited input makes old evidence visibly stale until Predict runs again. Explore opens positions, stages, attention, one-step Learn, and history. Microscope follows individual arithmetic operations, gradients, and Adam (the optimizer that calculates parameter updates).
+
+Reset model restores the selected or canonical state and preserves history. Cancel restores the last completed live state. Clear session clears both workers and the session history; opt-in Exhibit mode does this after five minutes without activity.
 
 Live model arithmetic runs in its owning Web Worker. A separate inspector worker reconstructs old runs and verifies all available semantic anchors before returning recomputed detail. No live `Value` object leaves its owner. Core runtime assets are bundled locally: no model API, remote font, dataset download, or WAN access is required after installing/building. Development dependency installation may require Internet access.
 
@@ -51,9 +61,9 @@ The container serves static assets only. The browser executes the scalar model. 
 
 ## Scope
 
-This fixture uses one layer, eight embedding features, two heads, eight context positions, three characters plus BOS, and **896 parameters**. Parameter count follows configuration. Model source remains independent of tracing and UI. The evidence player supports immutable replay and explicit missing values; attention arithmetic detail is **derived from observed live Q/K**, not a newly executed model run. Next-token selection uses the highest probability at the final input position, with no sampling claim.
+This fixture uses one layer, eight embedding features, two heads, eight context positions, three characters plus BOS, and **896 parameters**. Parameter count follows configuration. Model source remains independent of tracing and UI. The evidence player supports immutable replay and explicit missing values; attention arithmetic detail is **derived from observed live Q/K**, not a newly executed model run. Next-token selection uses the highest probability at the selected input position, with no random sampling.
 
-The upstream gist is pinned by revision and SHA-256. The committed Python oracle is independently authored and checked against the original downloaded reference; upstream source is not vendored because its license status is unresolved. No license decision is made. See the provenance document for the exact validation command and evidence.
+The upstream gist is pinned by revision and SHA-256. The committed Python oracle is independently authored and checked against the original downloaded reference; upstream source is not vendored. The pinned file has no license header; Karpathy later explicitly stated that microgpt is MIT licensed. This pass makes no repository-level licensing decision. See the provenance document for the exact validation command and evidence.
 
 Controlled ablation and matched training-data substitution research are documented in [experiment evidence](docs/experiments-v0.2.md). This slice makes no attack-success or security-effectiveness claims.
 
@@ -64,3 +74,14 @@ Current Predict retains full private scalar evidence. Learn snapshots actual gra
 History uses SHA-256 over a canonical binary64 encoding of complete state, including parameter order, moments, schedule, cursor and RNG continuation. The main-thread archive accepts only immutable plain data and validated references. Cached observed detail remains observed; uncaptured historical detail is labelled VERIFIED RECOMPUTATION only after verification passes. A mismatch produces no explanatory graph.
 
 Multi-step training retains every observed loss summary and full experiments at the first step, each loss halving, and final step. Checkpoint comparison uses exact archived runs with compatible model, input, objective, precision, shape and axes. Session capture stops at a conservative 64 MiB evidence estimate (plus one operation of headroom) and asks for Clear session instead of silently deleting history. See [capture benchmark](docs/capture-benchmark.md), [training benchmark](docs/training-benchmark.md), and [v0.2 acceptance](docs/acceptance-v0.2.md).
+
+## Find your starting point
+
+- Run the math without the browser: `npm run example` → [predict, one update, predict](examples/predict-teach.ts).
+- Understand the implementation: [Read the Code](READ_THE_CODE.md), beginning with TypeScript `Value` and `backward`.
+- Understand evidence, state, and runtime identity: [evidence and operations](docs/evidence-and-operations.md).
+- Review current engineering acceptance: [v0.2.1 acceptance](docs/acceptance-v0.2.1.md). [v0.2](docs/acceptance-v0.2.md) and [v0.1](docs/acceptance.md) remain historical records.
+- Review measurements: [Guided selection](docs/guided-measurement.md), [capture](docs/capture-benchmark.md), [training](docs/training-benchmark.md).
+- Understand prior decisions: [completed plans](../docs/exec-plans/completed/). Current work follows the [v0.2.1 plan](../docs/exec-plans/active/2026-09-06-model-lab-v0.2.1.md).
+
+**HUMAN TEACHING VALIDATION: PENDING.** Automated acceptance tests verify implementation behavior. Actual unfamiliar-user testing follows the [short facilitator checklist](docs/teaching-check.md).

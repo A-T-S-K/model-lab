@@ -2,17 +2,27 @@
 
 Model Lab runs a real, very small scalar transformer. Start with the numbers and the model; the browser and trace code can wait. The initial fixture is untrained, uses the characters `a`, `b`, `c` plus BOS, and has **896 parameters**. That count belongs to this configuration: one layer, embedding width 8, two heads, and context 8. It is not a constant for microgpt or transformers generally.
 
-Follow this path:
+Run the smallest example first:
 
-1. [Reference provenance](reference/PROVENANCE.md), then `forward` in [the independent Python oracle](reference/microgpt_reference.py).
-2. `Value` in [model/value.ts](model/value.ts), then `backward` in [model/autograd.ts](model/autograd.ts).
-3. `forward`, `rmsNorm`, `softmax`, and `loss` in [model/microgpt.ts](model/microgpt.ts).
-4. `adamStep` and `trainStep` in [model/training.ts](model/training.ts).
-5. `snapshotTraining` and `restoreTraining` in [model/state.ts](model/state.ts).
-6. `TraceRecorder` in [trace/recorder.ts](trace/recorder.ts), then `TracePlayer` in [trace/player.ts](trace/player.ts).
-7. `ModelSession` and `attentionDetail` in [app/worker/controller.ts](app/worker/controller.ts), then [the browser application](app/).
+```sh
+npm run example
+```
 
-The model imports neither the trace implementation nor the application. You can understand and execute its mathematics without either.
+[examples/predict-teach.ts](examples/predict-teach.ts) loads the fixture, predicts, calls one real `trainStep`, and predicts the same input again. It uses no observer, worker, trace, archive, inspector, or UI.
+
+Follow the TypeScript teaching path:
+
+1. `Value` in [model/value.ts](model/value.ts): a number, its operands, and local derivatives.
+2. `backward` in [model/autograd.ts](model/autograd.ts): accumulate the chain-rule contributions.
+3. `linear`, `rmsNorm`, `softmax`, and `forward` in [model/microgpt.ts](model/microgpt.ts): embeddings → normalization → Q/K/V → causal attention → combined heads → projection/residual → MLP → logits → probabilities.
+4. `loss` in that same file: select each known target's probability, take its negative log, and average.
+5. `adamStep` and `trainStep` in [model/training.ts](model/training.ts): the actual gradient, moments, corrections, and stored parameter change.
+
+On a first pass, skip `observe`, `observeVector`, `observeScalar`, and `structure.*` calls. They only describe and copy evidence from calculations you can already see. [model/observation.ts](model/observation.ts) contains their metadata and descriptions; it never executes a model operation. In `trainStep`, keep the visible `backward` → `captureBackward` → `adamStep` boundary in mind: evidence is copied before parameters change.
+
+Then read the supporting layers: [trace recorder/player](trace/) → [live scalar capture](inspect/capture.ts) → [complete state](model/state.ts) and [session archive](archive/session.ts) → [historical reconstruction](app/worker/inspector.ts) → [worker controller](app/worker/controller.ts) and [UI](app/main.ts). Read the [independent Python oracle](reference/microgpt_reference.py) and [upstream provenance](reference/PROVENANCE.md) when comparing implementations.
+
+The model imports neither the trace implementation nor the application. Understanding those systems is unnecessary to follow or execute its mathematics.
 
 ## 1. Establish what the numbers mean
 
@@ -66,7 +76,7 @@ Keys and values from earlier positions remain `Value` objects attached to the gr
 
 ## 4. Follow the residual stream to a probability
 
-After concatenating heads, `forward` applies the attention output matrix and adds the residual. It normalizes the new stream before the MLP, projects up to four times the embedding width, applies ReLU, projects down, and adds the next residual. The output matrix produces logits directly. **There is no final RMSNorm in this organism.** `softmax` turns those logits into a distribution, and `loss` uses the negative log probability of each target, averaged over positions.
+After concatenating heads, `forward` applies the attention output matrix and adds the residual. It normalizes the new stream before the MLP, projects up to four times the embedding width, applies ReLU, projects down, and adds the next residual. The output matrix produces logits directly. **There is no final RMSNorm in this organism.** `softmax` subtracts the largest score for numerical stability. Subtracting a common offset leaves probabilities unchanged; derivative contributions through that common offset cancel, so the maximum is detached from autograd. `softmax` turns those logits into a distribution, and `loss` uses the negative log probability of each target, averaged over positions.
 
 **Real:** matrix products, nonlinear activation, residual connections, a normalized probability distribution, and target cross-entropy. **Simplified:** no biases, dropout, or learned normalization gains; ReLU is the chosen activation.
 
