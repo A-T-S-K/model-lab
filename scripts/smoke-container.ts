@@ -13,9 +13,9 @@ try {
   });
   await page.goto(origin);
   await page.getByTestId('status').filter({ hasText: 'Live prediction complete' }).waitFor();
+  await page.getByRole('button', { name: 'Explore', exact: true }).click();
   await page.locator('#train').click();
   await page.getByTestId('status').filter({ hasText: 'Live update complete' }).waitFor();
-  await page.getByRole('button', { name: 'Explore', exact: true }).click();
   await page.locator('#inspect-gradient').click();
   await page.getByTestId('inspection-provenance').filter({ hasText: 'OBSERVED LIVE SCALAR' }).waitFor();
   await page.getByText('Experiment · head ablation', { exact: true }).click();
