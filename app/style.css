@@ -310,3 +310,31 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
 @media (max-width:600px) { .mode-tabs button { flex:1; padding:10px 6px; } .history .controls label { min-width:100%; } }
 .kiosk-option { flex-direction:row; align-items:center; margin:16px 0; }
 button,.flow button,select { min-height:44px; }
+
+/* Guided is an authored lesson, with detailed evidence rendered only on request. */
+.guided-lesson { display:grid; grid-template-columns:minmax(0, .9fr) minmax(0, 1.1fr); gap:18px; }
+.guided-lesson .panel { margin:0; padding:28px; }
+.lesson-predict { grid-column:1/-1; }
+.model-map { list-style:none; display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:16px; padding:0; margin:24px 0 12px; }
+.model-map li { position:relative; }
+.model-map li:not(:last-child)::after { content:'→'; position:absolute; right:-14px; top:12px; color:#638d35; }
+.model-map button { width:100%; height:100%; padding:12px 6px; font-size:13px; background:#f1f5ec; }
+.model-map button.active { background:#174c42; color:white; border-color:#174c42; }
+.map-explanation { border-left:3px solid #92b871; padding:8px 14px; min-height:64px; }
+.lesson-prediction { display:grid; grid-template-columns:1fr 1fr; gap:36px; align-items:center; margin:20px 0; }
+.lesson-prefix { font:700 32px ui-monospace,monospace; letter-spacing:4px; overflow-wrap:anywhere; }
+.boundary { font:600 11px ui-sans-serif,sans-serif; letter-spacing:0; border:1px solid #b7c9bf; border-radius:4px; padding:6px; vertical-align:middle; display:inline-block; }
+.guided-lesson .probability-row { grid-template-columns:82px 1fr 80px; }
+.lesson-comparison { display:flex; align-items:center; flex-wrap:wrap; gap:20px; padding:24px 0; }
+.lesson-number { font-size:42px; font-weight:700; letter-spacing:-1.4px; line-height:1.3; color:#174c42; }
+.lesson-teach #teach { margin:18px 0 8px; }
+.lesson-changed { border-top:4px solid #92b871; }
+.guided-lesson .controls { margin-top:20px; }
+@media(max-width:850px) {
+  .guided-lesson { grid-template-columns:1fr; }
+  .guided-lesson .panel { padding:20px; }
+  .model-map { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .model-map li:nth-child(3)::after { content:''; }
+  .lesson-prediction { grid-template-columns:1fr; gap:12px; }
+  .lesson-number { font-size:36px; }
+}

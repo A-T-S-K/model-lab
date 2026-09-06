@@ -13,6 +13,7 @@ test('production browser Predict exposes real arithmetic; Learn applies Adam and
   await expect(page.getByTestId('training-step')).toHaveText('0');
   await expect(page.getByText('LIVE RUN', { exact: true })).toBeVisible();
   const probabilities = async () => page.getByTestId('probabilities').locator('code').evaluateAll(nodes => nodes.map(node => Number(node.getAttribute('title'))));
+  await page.getByRole('button', { name: 'Explore', exact: true }).click();
   const before = await probabilities();
   for (let i = 0; i < before.length; i++) expect(before[i]).toBeCloseTo(fixture.positions[4].probabilities[i], 10);
   await page.getByRole('button', { name: 'Explore', exact: true }).click();
@@ -56,6 +57,7 @@ test('mobile layout and rapid reset leave a usable fresh model', async ({ page }
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
   await expect(page.getByTestId('status')).toContainText('Live prediction complete');
+  await page.getByRole('button', { name: 'Explore', exact: true }).click();
   await page.evaluate(() => {
     (document.querySelector('#train') as HTMLButtonElement).click();
     (document.querySelector('#cancel') as HTMLButtonElement).click();

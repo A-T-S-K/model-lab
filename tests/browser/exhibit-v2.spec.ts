@@ -50,6 +50,7 @@ test('browser measures max-context live scalar rendering and worker responsivene
     new PerformanceObserver(entries => { state.longTasks.push(...entries.getEntries().map(entry => entry.duration)); }).observe({ type: 'longtask', buffered: false });
   });
   await page.getByTestId('document-input').fill('abcabca');
+  await page.getByRole('button', { name: 'Explore', exact: true }).click();
   const trainStart = Date.now(); await page.locator('#train').click();
   await expect(page.getByTestId('status')).toContainText('Live update complete');
   const trainMs = Date.now() - trainStart;

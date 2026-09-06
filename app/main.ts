@@ -1,4 +1,5 @@
 import './style.css';
+import { guidedView, guidedMap, lessonPosition, type GuidedLearning } from './views/guided.js';
 import { forwardStages, trainingStages, greedySelection } from './source/stages.js';
 import fixture from '../fixtures/canonical.initial.json';
 import { TracePlayer } from '../trace/player.js';
@@ -27,6 +28,8 @@ const inspectionCache = new Map<string, InspectionResult>();
 let selectedSnapshotId = '';
 let comparisonRunId = '';
 let trainingCount = 1;
+let guidedMapIndex = 5;
+let guidedLearning: GuidedLearning | undefined;
 let liveTrainingStep = 0;
 let liveRunId = '';
 let kioskEnabled = false;
@@ -99,18 +102,20 @@ function render(): void {
   const openDetails = new Set(Array.from(mount.querySelectorAll('details[open] > summary')).map(summary => summary.textContent));
   const focused = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
   const focusId = focused?.id;
+  const selection = focused instanceof HTMLInputElement && focused.type === 'text' ? [focused.selectionStart, focused.selectionEnd] : undefined;
   const probabilities = selectedArtifact('probabilities');
   const values = probabilities?.availability === 'available' ? probabilities.values : null;
   const greedy = values ? greedySelection(values) : undefined;
   const stage = [...forwardStages, ...trainingStages].find(([kind]) => kind === selectedKind)!;
-  mount.innerHTML = `<header><div class="eyebrow">AI Village / Model Lab</div><h1>A small model. Every step inspectable.</h1><p>Follow real scalar math from characters to a prediction, then inspect what one learning update changes.</p></header>
+  mount.innerHTML = `<header><div class="eyebrow">AI Village / Model Lab</div><h1>${mode === 'guided' ? 'A tiny GPT. A real learning story.' : 'A small model. Every step inspectable.'}</h1><p>${mode === 'guided' ? 'Predict a character. Teach the model. See what changed.' : 'Follow real scalar math from characters to a prediction, then inspect what one learning update changes.'}</p></header>
     <main data-mode="${mode}"><nav class="mode-tabs" aria-label="Evidence mode">${(['guided', 'explore', 'microscope'] as const).map(item => `<button data-mode="${item}" aria-pressed="${mode === item}" class="${mode === item ? 'primary' : ''}">${item[0]!.toUpperCase() + item.slice(1)}</button>`).join('')}</nav><div class="toolbar"><label for="document">Input · a, b, c · up to ${config.blockSize - 1} characters<input id="document" data-testid="document-input" value="${escapeHtml(documentText)}" maxlength="${config.blockSize - 1}" pattern="[abc]*" autocomplete="off" spellcheck="false" ${busy ? 'disabled' : ''}></label>
-      <button id="predict" class="primary" ${busy || !ready ? 'disabled' : ''}>Predict</button><button id="train" ${busy || !ready ? 'disabled' : ''}>Learn · one update</button>
+      <button id="predict" class="primary" ${busy || !ready ? 'disabled' : ''}>Predict</button>${mode !== 'guided' ? `<button id="train" ${busy || !ready ? 'disabled' : ''}>Learn · one update</button>` : ''}
       <button id="reset" ${!ready && !busy ? 'disabled' : ''}>Reset model</button><button id="cancel" ${!busy && !inspectionPending ? 'disabled' : ''}>Cancel operation</button>
       <button id="clear-session">Clear session</button><div><div data-testid="run-binding">${runBindingView()}</div><p data-testid="status" role="status" aria-live="polite">${escapeHtml(status)}</p></div></div>
       ${error ? `<p class="error" role="alert">${escapeHtml(error)}</p>` : ''}
-      <div class="note">Tiny teaching model · ${parameterCount ?? 'loading'} parameters · ${config.nLayer} layer · ${config.nHead} heads · width ${config.nEmbd}. Starts from fixed, untrained parameters. Runs locally in a browser worker using binary64 arithmetic. Training step: <strong data-testid="training-step">${liveTrainingStep}</strong>.</div>
-      ${result?.run.manifest.intervention ? `<p class="note" data-testid="intervention-declaration">Selected run uses a declared intervention: ${escapeHtml(JSON.stringify(result.run.manifest.intervention))}. Its values describe this treated execution.</p>` : ''}${mode !== 'guided' ? renderHistory() : ''}<div class="grid"><section class="panel wide"><div class="eyebrow">01 / Input → tokens → position</div><h2>Choose a position to follow</h2><p class="muted">BOS marks the beginning. Each position predicts the next token from only its prefix.</p>
+      <div class="note">Tiny teaching model · ${parameterCount ?? 'loading'} parameters · ${config.nLayer} layer · ${config.nHead} heads · width ${config.nEmbd}. ${mode === 'guided' ? 'All predictions and teaching happen on this device. Real updates completed:' : 'Starts from fixed, untrained parameters. Runs locally in a browser worker using binary64 arithmetic. Training step:'} <strong data-testid="training-step">${liveTrainingStep}</strong>.</div>
+      ${mode === 'guided' ? guidedView(result, guidedLearning, config.vocabulary, documentText, liveRunId, busy, ready, guidedMapIndex) : `
+      ${result?.run.manifest.intervention ? `<p class="note" data-testid="intervention-declaration">Selected run uses a declared intervention: ${escapeHtml(JSON.stringify(result.run.manifest.intervention))}. Its values describe this treated execution.</p>` : ''}${renderHistory()}<div class="grid"><section class="panel wide"><div class="eyebrow">01 / Input → tokens → position</div><h2>Choose a position to follow</h2><p class="muted">BOS marks the beginning. Each position predicts the next token from only its prefix.</p>
         <div class="tokens">${result?.tokenIds.map((id, index) => `<button class="token ${index === selectedToken ? 'active' : ''}" data-token="${index}" aria-pressed="${index === selectedToken}"><strong>${escapeHtml(tokenName(id, config.vocabulary))}</strong><small>position ${index} · ID ${id}</small></button>`).join('') ?? '<p class="muted">Waiting for a live run.</p>'}</div>
         ${result ? `<small>Selected prefix: <code>${escapeHtml(result.tokenIds.slice(0, selectedToken + 1).map(id => tokenName(id, config.vocabulary)).join(' · '))}</code> → target in this sequence: <strong>${escapeHtml(tokenName(result.targetIds[selectedToken]!, config.vocabulary))}</strong></small>` : ''}</section>
       <section class="panel explore-panel"><div class="eyebrow">02 / Follow the computation</div><h2>The path through the model</h2><h3>Forward prediction</h3><div class="flow" data-testid="forward-stages">${forwardStages.map(([kind, label]) => `<button data-stage="${kind}" class="${kind === selectedKind ? 'active' : ''}" aria-pressed="${kind === selectedKind}">${label}</button>`).join('')}</div><h3>Training · after the forward prediction</h3><div class="flow" data-testid="training-stages">${trainingStages.map(([kind, label]) => `<button data-stage="${kind}" class="${kind === selectedKind ? 'active' : ''}" aria-pressed="${kind === selectedKind}">${label}</button>`).join('')}</div>
@@ -124,21 +129,47 @@ function render(): void {
         <p class="muted">Learn uses the entered sequence and its next-token targets. It applies one actual optimizer update, then reruns the same fixed input.</p>
         ${result?.experiment ? `<nav class="controls" aria-label="Learning experiment"><button data-experiment-run="${escapeHtml(result.experiment.beforeRunId)}" ${busy ? 'disabled' : ''}>Before state · inspect prediction</button><span>→</span><button data-experiment-run="${escapeHtml(result.experiment.trainingRunId)}" ${busy ? 'disabled' : ''}>Observed training · loss and backward</button><span>→</span><button data-experiment-run="${escapeHtml(result.experiment.afterRunId)}" ${busy ? 'disabled' : ''}>After state · inspect prediction</button></nav><p class="muted">Exact experiment ${escapeHtml(result.experiment.id)}. Both complete snapshots and all three executions are archived independently.</p>` : ''}
         <div data-testid="learn-evidence">${learnView(result?.learn, selectedParameter, selectedToken, config.vocabulary, result?.targetIds[selectedToken], archive.snapshots.get(result?.experiment?.startingSnapshotId ?? '')?.state.optimizer)}${result?.learn ? sourceView('adam') : ''}</div></section>${mode === 'microscope' ? `<section class="panel wide" id="microscope"><h2>Microscope · follow the calculation</h2><div data-testid="microscope-evidence">${microscopeView(inspection, inspectionPath, inspectionLabel, inspectionPending, inspectionWhole)}</div></section>` : ''}</div>
-      <footer>Evidence is copied from real execution and replayed immutably. Displayed decimals are rounded; canonical values retain full precision. <a href="https://gist.github.com/karpathy/8627fe009c40f57531cb18360106ce95">Based on Andrej Karpathy’s microgpt</a>.</footer></main>`;
+`}
+      <footer>${mode === 'guided' ? 'This small model is for learning how prediction and training work. Displayed percentages are rounded.' : 'Evidence is copied from real execution and replayed immutably. Displayed decimals are rounded; canonical values retain full precision.'} <a href="https://gist.github.com/karpathy/8627fe009c40f57531cb18360106ce95">Based on Andrej Karpathy’s microgpt</a>.</footer></main>`;
   bind();
   mount.querySelectorAll<HTMLDetailsElement>('details').forEach(details => { if (openDetails.has(details.querySelector('summary')?.textContent ?? '')) details.open = true; });
   if (focusId) document.getElementById(focusId)?.focus({ preventScroll: true });
+  const restored = focusId && document.getElementById(focusId);
+  if (selection && restored instanceof HTMLInputElement) restored.setSelectionRange(selection[0], selection[1]);
+}
+
+/** A teaching comparison always follows its own after-run, never a replacement execution. */
+function selectGuidedComparison(): boolean {
+  if (!guidedLearning || result?.run.manifest.runId === guidedLearning.afterRunId) return true;
+  if (archive.runs.has(guidedLearning.afterRunId)) { selectRun(guidedLearning.afterRunId); return true; }
+  error = 'Detailed evidence for this earlier teaching comparison is unavailable. Its recorded probabilities remain visible; no different run is substituted.';
+  render(); return false;
 }
 
 function bind(): void {
-  document.querySelector<HTMLInputElement>('#document')!.addEventListener('input', event => { documentText = (event.target as HTMLInputElement).value; document.querySelector('[data-testid="run-binding"]')!.innerHTML = runBindingView(); });
+  document.querySelector<HTMLInputElement>('#document')!.addEventListener('input', event => { documentText = (event.target as HTMLInputElement).value; render(); });
   document.querySelector('#predict')!.addEventListener('click', () => void execute('predict'));
-  document.querySelector('#train')!.addEventListener('click', () => void execute('train'));
+  document.querySelector('#train')?.addEventListener('click', () => void execute('train'));
   document.querySelector('#reset')!.addEventListener('click', () => void reset(false));
   document.querySelector('#cancel')!.addEventListener('click', () => void reset(true));
   document.querySelector('#clear-session')!.addEventListener('click', () => void reset(false, true));
   document.querySelectorAll<HTMLButtonElement>('button[data-mode]').forEach(button => button.addEventListener('click', () => { mode = button.dataset.mode as typeof mode; render(); }));
-  document.querySelector('#why-prediction')?.addEventListener('click', () => { mode = 'explore'; selectedKind = 'probabilities'; render(); });
+  document.querySelector('#why-prediction')?.addEventListener('click', () => { if (mode === 'guided' && result) selectedToken = lessonPosition(result); mode = 'explore'; selectedKind = 'probabilities'; render(); });
+  document.querySelector('#teach')?.addEventListener('click', () => void execute('train', 10, true));
+  document.querySelector('#guided-explore')?.addEventListener('click', () => {
+    if (!selectGuidedComparison()) return;
+    mode = 'explore';
+    if (result) selectedToken = guidedLearning && result.run.manifest.runId === guidedLearning.afterRunId ? guidedLearning.position : lessonPosition(result);
+    selectedKind = 'probabilities'; render();
+  });
+  document.querySelector('#guided-microscope')?.addEventListener('click', () => {
+    if (!result || busy) return;
+    if (!selectGuidedComparison()) return;
+    selectedToken = guidedLearning && result.run.manifest.runId === guidedLearning.afterRunId ? guidedLearning.position : lessonPosition(result); selectedKind = 'probabilities';
+    const artifact = selectedArtifact('probabilities');
+    if (artifact) void inspect(result.run.manifest.runId, { kind: 'artifact', artifactId: artifact.id, index: result.targetIds[selectedToken]! }, `Target probability · position ${selectedToken}`);
+  });
+  document.querySelectorAll<HTMLButtonElement>('[data-map]').forEach(button => button.addEventListener('click', () => { guidedMapIndex = Number(button.dataset.map); selectedKind = guidedMap[guidedMapIndex]![0] === 'characters' ? 'tokenEmbedding' : guidedMap[guidedMapIndex]![0]; render(); }));
   document.querySelectorAll<HTMLButtonElement>('[data-artifact]').forEach(button => button.addEventListener('click', () => {
     if (result && !busy) void inspect(result.run.manifest.runId, { kind: 'artifact', artifactId: button.dataset.artifact!, index: Number(button.dataset.element) }, `${selectedKind} · position ${selectedToken} · element ${button.dataset.element}`);
   }));
@@ -161,8 +192,8 @@ function bind(): void {
   document.querySelectorAll<HTMLButtonElement>('[data-query]').forEach(button => button.addEventListener('click', () => {
     selectedToken = Number(button.dataset.query); key = Number(button.dataset.key); detail = undefined; render(); void loadDetail();
   }));
-  document.querySelector('#layer')!.addEventListener('change', event => { layer = Number((event.target as HTMLSelectElement).value); detail = undefined; render(); void loadDetail(); });
-  document.querySelector('#head')!.addEventListener('change', event => { head = Number((event.target as HTMLSelectElement).value); detail = undefined; render(); void loadDetail(); });
+  document.querySelector('#layer')?.addEventListener('change', event => { layer = Number((event.target as HTMLSelectElement).value); detail = undefined; render(); void loadDetail(); });
+  document.querySelector('#head')?.addEventListener('change', event => { head = Number((event.target as HTMLSelectElement).value); detail = undefined; render(); void loadDetail(); });
   document.querySelector('#parameter-select')?.addEventListener('change', event => { selectedParameter = Number((event.target as HTMLSelectElement).value); render(); });
 }
 
@@ -185,22 +216,33 @@ function clearDisplayedInspection(): void {
   inspectionPath = []; inspectionPending = false; inspectionLabel = ''; inspectionWhole = false;
 }
 
-async function execute(command: 'predict' | 'train', count = 1): Promise<void> {
+async function execute(command: 'predict' | 'train', count = 1, guided = false): Promise<void> {
   if (busy || !ready) return;
   if (evidenceBytes >= SESSION_BUDGET) { error = 'Session evidence limit reached (64 MiB). Clear session before starting more work.'; render(); return; }
   if (!/^[abc]{0,7}$/.test(documentText)) { error = 'Use up to seven characters from a, b, and c.'; render(); return; }
+  if (guided && (!result || result.run.manifest.runId !== liveRunId || result.tokenIds.slice(1).map(id => config.vocabulary[id]).join('') !== documentText || documentText.length < 2)) return;
+  const executionDocument = documentText;
+  if (guided) guidedLearning = undefined;
   clearDisplayedInspection();
   const currentOperation = ++operation;
   busy = true; error = ''; detail = undefined;
-  status = command === 'train' ? 'Computing loss, backward, and one Adam update…' : 'Recording a live prediction…'; render();
+  status = command === 'train' ? guided ? 'Teaching the next characters through 10 real updates…' : 'Computing loss, backward, and one Adam update…' : 'Recording a live prediction…'; render();
   try {
     let retainedLoss = Infinity;
     for (let step = 0; step < count; step++) {
     if (evidenceBytes >= SESSION_BUDGET) { status = 'Session evidence limit reached · completed history preserved'; break; }
-    const response = await client.request({ command, document: documentText });
+    const response = await client.request({ command, document: executionDocument });
     if (currentOperation !== operation) return;
     if (response.status !== 'result') throw new Error('Worker did not return model evidence');
     const incoming = response.result;
+    if (guided && incoming.learn) {
+      const position = lessonPosition(incoming); const target = incoming.targetIds[position]!;
+      guidedLearning = { document: executionDocument, position, target,
+        before: guidedLearning?.before ?? incoming.learn.before.probabilities[position]![target]!,
+        after: incoming.learn.after.probabilities[position]![target]!,
+        completed: (guidedLearning?.completed ?? 0) + 1,
+        startingStep: guidedLearning?.startingStep ?? incoming.trainingStep - 1, afterRunId: incoming.run.manifest.runId };
+    }
     const retain = count === 1 || step === 0 || step === count - 1 || (incoming.learn && incoming.learn.meanLoss <= retainedLoss / 2);
     if (incoming.learn) trainingSummaries.push({ step: incoming.trainingStep, loss: incoming.learn.meanLoss });
     if (retain) {
@@ -224,6 +266,15 @@ async function execute(command: 'predict' | 'train', count = 1): Promise<void> {
     if (currentOperation !== operation) return;
     error = failure instanceof Error ? failure.message : String(failure); status = 'Run failed';
   } finally {
+    // A bounded lesson may end early at the optimizer limit or evidence budget.
+    // Preserve its last completed comparison just as cancellation/reset preserves it.
+    if (currentOperation === operation && guidedLearning && guided && result?.run.manifest.runId === guidedLearning.afterRunId && !archive.runs.has(result.run.manifest.runId)) {
+      const destination = archive; const completed = result;
+      for (const snapshot of completed.snapshots) await destination.addSnapshot(snapshot);
+      for (const run of completed.runs) await destination.addRun(run);
+      if (completed.experiment) await destination.addLearningExperiment(completed.experiment);
+      if (currentOperation === operation) evidenceBytes += new TextEncoder().encode(JSON.stringify(completed)).byteLength;
+    }
     if (currentOperation === operation) { busy = false; render(); void loadDetail(); }
   }
 }
@@ -235,18 +286,19 @@ async function reset(cancelled: boolean, clear = false): Promise<void> {
   busy = true; ready = false; error = '';
   if (clear) {
     archive = new SessionArchive(); evidenceBytes = 0; trainingSummaries.length = 0; inspectionCache.clear(); inspection = undefined; inspectionPath = [];
-    mode = 'guided'; comparisonRunId = ''; selectedSnapshotId = ''; documentText = fixture.document;
+    mode = 'guided'; guidedLearning = undefined; guidedMapIndex = 5; comparisonRunId = ''; selectedSnapshotId = ''; documentText = fixture.document;
     selectedToken = 0; selectedKind = 'embeddingNorm'; layer = 0; head = 0; key = 0; trainingCount = 1;
     result = undefined; player = undefined; detail = undefined;
   }
   status = cancelled ? 'Cancelling operation…' : clear ? 'Clearing session…' : 'Restoring selected model snapshot…'; render();
   try {
     if (!clear && result && !archive.runs.has(result.run.manifest.runId)) {
-      const destination = archive;
-      for (const snapshot of result.snapshots) await destination.addSnapshot(snapshot);
-      for (const run of result.runs) await destination.addRun(run);
-      if (result.experiment) await destination.addLearningExperiment(result.experiment);
-      evidenceBytes += new TextEncoder().encode(JSON.stringify(result)).byteLength;
+      const destination = archive; const completed = result;
+      for (const snapshot of completed.snapshots) await destination.addSnapshot(snapshot);
+      for (const run of completed.runs) await destination.addRun(run);
+      if (completed.experiment) await destination.addLearningExperiment(completed.experiment);
+      if (currentOperation !== operation) return;
+      evidenceBytes += new TextEncoder().encode(JSON.stringify(completed)).byteLength;
     }
     if (currentOperation !== operation) return;
     const snapshot = clear || !selectedSnapshotId ? undefined : archive.snapshots.get(selectedSnapshotId);
