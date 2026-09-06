@@ -10,7 +10,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'reference'))
-from generate_fixture import EXPECTED, INITIAL, encode, generate
+from generate_fixture import EXPECTED, INITIAL, generate
+from portable_conformance import compare
 from microgpt_reference import Scalar, forward, load_parameters
 
 
@@ -18,10 +19,13 @@ class ReferenceTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.initial = json.loads(INITIAL.read_text())
-        cls.expected = json.loads(EXPECTED.read_text())
+        cls.canonical = json.loads(EXPECTED.read_text())
+        # Algebraic identities remain exact within one native execution.
+        # Cross-environment agreement is checked separately against canonical.
+        cls.expected = generate()
 
-    def test_fixture_regenerates_byte_for_byte(self):
-        self.assertEqual(encode(generate()), EXPECTED.read_text())
+    def test_fixture_conforms_to_canonical(self):
+        compare(self.canonical, self.expected)
 
     def test_initial_numeric_state_is_bound_to_expected_evidence(self):
         self.assertEqual(hashlib.sha256(INITIAL.read_bytes()).hexdigest(),

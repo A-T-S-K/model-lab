@@ -35,6 +35,7 @@ for command in [
     ['npm', 'ci'],
     ['npm', 'run', 'test:reference'],
     ['npm', 'test'],
+    ['npm', 'run', 'example'],
     ['npm', 'run', 'build'],
     ['npm', 'run', 'test:browser'],
 ]:

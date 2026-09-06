@@ -7,11 +7,11 @@
     "dev": "npm run build && vite preview --host 127.0.0.1",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test tests/model/*.test.ts tests/trace/*.test.ts tests/integration/*.test.ts tests/app/*.test.ts tests/integration/*.test.mjs",
-    "test:reference": "python3 -m unittest discover -s tests/reference -v && python3 reference/generate_fixture.py --check",
+    "test:reference": "npm run test:reference:portable",
     "test:browser": "playwright test",
     "build": "npm run typecheck && vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "acceptance": "npm run test:reference && npm run test && npm run build && npm run test:browser",
+    "acceptance": "npm run test:reference && npm test && npm run example && npm run build && npm run test:browser",
     "test:isolation": "python3 scripts/check_isolation.py",
     "benchmark:capture": "node --expose-gc --import tsx scripts/benchmark-capture.ts",
     "benchmark:training": "node --expose-gc --import tsx scripts/benchmark-training.ts",
@@ -23,7 +23,9 @@
     "prebenchmark:training": "npm run runtime:identity",
     "prebenchmark:experiments": "npm run runtime:identity",
     "example": "node --import tsx examples/predict-teach.ts",
-    "measure:guided": "node --import tsx scripts/measure-guided.ts"
+    "measure:guided": "node --import tsx scripts/measure-guided.ts",
+    "test:reference:portable": "python3 -m unittest discover -s tests/reference -v && python3 reference/portable_conformance.py",
+    "test:reference:canonical": "python3 -m unittest discover -s tests/canonical -v && python3 reference/generate_fixture.py --check"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

@@ -29,14 +29,15 @@ Live model arithmetic runs in its owning Web Worker. A separate inspector worker
 ## Validation
 
 ```bash
-npm run test:reference   # Python properties and exact fixture regeneration
+npm run test:reference   # portable: exact structure/identity + strict numeric conformance
 npm test                # scalar conformance, trace, worker/session properties
+npm run example         # model-only predict, teach, predict
 npm run build           # strict TypeScript and production assets
 npx playwright install chromium
 npm run test:browser     # real browser Predict, arithmetic, Learn, reset
 ```
 
-Or run `npm run acceptance` after installing Chromium. Browser tests use the production build on port 4173. Full-precision fixture values are compared using `abs(error) <= 1e-10 + 1e-9 * abs(expected)`; UI decimal formatting does not change canonical evidence. See [fixtures](fixtures/README.md), [provenance](reference/PROVENANCE.md), and [Read the Code](READ_THE_CODE.md).
+Or run `npm run acceptance` after installing Chromium. Browser tests use the production build on port 4173. `test:reference` always means portable Python validation (`1e-30 + 1e-12 * abs(canonical)`); `npm run test:reference:canonical` is a separate byte-verification command tied to the [documented environment](reference/PROVENANCE.md#canonical-byte-exact-regeneration). TypeScript full-precision fixture values are compared using `abs(error) <= 1e-10 + 1e-9 * abs(expected)`; UI decimal formatting does not change canonical evidence. See [fixtures](fixtures/README.md), [provenance](reference/PROVENANCE.md), and [Read the Code](READ_THE_CODE.md).
 
 ## Isolation and container
 
@@ -48,7 +49,7 @@ cd model-lab
 npm run test:isolation
 ```
 
-This copies only tracked subtree files to a fresh temporary directory, runs `npm ci`, Python/reference and TypeScript tests, production build, and browser tests without sibling source. It leaves the temporary copy path in the log for inspection.
+This copies only tracked subtree files to a fresh temporary directory, runs `npm ci`, portable Python/reference and TypeScript tests, model-only example, production build, and browser tests without sibling source. It leaves the temporary copy path in the log for inspection.
 
 From repository root:
 

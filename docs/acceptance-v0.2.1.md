@@ -1,6 +1,8 @@
 # Model Lab v0.2.1 acceptance
 
-**Engineering acceptance: PASS — September 6, 2026.**
+**Local engineering acceptance: prior pass PASS — September 6, 2026; numerical-portability corrective acceptance in progress.**
+
+**Hosted CI acceptance: FAILED on the first pushed `model-lab` run at byte-exact Python reference regeneration; corrective hosted run PENDING.**
 
 **HUMAN TEACHING VALIDATION: PENDING.** Automated checks and reviewer assessments do not establish beginner comprehension. The [short facilitator checklist](teaching-check.md) is ready for actual unfamiliar-user sessions.
 
@@ -34,7 +36,7 @@ Final isolated source copy: `/var/folders/2g/6n8r5w2n7z54m4y1m8vj9cjh0000gn/T/mo
 
 Local execution logs are under `/tmp/model-lab-v021-final-{acceptance,isolation,docker-build,container-smoke,example,measurement}.log`. These paths are local validation artifacts, not portable repository dependencies.
 
-The [narrow GitHub Actions workflow](../../.github/workflows/model-lab.yml) runs reference/unit/build/browser, isolated-subtree, and container checks for Model Lab changes. Its commands were exercised locally; hosted Actions has not run because this work has not been pushed.
+The [narrow GitHub Actions workflow](../../.github/workflows/model-lab.yml) runs reference/unit/build/browser, isolated-subtree, and container checks for Model Lab changes. The first hosted run subsequently failed at byte-exact Python reference regeneration on Ubuntu 24.04 / Python 3.12.14. The [portability investigation](../reference/PORTABILITY.md) reproduces and diagnoses that failure. The corrective workflow uses explicit portable reference conformance. A hosted run of the correction still requires an authorized push; this pass has not pushed or triggered a remote workflow.
 
 ## Repaired truth and preserved depth
 

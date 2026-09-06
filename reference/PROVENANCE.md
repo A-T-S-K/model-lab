@@ -31,11 +31,44 @@ python3 reference/compare_upstream.py /path/to/hash-matching/microgpt.py
 
 The September 5 comparison checked 3,676 scalar values: all pre/post logits and probabilities, per-position and mean losses, all gradients, all post-update parameters, and Adam first/second moments. Maximum absolute difference was **0.0**. The check permits absolute and relative error of `1e-12`; the observed result was exact. This validation establishes the independent oracle's numerical agreement without committing upstream code. The optional comparison needs the externally supplied original file; ordinary tests and regeneration are offline.
 
-## Reproduction
+## Canonical byte-exact regeneration
+
+The historical canonical fixture is preserved (Option A); September 5 upstream comparison results above have **not** been rerun. Regeneration consumes the committed initial bytes and checks the full-precision JSON encoding byte-for-byte, including key order and whitespace. This is a provenance claim about a defined CPython/libm environment, not a cross-platform floating-point guarantee.
+
+The accepted canonical generation environment, revalidated September 6, is **macOS 26.5.2 (25F84), arm64**, Apple Command Line Tools **CPython 3.9.6**, build `default, May 22 2026, 11:13:45`, compiler `Clang 21.0.0 (clang-2100.1.1.101)`, using that macOS system libm. Executable: `/Library/Developer/CommandLineTools/usr/bin/python3`, SHA-256 `bdea59019a38eb6600cc9e71e984a97fedadc406448431281e7657030f54987e`. Python version alone does not identify this environment. This records the validated Apple environment; it is not a digest-pinned, redistributable environment image.
+
+Unchanged fixture SHA-256 digests:
+
+- `canonical.initial.json`: `09670a2658a3bca2f7204927cdd41f8559fdd360d180533698a9857a4863b056`.
+- `canonical.expected.json`: `b8af1e9889a7a9561b5a9cff7320436d83f2822f0fa0fd62853760b905bd0737`.
 
 ```sh
-python3 reference/generate_fixture.py --check
-python3 -m unittest discover -s tests/reference -v
+npm run test:reference:canonical
 ```
 
-The regeneration check compares bytes, including full-precision serialized Python floats. This is deterministic within the validated CPython/libm environment; platforms with different transcendental implementations may need numerical review rather than silently rewriting evidence. Cross-runtime conformance uses explicit tolerances, separate from canonical display rounding.
+This runs the original byte-equality assertion in `tests/canonical/` and `generate_fixture.py --check`. Neither writes fixtures. On a different environment, byte failure does not authorize replacing evidence. The explicit generator without `--check` remains a deliberate authoring command, outside all acceptance paths.
+
+## Portable numerical conformance
+
+```sh
+npm run test:reference           # always aliases test:reference:portable
+npm run test:reference:portable
+```
+
+These run offline reference properties, adversarial validator regressions, and an uninstrumented native oracle regeneration compared recursively with the untouched canonical evidence. There is no environment-variable switch or skipped exact test. Canonical verification has its own explicit command.
+
+The portable comparison requires exact Python/JSON types, object keys and insertion order, array lengths and element order, integer IDs/counts/indexes, strings, booleans/nulls and identity fields. Configuration and declared ordering subtrees are exact even for floating inputs. The unchanged initial-state byte hash binds configuration, parameter order, input/target IDs, initial matrices, optimizer inputs and continuation state. Parameter matrix keys/order, token/target fields and optimizer structure are checked directly in generated evidence. Reference algebraic identities and exact post-update re-execution are tested against one native execution; agreement of that execution with the canonical fixture is tested separately.
+
+For finite floating numerical evidence only:
+
+```text
+abs(actual - canonical) <= 1e-30 + 1e-12 * abs(canonical)
+```
+
+The `1e-12` relative limit matches the existing upstream reference relative tolerance. The `1e-30` absolute floor is deliberately much tighter than its `1e-12` floor, so tiny second moments cannot undergo meaningful relative drift under a unit-scale absolute allowance. The measured maximum relative error is about 5,000 times smaller than the limit. Zero evidence has only the `1e-30` floor. Non-finite values fail. Neither canonical evidence nor regenerated values are rounded. Existing TypeScript/model tolerances remain unchanged.
+
+Output reports differing-float count, maximum absolute and relative errors, and the path of each maximum. Relative error uses the absolute canonical value as denominator (infinity for nonzero error from zero). Failure includes the first offending path, values, error magnitudes and allowed error, plus global maxima over comparable numeric leaves.
+
+The [measured macOS/Linux discrepancy and operation-level diagnosis](PORTABILITY.md) found **two of 10,117 floats** differing, maximum absolute error **2.0679515313825692e-25**, maximum relative error **1.984571846060205e-16**, both at `adam.vHat[150]`. Ubuntu 24.04 and Debian Linux CPython 3.12.14 agreed exactly with each other. Tracing isolated platform `pow` differences; replaying macOS primitive outputs restored the entire canonical byte stream with identical operation inputs. This justifies separating provenance from portable conformance without changing the model or fixtures.
+
+Hosted Linux CI, aggregate acceptance, and isolated-subtree acceptance use the portable path. Canonical verification is not scheduled on a generic macOS runner: the defined Apple OS/CPython/libm environment is not available as a pinned hosted image. It remains a local provenance gate in that environment. A future deliberate canonical-container migration would need new provenance and full dependent acceptance, rather than an opportunistic fixture rewrite.
