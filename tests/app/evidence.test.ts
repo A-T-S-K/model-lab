@@ -22,7 +22,7 @@ test('future attention display states the computation does not exist', () => {
 
 test('derived scalar view displays each captured multiplication and softmax connection', () => {
   const html = detailView({ provenance: 'derived', availability: 'available', q: [2, 3], k: [4, 5], products: [8, 15], sum: 23, scale: 1 / Math.sqrt(2), scaled: 23 / Math.sqrt(2), observedLogit: 23 / Math.sqrt(2), probability: 0.75, logits: [1, 23 / Math.sqrt(2)], sourceRunId: 'test' });
-  assert.match(html, /DERIVED FROM LIVE EVIDENCE/);
+  assert.match(html, /DERIVED FROM OBSERVED EVIDENCE/);
   assert.match(html, /8\.000000/);
   assert.match(html, /15\.000000/);
   assert.match(html, /sum\(Q × K\) = 23\.000000/);

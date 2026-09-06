@@ -7,7 +7,12 @@ export class Value {
     public readonly operation = 'leaf',
     public readonly parents: readonly Value[] = [],
     public readonly localDerivatives: readonly number[] = [],
+    public readonly detail: { constant?: string; exponent?: number } = {},
   ) {}
+
+  static constant(data: number, description = 'numeric literal'): Value {
+    return new Value(data, 'leaf', [], [], { constant: description });
+  }
 
   add(other: Value | number): Value {
     const right = asValue(other);
@@ -20,7 +25,7 @@ export class Value {
   }
 
   pow(exponent: number): Value {
-    return new Value(this.data ** exponent, 'power', [this], [exponent * this.data ** (exponent - 1)]);
+    return new Value(this.data ** exponent, 'power', [this], [exponent * this.data ** (exponent - 1)], { exponent });
   }
 
   log(): Value {
@@ -42,9 +47,9 @@ export class Value {
 }
 
 export function asValue(value: Value | number): Value {
-  return value instanceof Value ? value : new Value(value);
+  return value instanceof Value ? value : Value.constant(value);
 }
 
 export function sum(values: readonly Value[]): Value {
-  return values.reduce((total, value) => total.add(value), new Value(0));
+  return values.reduce((total, value) => total.add(value), Value.constant(0, 'sum initial value'));
 }

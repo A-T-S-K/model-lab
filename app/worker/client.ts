@@ -1,4 +1,5 @@
 import type { WorkerRequest, WorkerResponse } from './protocol.js';
+import type { ArchivedSnapshot } from '../../archive/session.js';
 type Command = WorkerRequest extends infer R ? R extends WorkerRequest ? Omit<R, 'sessionId' | 'runId' | 'generationId'> : never : never;
 
 /** Termination cancels synchronous scalar work immediately; generations reject late replies. */
@@ -7,6 +8,7 @@ export class ModelWorkerClient {
   private generationId = 0;
   private sequence = 0;
   private worker: Worker;
+  private completedSnapshot?: ArchivedSnapshot;
   private pending = new Map<string, { resolve: (value: WorkerResponse) => void; reject: (error: Error) => void }>();
 
   constructor() { this.worker = this.spawn(); }
@@ -18,6 +20,8 @@ export class ModelWorkerClient {
       const pending = this.pending.get(response.runId);
       if (!pending) return;
       this.pending.delete(response.runId);
+      if (response.status === 'ready' && response.archivedSnapshot) this.completedSnapshot = response.archivedSnapshot;
+      if (response.status === 'result') this.completedSnapshot = response.result.snapshots.at(-1);
       if (response.status === 'error') pending.reject(new Error(response.error)); else pending.resolve(response);
     };
     worker.onerror = event => {
@@ -35,14 +39,14 @@ export class ModelWorkerClient {
     });
   }
   initialize(): Promise<WorkerResponse> { return this.request({ command: 'initialize' }); }
-  reset(): Promise<WorkerResponse> {
+  reset(snapshot?: ArchivedSnapshot): Promise<WorkerResponse> {
     this.worker.terminate();
     for (const pending of this.pending.values()) pending.reject(new Error('Run cancelled by reset'));
     this.pending.clear(); this.generationId++;
     this.worker = this.spawn();
-    return this.initialize();
+    return snapshot ? this.request({ command: 'restore', snapshot }) : this.initialize();
   }
-  cancel(): Promise<WorkerResponse> { return this.reset(); }
+  cancel(): Promise<WorkerResponse> { return this.reset(this.completedSnapshot); }
   dispose(): void {
     this.worker.terminate();
     for (const pending of this.pending.values()) pending.reject(new Error('Worker disposed'));

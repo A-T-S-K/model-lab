@@ -1,6 +1,6 @@
 # Model Lab
 
-An isolated, browser-local scalar GPT teaching experience. Predict exposes the actual forward pass and causal attention arithmetic. Learn applies one real backward/Adam update and reruns the same fixed input. The tiny initial model is untrained; changed probabilities alone are not an improvement claim.
+An isolated, browser-local scalar GPT teaching experience. Guided introduces the actual prediction. Explore selects semantic values and historical checkpoints. Microscope recursively exposes primitive operations, structural inputs, and actual backward contributions. Learn records an explicit before-state → observed training execution → after-state experiment. The tiny initial model is untrained; changed probabilities alone are not an improvement claim.
 
 ## Run locally
 
@@ -12,9 +12,9 @@ npm ci
 npm run dev
 ```
 
-Open the localhost URL printed by Vite. Enter up to seven characters from `a`, `b`, and `c`. BOS is added automatically. Select a token, model stage, attention head, and causal cell to inspect evidence. Learn trains on the displayed document with shifted character targets and terminal BOS. Reset and Cancel & reset restore the committed initial state; cancellation discards the worker's current session.
+Open the localhost URL printed by Vite. Enter up to seven characters from `a`, `b`, and `c`. BOS is added automatically. Select a token, model stage, attention head, and causal cell to inspect evidence. Learn trains on the displayed document with shifted character targets and terminal BOS. Reset model restores the selected or canonical snapshot and preserves the archive. Cancel terminates current work and restores the last completed live snapshot. Clear session clears both workers, runs, experiments and comparisons; kiosk inactivity invokes Clear session.
 
-All model arithmetic runs in a Web Worker. Core runtime assets are bundled locally: no model API, remote font, dataset download, or WAN access is required after installing/building. Development dependency installation may require Internet access.
+Live model arithmetic runs in its owning Web Worker. A separate inspector worker reconstructs old runs and verifies all available semantic anchors before returning recomputed detail. No live `Value` object leaves its owner. Core runtime assets are bundled locally: no model API, remote font, dataset download, or WAN access is required after installing/building. Development dependency installation may require Internet access.
 
 ## Validation
 
@@ -55,4 +55,12 @@ This fixture uses one layer, eight embedding features, two heads, eight context 
 
 The upstream gist is pinned by revision and SHA-256. The committed Python oracle is independently authored and checked against the original downloaded reference; upstream source is not vendored because its license status is unresolved. No license decision is made. See the provenance document for the exact validation command and evidence.
 
-Optional ablation and poisoning experiments are deferred. This slice makes no attack-success or security-effectiveness claims.
+Controlled ablation and matched training-data substitution research are documented in [experiment evidence](docs/experiments-v0.2.md). This slice makes no attack-success or security-effectiveness claims.
+
+## v0.2 evidence and retention
+
+Current Predict retains full private scalar evidence. Learn snapshots actual gradients and every operand contribution before Adam changes parameters or clears gradients. The gradient in the microscope equals the observed gradient consumed by Adam; the optimizer panel expands moments, bias correction, mathematical update and actual representable delta. An advanced whole-run capture exposes measured graph statistics without a graph hairball.
+
+History uses SHA-256 over a canonical binary64 encoding of complete state, including parameter order, moments, schedule, cursor and RNG continuation. The main-thread archive accepts only immutable plain data and validated references. Cached observed detail remains observed; uncaptured historical detail is labelled VERIFIED RECOMPUTATION only after verification passes. A mismatch produces no explanatory graph.
+
+Multi-step training retains every observed loss summary and full experiments at the first step, each loss halving, and final step. Checkpoint comparison uses exact archived runs with compatible model, input, objective, precision, shape and axes. Session capture stops at a conservative 64 MiB evidence estimate (plus one operation of headroom) and asks for Clear session instead of silently deleting history. See [capture benchmark](docs/capture-benchmark.md), [training benchmark](docs/training-benchmark.md), and [v0.2 acceptance](docs/acceptance-v0.2.md).

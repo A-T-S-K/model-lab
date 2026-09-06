@@ -8,11 +8,11 @@ import { trainStep } from '../../model/training.js';
 import { TraceRecorder } from '../../trace/recorder.js';
 
 const tag = { sessionId: 'test-session', runId: 'run-1', generationId: 0 };
-function ready() { const session = new ModelSession(); assert.equal(session.handle({ ...tag, command: 'initialize' }).status, 'ready'); return session; }
+async function ready() { const session = new ModelSession(); assert.equal((await session.handle({ ...tag, command: 'initialize' })).status, 'ready'); return session; }
 function result(response: WorkerResponse) { assert.equal(response.status, 'result'); if (response.status !== 'result') throw new Error('Expected result'); return response.result; }
 
-test('worker Predict captures authentic arithmetic; future cells are unavailable', () => {
-  const run = result(ready().handle({ ...tag, command: 'predict', document: fixture.document }));
+test('worker Predict captures authentic arithmetic; future cells are unavailable', async () => {
+  const run = result(await (await ready()).handle({ ...tag, command: 'predict', document: fixture.document }));
   const detail = attentionDetail(run.run, 0, 1, 3, 2);
   assert.equal(detail.availability, 'available');
   assert.equal(detail.products.length, fixture.config.nEmbd / fixture.config.nHead);
@@ -23,25 +23,25 @@ test('worker Predict captures authentic arithmetic; future cells are unavailable
   assert.equal(future.availability, 'not_applicable'); assert.equal(future.observedLogit, null);
 });
 
-test('worker Learn evidence is an applied update and reruns identical input with new state', () => {
-  const session = ready();
-  const before = result(session.handle({ ...tag, command: 'predict', document: fixture.document }));
-  const after = result(session.handle({ ...tag, runId: 'learn', command: 'train', document: fixture.document }));
+test('worker Learn evidence is an applied update and reruns identical input with new state', async () => {
+  const session = await ready();
+  const before = result(await session.handle({ ...tag, command: 'predict', document: fixture.document }));
+  const after = result(await session.handle({ ...tag, runId: 'learn', command: 'train', document: fixture.document }));
   assert.equal(after.trainingStep, 1); assert.ok(after.learn);
   assert.deepEqual(after.learn.before.probabilities, before.probabilities);
   assert.deepEqual(after.learn.after.probabilities, after.probabilities);
   assert.notDeepEqual(after.probabilities, before.probabilities);
   for (const parameter of after.learn.update.parameters) assert.equal(parameter.after, parameter.before + parameter.delta);
-  const rerun = result(session.handle({ ...tag, runId: 'rerun', command: 'predict', document: fixture.document }));
+  const rerun = result(await session.handle({ ...tag, runId: 'rerun', command: 'predict', document: fixture.document }));
   assert.deepEqual(rerun.probabilities, after.probabilities);
-  assert.equal(session.handle({ ...tag, generationId: 1, command: 'reset' }).status, 'ready');
-  assert.equal(session.handle({ ...tag, command: 'predict', document: fixture.document }).status, 'error');
-  const reset = result(session.handle({ ...tag, generationId: 1, command: 'predict', document: fixture.document }));
+  assert.equal((await session.handle({ ...tag, generationId: 1, command: 'reset' })).status, 'ready');
+  assert.equal((await session.handle({ ...tag, command: 'predict', document: fixture.document })).status, 'error');
+  const reset = result(await session.handle({ ...tag, generationId: 1, command: 'predict', document: fixture.document }));
   assert.deepEqual(reset.probabilities, before.probabilities);
 });
 
-test('real TraceRecorder cannot change forward, gradients, or optimizer state; recording survives update', () => {
-  const capture = result(ready().handle({ ...tag, command: 'predict', document: fixture.document })).run;
+test('real TraceRecorder cannot change forward, gradients, or optimizer state; recording survives update', async () => {
+  const capture = result(await (await ready()).handle({ ...tag, command: 'predict', document: fixture.document })).run;
   const recorder = new TraceRecorder(capture.manifest);
   const plain = loadModel(fixture.config, fixture.parameters, fixture.parameterOrder);
   const observed = loadModel(fixture.config, fixture.parameters, fixture.parameterOrder);
@@ -54,21 +54,21 @@ test('real TraceRecorder cannot change forward, gradients, or optimizer state; r
   assert.equal(JSON.stringify(recording), saved);
 });
 
-test('invalid input cannot mutate the current model', () => {
-  const session = ready();
-  const before = result(session.handle({ ...tag, command: 'predict', document: fixture.document }));
-  for (const document of ['invalid', 'aaaaaaaa']) assert.equal(session.handle({ ...tag, command: 'train', document }).status, 'error');
-  const after = result(session.handle({ ...tag, command: 'predict', document: fixture.document }));
+test('invalid input cannot mutate the current model', async () => {
+  const session = await ready();
+  const before = result(await session.handle({ ...tag, command: 'predict', document: fixture.document }));
+  for (const document of ['invalid', 'aaaaaaaa']) assert.equal((await session.handle({ ...tag, command: 'train', document })).status, 'error');
+  const after = result(await session.handle({ ...tag, command: 'predict', document: fixture.document }));
   assert.deepEqual(after.probabilities, before.probabilities); assert.equal(after.trainingStep, 0);
 });
 
-test('different training histories have distinct checkpoint identities; stale reset is rejected', () => {
-  const a = ready(); const b = new ModelSession();
-  b.handle({ ...tag, sessionId: 'other-session', command: 'initialize' });
-  const first = result(a.handle({ ...tag, command: 'train', document: 'abca' }));
-  const second = result(b.handle({ ...tag, sessionId: 'other-session', command: 'train', document: 'cccc' }));
+test('different training histories have distinct checkpoint identities; stale reset is rejected', async () => {
+  const a = await ready(); const b = new ModelSession();
+  await b.handle({ ...tag, sessionId: 'other-session', command: 'initialize' });
+  const first = result(await a.handle({ ...tag, command: 'train', document: 'abca' }));
+  const second = result(await b.handle({ ...tag, sessionId: 'other-session', command: 'train', document: 'cccc' }));
   assert.notEqual(first.run.manifest.startingCheckpointId, second.run.manifest.startingCheckpointId);
-  a.handle({ ...tag, generationId: 1, command: 'reset' });
-  assert.equal(a.handle({ ...tag, generationId: 0, command: 'reset' }).status, 'error');
-  assert.equal(a.handle({ ...tag, generationId: 1, command: 'predict', document: 'abca' }).status, 'result');
+  await a.handle({ ...tag, generationId: 1, command: 'reset' });
+  assert.equal((await a.handle({ ...tag, generationId: 0, command: 'reset' })).status, 'error');
+  assert.equal((await a.handle({ ...tag, generationId: 1, command: 'predict', document: 'abca' })).status, 'result');
 });

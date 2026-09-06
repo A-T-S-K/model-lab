@@ -1,6 +1,6 @@
 {
   "name": "ai-village-model-lab",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,7 +12,10 @@
     "build": "npm run typecheck && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "acceptance": "npm run test:reference && npm run test && npm run build && npm run test:browser",
-    "test:isolation": "python3 scripts/check_isolation.py"
+    "test:isolation": "python3 scripts/check_isolation.py",
+    "benchmark:capture": "node --expose-gc --import tsx scripts/benchmark-capture.ts",
+    "benchmark:training": "node --expose-gc --import tsx scripts/benchmark-training.ts",
+    "benchmark:experiments": "node --import tsx scripts/benchmark-experiments.ts"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

@@ -90,9 +90,9 @@ After concatenating heads, `forward` applies the attention output matrix and add
 
 ## 6. Distinguish execution from evidence
 
-The model's optional observer receives numeric copies after operations have run. `TraceRecorder` copies and freezes that evidence, bounds values and artifact metadata, and labels unavailable capture explicitly. `TracePlayer` can replay saved JSON without importing the model. See [evidence and operations](docs/evidence-and-operations.md) for the precise vocabulary.
+The semantic observer receives numeric copies after operations have run. The optional worker-private microscope callback additionally receives actual scalar roots; only immutable numeric graph slices cross the worker boundary. `TraceRecorder` copies and freezes that evidence, bounds values and artifact metadata, and labels unavailable capture explicitly. `TracePlayer` can replay saved JSON without importing the model. See [evidence and operations](docs/evidence-and-operations.md) for the precise vocabulary.
 
-**Real:** the displayed semantic vectors originate in model execution. **Simplified:** the recorder captures useful semantic boundaries, not every scalar node and local derivative by default.
+**Real:** the displayed semantic vectors originate in model execution. **Simplified:** the semantic recorder captures useful boundaries while the private capture context retains complete scalar evidence for the current tiny run.
 
 **Generalizes:** immutable evidence, explicit provenance, and bounded capture. **Does not directly generalize:** these provisional concept names are not a universal ontology for every neural network.
 
@@ -102,13 +102,13 @@ The model's optional observer receives numeric copies after operations have run.
 
 ## 7. Cross the worker boundary last
 
-`ModelSession` owns the live model/optimizer and records predictions. `attentionDetail` derives multiplication terms from captured Q/K arrays and reports the separately observed logit and probability. `ModelWorkerClient` sends tagged commands to the worker, rejects responses from old sessions/generations, and terminates/restarts the worker on reset. Cancellation uses that same reset path and restores the fixture; it does not retain partially completed training.
+`ModelSession` owns the live model/optimizer and records predictions. `attentionDetail` derives multiplication terms from captured Q/K arrays and reports the separately observed logit and probability. `ModelWorkerClient` sends tagged commands to the worker, rejects responses from old sessions/generations, and terminates/restarts the worker on reset. Cancellation uses that same termination path and restores the last completed snapshot; it does not retain partially completed training. Reset can restore a selected archived snapshot. Clear session also clears the separate inspector and main-thread history.
 
 **Real:** browser-local model execution occurs in a worker, with batched result objects sent to the page. **Simplified:** work inside one model command is synchronous; cancellation terminates the worker rather than interrupting its scalar loop cooperatively.
 
 **Generalizes:** separating UI responsiveness from computation and rejecting stale responses. **Does not directly generalize:** this small command protocol is not a distributed training service.
 
-**Try:** follow a `predict` request through [client.ts](app/worker/client.ts), [protocol.ts](app/worker/protocol.ts), [worker.ts](app/worker/worker.ts), and `ModelSession.handle`. For a `train` request, distinguish the `learn` before/update/after payload from the semantic recording: that recording describes a prediction using the post-update model.
+**Try:** follow a `predict` request through [client.ts](app/worker/client.ts), [protocol.ts](app/worker/protocol.ts), [worker.ts](app/worker/worker.ts), and `ModelSession.handle`. For a `train` request, follow the first-class LearningExperiment: beforeRun, observed trainingRun with loss and gradient anchors, exact resultingSnapshot, and afterRun. The current prediction shows afterRun; its gradient action refers back to the actual trainingRun.
 
 **Tests worth reading:** start with the fixed-input update and snapshot tests above, then follow the worker/browser checks listed by [package.json](package.json) as integration evolves.
 
@@ -123,3 +123,9 @@ abs(actual - expected) <= 1e-10 + 1e-9 * abs(expected)
 No canonical numbers are rounded for display. This tolerance allows last-bit differences in ordered reductions and transcendental functions; it is not permission to fabricate unavailable values. Finite-difference gradient checks have their own documented tolerances. Python fixture regeneration separately checks exact serialized bytes in the validated environment.
 
 From the Model Lab directory, `npm run test:reference` runs the offline oracle tests and deterministic regeneration, and `npm test` runs the configured TypeScript suites. [package.json](package.json) lists build and browser acceptance commands. Those commands exercise implementation evidence; this guide itself is not an acceptance log.
+
+## 8. Use the microscope without hiding the model
+
+Read [inspect/capture.ts](inspect/capture.ts) after the math. `CaptureContext` maintains private root identities and snapshots scalar nodes and operand-occurrence edges. `trainStep` invokes `captureBackward` between `backward` and `adamStep`. The callback copies child adjoints, local derivatives, contributions, and parameter gradients before mutation. A repeated operand is two edges. The numerical model still executes directly when no observer is present.
+
+Read [archive/snapshot.ts](archive/snapshot.ts) for canonical binary64 identity, [archive/experiment.ts](archive/experiment.ts) for exact transition validation, and [app/worker/inspector.ts](app/worker/inspector.ts) for disposable historical reconstruction. Historical verification compares every available semantic anchor and requires recorded gradients for backward explanations. Source panels bundle these actual source files with SHA-256 identities and curated symbols, so no network or fixed line numbers are needed.

@@ -5,281 +5,308 @@
   font-synthesis:none;
   font-weight:400;
   line-height:1.5}
-  * {
-    box-sizing:border-box}
-    body {
-      margin:0}
-      button,input,select {
-        font:inherit}
-        button,select {
-          cursor:pointer}
-          button {
-            border:1px solid #b7c9bf;
-            border-radius:7px;
-            background:#fff;
-            color:#153331;
-            padding:9px 16px;
-            font-weight:650}
-            button:hover {
-              background:#e3ede3}
-              button:disabled {
-                cursor:wait;
-                opacity:.5}
-                button.primary {
-                  background:#174c42;
-                  color:white;
-                  border-color:#174c42}
-                  input,select {
-                    border:1px solid #b7c9bf;
-                    background:#fff;
-                    border-radius:7px;
-                    padding:9px 12px;
-                    color:#153331}
-                    input {
-                      min-width:0}
-                      label {
-                        display:flex;
-                        gap:7px;
-                        flex-direction:column;
-                        font-size:12px;
-                        font-weight:700}
-                        header {
-                          background:#102e2a;
-                          color:#edf7eb;
-                          padding:24px max(24px,calc((100vw - 1280px)/2));
-                          border-bottom:4px solid #b7e078}
-                          header .eyebrow {
-                            color:#b7e078}
-                            h1 {
-                              font-size:38px;
-                              letter-spacing:-1.6px;
-                              margin:4px 0}
-                              h2 {
-                                font-size:21px;
-                                letter-spacing:-.5px;
-                                margin:0 0 12px}
-                                h3 {
-                                  font-size:14px;
-                                  margin:12px 0 8px}
-                                  p {
-                                    margin:8px 0}
-                                    main {
-                                      max-width:1328px;
-                                      padding:24px;
-                                      margin:auto}
-                                      .eyebrow {
-                                        font:700 11px ui-monospace,monospace;
-                                        letter-spacing:1.8px;
-                                        text-transform:uppercase}
-                                        .muted,small {
-                                          color:#61736d}
-                                          .badge {
-                                            display:inline-flex;
-                                            background:#d8ebce;
-                                            color:#294d28;
-                                            font:700 10px ui-monospace,monospace;
-                                            border:1px solid #a8c798;
-                                            border-radius:4px;
-                                            padding:4px 7px;
-                                            letter-spacing:.7px}
-                                            .toolbar,.controls,.row {
-                                              display:flex;
-                                              align-items:end;
-                                              gap:12px;
-                                              flex-wrap:wrap}
-                                              .toolbar {
-                                                padding:18px;
-                                                background:#e9eee4;
-                                                border:1px solid #d1dccd;
-                                                border-radius:10px;
-                                                margin-bottom:18px}
-                                                .toolbar p {
-                                                  font-size:12px}
-                                                  .grid {
-                                                    display:grid;
-                                                    grid-template-columns:minmax(0,1.3fr) minmax(320px,1fr);
-                                                    gap:18px}
-                                                    .panel,section.card {
-                                                      background:#fff;
-                                                      border:1px solid #d5dfd3;
-                                                      border-radius:10px;
-                                                      padding:22px;
-                                                      margin-bottom:18px;
-                                                      min-width:0}
-                                                      .wide {
-                                                        grid-column:1/-1}
-                                                        .tokens {
-                                                          display:flex;
-                                                          gap:7px;
-                                                          flex-wrap:wrap;
-                                                          margin:14px 0}
-                                                          .token {
-                                                            display:inline-flex;
-                                                            align-items:center;
-                                                            justify-content:center;
-                                                            flex-direction:column;
-                                                            min-width:48px;
-                                                            border:1px solid #bdcfb9;
-                                                            border-radius:7px;
-                                                            background:#edf4e8;
-                                                            padding:8px}
-                                                            .token.active {
-                                                              background:#174c42;
-                                                              color:#fff}
-                                                              .token small {
-                                                                font-size:10px;
-                                                                color:inherit;
-                                                                opacity:.7}
-                                                                .flow {
-                                                                  display:flex;
-                                                                  gap:6px;
-                                                                  flex-wrap:wrap;
-                                                                  margin:10px 0}
-                                                                  .flow button {
-                                                                    font-size:11px;
-                                                                    padding:6px 8px;
-                                                                    border-radius:4px}
-                                                                    .flow button.active {
-                                                                      background:#174c42;
-                                                                      color:#fff}
-                                                                      .heatmap {
-                                                                        display:flex;
-                                                                        gap:4px;
-                                                                        flex-wrap:wrap;
-                                                                        margin:12px 0}
-                                                                        .heatmap span {
-                                                                          min-width:54px;
-                                                                          text-align:center;
-                                                                          padding:12px 5px;
-                                                                          border-radius:4px;
-                                                                          font:11px ui-monospace,monospace;
-                                                                          border:1px solid #d8e3d7}
-                                                                          .probability-row {
-                                                                            display:grid;
-                                                                            grid-template-columns:46px 1fr 85px;
-                                                                            align-items:center;
-                                                                            gap:10px;
-                                                                            margin:10px 0;
-                                                                            font-size:13px}
-                                                                            .bar-track {
-                                                                              background:#edf1e9;
-                                                                              height:17px;
-                                                                              border-radius:3px;
-                                                                              overflow:hidden}
-                                                                              .bar {
-                                                                                background:#519879;
-                                                                                height:100%}
-                                                                                .probability-row code {
-                                                                                  text-align:right}
-                                                                                  .attention-grid {
-                                                                                    border-collapse:separate;
-                                                                                    border-spacing:5px;
-                                                                                    width:100%;
-                                                                                    margin-top:12px}
-                                                                                    .attention-grid td,.attention-grid th {
-                                                                                      font-size:11px;
-                                                                                      text-align:center}
-                                                                                      .attention-grid button {
-                                                                                        width:100%;
-                                                                                        padding:9px 4px;
-                                                                                        font:11px ui-monospace,monospace;
-                                                                                        background:#e2edda}
-                                                                                        .attention-grid button.selected {
-                                                                                          background:#174c42;
-                                                                                          color:#fff}
-                                                                                          .masked {
-                                                                                            background:repeating-linear-gradient(135deg,#f2f3ee,#f2f3ee 5px,#e5e9e0 5px,#e5e9e0 6px);
-                                                                                            padding:10px 4px;
-                                                                                            color:#77877c;
-                                                                                            border-radius:4px}
-                                                                                            table {
-                                                                                              width:100%;
-                                                                                              border-collapse:collapse;
-                                                                                              font-size:12px}
-                                                                                              td,th {
-                                                                                                padding:7px 8px;
-                                                                                                border-bottom:1px solid #e6ece1;
-                                                                                                text-align:right}
-                                                                                                td:first-child,th:first-child {
-                                                                                                  text-align:left}
-                                                                                                  code,pre {
-                                                                                                    font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-                                                                                                    pre {
-                                                                                                      font-size:11px;
-                                                                                                      white-space:pre-wrap;
-                                                                                                      overflow-wrap:anywhere}
-                                                                                                      .equation {
-                                                                                                        font:12px/1.8 ui-monospace,monospace;
-                                                                                                        background:#f2f5ed;
-                                                                                                        border-radius:6px;
-                                                                                                        padding:12px;
-                                                                                                        overflow-wrap:anywhere}
-                                                                                                        .metric {
-                                                                                                          font-size:25px;
-                                                                                                          font-weight:700;
-                                                                                                          letter-spacing:-.7px}
-                                                                                                          .metrics {
-                                                                                                            display:flex;
-                                                                                                            gap:30px;
-                                                                                                            flex-wrap:wrap;
-                                                                                                            margin:16px 0}
-                                                                                                            .error {
-                                                                                                              padding:12px;
-                                                                                                              border:1px solid #c68664;
-                                                                                                              background:#fff0e6;
-                                                                                                              color:#873a24;
-                                                                                                              border-radius:7px}
-                                                                                                              .note {
-                                                                                                                font-size:12px;
-                                                                                                                background:#f1f4eb;
-                                                                                                                border-left:3px solid #92b871;
-                                                                                                                padding:10px 12px;
-                                                                                                                margin:12px 0}
-                                                                                                                .source-links {
-                                                                                                                  display:flex;
-                                                                                                                  gap:14px;
-                                                                                                                  flex-wrap:wrap;
-                                                                                                                  font-size:12px}
-                                                                                                                  a {
-                                                                                                                    color:#176a52}
-                                                                                                                    footer {
-                                                                                                                      font-size:12px;
-                                                                                                                      padding:18px 0;
-                                                                                                                      color:#60776c}
-                                                                                                                      .sr-only {
-                                                                                                                        position:absolute;
-                                                                                                                        width:1px;
-                                                                                                                        height:1px;
-                                                                                                                        overflow:hidden;
-                                                                                                                        clip:rect(0,0,0,0)}
-                                                                                                                        @media(max-width:850px) {
-                                                                                                                          .grid {
-                                                                                                                            grid-template-columns:1fr}
-                                                                                                                            h1 {
-                                                                                                                              font-size:30px}
-                                                                                                                              main {
-                                                                                                                                padding:14px}
-                                                                                                                                .panel,section.card {
-                                                                                                                                  padding:16px}
-                                                                                                                                  .toolbar {
-                                                                                                                                    align-items:stretch}
-                                                                                                                                    .toolbar input {
-                                                                                                                                      width:100%}
-                                                                                                                                      .attention-grid {
-                                                                                                                                        border-spacing:2px}
-                                                                                                                                        .attention-grid button {
-                                                                                                                                          font-size:9px}
-                                                                                                                                        }
-                                                                                                                                        .table-scroll {
-                                                                                                                                          max-width:100%;
-                                                                                                                                          overflow-x:auto}
-                                                                                                                                          .table-scroll .attention-grid {
-                                                                                                                                            min-width:350px}
-                                                                                                                                            select {
-                                                                                                                                              max-width:100%}
-                                                                                                                                              @media(max-width:850px) {
-                                                                                                                                                td,th {
-                                                                                                                                                  padding:7px 4px}
-                                                                                                                                                  .table-scroll .attention-grid {
-                                                                                                                                                    min-width:350px}
-                                                                                                                                                  }
+* {
+  box-sizing:border-box}
+body {
+  margin:0}
+button,input,select {
+  font:inherit}
+button,select {
+  cursor:pointer}
+button {
+  border:1px solid #b7c9bf;
+  border-radius:7px;
+  background:#fff;
+  color:#153331;
+  padding:9px 16px;
+  font-weight:650}
+button:hover {
+  background:#e3ede3}
+button:disabled {
+  cursor:wait;
+  opacity:.5}
+button.primary {
+  background:#174c42;
+  color:white;
+  border-color:#174c42}
+input,select {
+  border:1px solid #b7c9bf;
+  background:#fff;
+  border-radius:7px;
+  padding:9px 12px;
+  color:#153331}
+input {
+  min-width:0}
+label {
+  display:flex;
+  gap:7px;
+  flex-direction:column;
+  font-size:12px;
+  font-weight:700}
+header {
+  background:#102e2a;
+  color:#edf7eb;
+  padding:24px max(24px,calc((100vw - 1280px)/2));
+  border-bottom:4px solid #b7e078}
+header .eyebrow {
+  color:#b7e078}
+h1 {
+  font-size:38px;
+  letter-spacing:-1.6px;
+  margin:4px 0}
+h2 {
+  font-size:21px;
+  letter-spacing:-.5px;
+  margin:0 0 12px}
+h3 {
+  font-size:14px;
+  margin:12px 0 8px}
+p {
+  margin:8px 0}
+main {
+  max-width:1328px;
+  padding:24px;
+  margin:auto}
+.eyebrow {
+  font:700 11px ui-monospace,monospace;
+  letter-spacing:1.8px;
+  text-transform:uppercase}
+.muted,small {
+  color:#61736d}
+.badge {
+  display:inline-flex;
+  background:#d8ebce;
+  color:#294d28;
+  font:700 10px ui-monospace,monospace;
+  border:1px solid #a8c798;
+  border-radius:4px;
+  padding:4px 7px;
+  letter-spacing:.7px}
+.toolbar,.controls,.row {
+  display:flex;
+  align-items:end;
+  gap:12px;
+  flex-wrap:wrap}
+.toolbar {
+  padding:18px;
+  background:#e9eee4;
+  border:1px solid #d1dccd;
+  border-radius:10px;
+  margin-bottom:18px}
+.toolbar p {
+  font-size:12px}
+.grid {
+  display:grid;
+  grid-template-columns:minmax(0,1.3fr) minmax(320px,1fr);
+  gap:18px}
+.panel,section.card {
+  background:#fff;
+  border:1px solid #d5dfd3;
+  border-radius:10px;
+  padding:22px;
+  margin-bottom:18px;
+  min-width:0}
+.wide {
+  grid-column:1/-1}
+.tokens {
+  display:flex;
+  gap:7px;
+  flex-wrap:wrap;
+  margin:14px 0}
+.token {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex-direction:column;
+  min-width:48px;
+  border:1px solid #bdcfb9;
+  border-radius:7px;
+  background:#edf4e8;
+  padding:8px}
+.token.active {
+  background:#174c42;
+  color:#fff}
+.token small {
+  font-size:10px;
+  color:inherit;
+  opacity:.7}
+.flow {
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  margin:10px 0}
+.flow button {
+  font-size:11px;
+  padding:6px 8px;
+  border-radius:4px}
+.flow button.active {
+  background:#174c42;
+  color:#fff}
+.heatmap {
+  display:flex;
+  gap:4px;
+  flex-wrap:wrap;
+  margin:12px 0}
+.heatmap span {
+  min-width:54px;
+  text-align:center;
+  padding:12px 5px;
+  border-radius:4px;
+  font:11px ui-monospace,monospace;
+  border:1px solid #d8e3d7}
+.probability-row {
+  display:grid;
+  grid-template-columns:46px 1fr 85px;
+  align-items:center;
+  gap:10px;
+  margin:10px 0;
+  font-size:13px}
+.bar-track {
+  background:#edf1e9;
+  height:17px;
+  border-radius:3px;
+  overflow:hidden}
+.bar {
+  background:#519879;
+  height:100%}
+.probability-row code {
+  text-align:right}
+.attention-grid {
+  border-collapse:separate;
+  border-spacing:5px;
+  width:100%;
+  margin-top:12px}
+.attention-grid td,.attention-grid th {
+  font-size:11px;
+  text-align:center}
+.attention-grid button {
+  width:100%;
+  padding:9px 4px;
+  font:11px ui-monospace,monospace;
+  background:#e2edda}
+.attention-grid button.selected {
+  background:#174c42;
+  color:#fff}
+.masked {
+  background:repeating-linear-gradient(135deg,#f2f3ee,#f2f3ee 5px,#e5e9e0 5px,#e5e9e0 6px);
+  padding:10px 4px;
+  color:#77877c;
+  border-radius:4px}
+table {
+  width:100%;
+  border-collapse:collapse;
+  font-size:12px}
+td,th {
+  padding:7px 8px;
+  border-bottom:1px solid #e6ece1;
+  text-align:right}
+td:first-child,th:first-child {
+  text-align:left}
+code,pre {
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+pre {
+  font-size:11px;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere}
+.equation {
+  font:12px/1.8 ui-monospace,monospace;
+  background:#f2f5ed;
+  border-radius:6px;
+  padding:12px;
+  overflow-wrap:anywhere}
+.metric {
+  font-size:25px;
+  font-weight:700;
+  letter-spacing:-.7px}
+.metrics {
+  display:flex;
+  gap:30px;
+  flex-wrap:wrap;
+  margin:16px 0}
+.error {
+  padding:12px;
+  border:1px solid #c68664;
+  background:#fff0e6;
+  color:#873a24;
+  border-radius:7px}
+.note {
+  font-size:12px;
+  background:#f1f4eb;
+  border-left:3px solid #92b871;
+  padding:10px 12px;
+  margin:12px 0}
+.source-links {
+  display:flex;
+  gap:14px;
+  flex-wrap:wrap;
+  font-size:12px}
+a {
+  color:#176a52}
+footer {
+  font-size:12px;
+  padding:18px 0;
+  color:#60776c}
+.sr-only {
+  position:absolute;
+  width:1px;
+  height:1px;
+  overflow:hidden;
+  clip:rect(0,0,0,0)}
+@media(max-width:850px) {
+  .grid {
+    grid-template-columns:1fr}
+  h1 {
+    font-size:30px}
+  main {
+    padding:14px}
+  .panel,section.card {
+    padding:16px}
+  .toolbar {
+    align-items:stretch}
+  .toolbar input {
+    width:100%}
+  .attention-grid {
+    border-spacing:2px}
+  .attention-grid button {
+    font-size:9px}
+}
+.table-scroll {
+  max-width:100%;
+  overflow-x:auto}
+.table-scroll .attention-grid {
+  min-width:350px}
+select {
+  max-width:100%}
+@media(max-width:850px) {
+  td,th {
+    padding:7px 4px}
+  .table-scroll .attention-grid {
+    min-width:350px}
+}
+
+/* Three projections over the same immutable evidence. */
+.mode-tabs { display:flex; gap:8px; margin-bottom:18px; }
+main[data-mode="guided"] .explore-panel { display:none; }
+main[data-mode="microscope"] #microscope { grid-row:1; }
+main[data-mode="guided"] .grid { grid-template-columns:1fr; }
+main[data-mode="guided"] .wide { grid-column:auto; }
+.heatmap button { min-width:64px; padding:10px 5px; font:11px ui-monospace,monospace; }
+.source { margin-top:18px; border-top:1px solid #d5dfd3; padding-top:14px; }
+summary { cursor:pointer; font-weight:650; padding:8px 0; }
+.source pre { white-space:pre-wrap; overflow-wrap:anywhere; background:#102e2a; color:#edf7eb; padding:16px; border-radius:7px; font-size:12px; max-height:420px; overflow:auto; }
+.source small code { overflow-wrap:anywhere; }
+.breadcrumbs { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin:16px 0; }
+.breadcrumbs button { font-size:12px; }
+.breadcrumbs button::before { content:'› '; }
+.operand-list { display:flex; flex-wrap:wrap; gap:8px; }
+.operand-list button { text-align:left; font:12px ui-monospace,monospace; overflow-wrap:anywhere; }
+.history .controls label { flex:1; min-width:180px; }
+.history select { width:100%; }
+.equation { overflow-wrap:anywhere; }
+#microscope { scroll-margin-top:16px; }
+#microscope code { overflow-wrap:anywhere; }
+button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible { outline:3px solid #638d35; outline-offset:3px; }
+@media (prefers-reduced-motion: reduce) { *,*::before,*::after { scroll-behavior:auto!important; animation:none!important; transition:none!important; } }
+@media (max-width:600px) { .mode-tabs button { flex:1; padding:10px 6px; } .history .controls label { min-width:100%; } }
+.kiosk-option { flex-direction:row; align-items:center; margin:16px 0; }
+button,.flow button,select { min-height:44px; }

@@ -15,9 +15,10 @@ test('production browser Predict exposes real arithmetic; Learn applies Adam and
   const probabilities = async () => page.getByTestId('probabilities').locator('code').evaluateAll(nodes => nodes.map(node => Number(node.getAttribute('title'))));
   const before = await probabilities();
   for (let i = 0; i < before.length; i++) expect(before[i]).toBeCloseTo(fixture.positions[4].probabilities[i], 10);
+  await page.getByRole('button', { name: 'Explore', exact: true }).click();
   await page.locator('#head').selectOption('1');
   await page.locator('[data-query="3"][data-key="2"]').click();
-  await expect(page.getByTestId('attention-detail')).toContainText('DERIVED FROM LIVE EVIDENCE');
+  await expect(page.getByTestId('attention-detail')).toContainText('DERIVED FROM OBSERVED EVIDENCE');
   const rows = await page.getByTestId('attention-detail').locator('tbody tr').evaluateAll(nodes => nodes.map(row => Array.from(row.querySelectorAll('td[title]')).map(cell => Number(cell.getAttribute('title')))));
   expect(rows).toHaveLength(4);
   rows.forEach(([q, k, product]) => expect(q * k).toBeCloseTo(product, 14));

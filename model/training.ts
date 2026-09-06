@@ -86,6 +86,7 @@ export function trainStep(model: Model, optimizer: OptimizerState, inputIds: rea
   const result = loss(model, inputIds, targetIds, observer);
   const before = { logits: result.logits.map(row => row.map(value => value.data)), probabilities: result.probabilities.map(row => row.map(value => value.data)) };
   backward(result.mean);
+  observer?.captureBackward?.(result.mean);
   const update = adamStep(model, optimizer);
   optimizer.datasetCursor++;
   // Reexecute the same fixed input using the actual updated model.

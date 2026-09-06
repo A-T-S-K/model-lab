@@ -1,10 +1,13 @@
 import fixture from '../../fixtures/canonical.initial.json';
-import { loadModel, createOptimizerState, snapshotTraining } from '../../model/state.js';
+import { loadModel, createOptimizerState, snapshotTraining, restoreTraining } from '../../model/state.js';
 import { predict, tokenize } from '../../model/microgpt.js';
 import { trainStep } from '../../model/training.js';
 import { TraceRecorder } from '../../trace/recorder.js';
 import { TracePlayer } from '../../trace/player.js';
 import type { RecordedRun, RunManifest } from '../../trace/types.js';
+import { archiveSnapshot, snapshotId, type ArchivedSnapshot, type LearningExperiment } from '../../archive/session.js';
+import { CaptureContext } from '../../inspect/capture.js';
+import { runManifest } from './manifest.js';
 import type { AttentionDetail, WorkerRequest, WorkerResponse } from './protocol.js';
 
 export function attentionDetail(run: RecordedRun, layer: number, head: number, query: number, key: number): AttentionDetail {
@@ -27,24 +30,39 @@ export function attentionDetail(run: RecordedRun, layer: number, head: number, q
     scaled: sum * scale, observedLogit: logits[key], probability: probabilities[key], logits: [...logits], sourceRunId: run.manifest.runId };
 }
 
-/** Synchronous model logic is invoked only inside the worker in the browser. */
+/** Owns the only mutable live model. Requests execute serially across async hashing. */
 export class ModelSession {
   private model = loadModel(fixture.config, fixture.parameters, fixture.parameterOrder);
   private optimizer = createOptimizerState(this.model, fixture.optimizer);
   private run?: RecordedRun;
+  private contexts = new Map<string, CaptureContext>();
   private generationId = -1;
   private sessionId = '';
+  private queue: Promise<unknown> = Promise.resolve();
 
-  handle(request: WorkerRequest): WorkerResponse {
+  handle(request: WorkerRequest): Promise<WorkerResponse> {
+    const response = this.queue.then(() => this.execute(request));
+    this.queue = response.catch(() => undefined);
+    return response;
+  }
+
+  private async execute(request: WorkerRequest): Promise<WorkerResponse> {
     const tag = { sessionId: request.sessionId, runId: request.runId, generationId: request.generationId };
     try {
-      if (request.command === 'initialize' || request.command === 'reset') {
+      if (request.command === 'initialize' || request.command === 'reset' || request.command === 'restore') {
         if (request.generationId < this.generationId || (this.sessionId && request.sessionId !== this.sessionId)) throw new Error('Stale session or generation');
-        this.model = loadModel(fixture.config, fixture.parameters, fixture.parameterOrder);
-        this.optimizer = createOptimizerState(this.model, fixture.optimizer);
-        this.run = undefined;
+        if (request.command === 'restore') {
+          if (await snapshotId(request.snapshot.state) !== request.snapshot.id) throw new Error('Snapshot identity mismatch');
+          const restored = restoreTraining(request.snapshot.state);
+          this.model = restored.model; this.optimizer = restored.optimizer;
+        } else {
+          this.model = loadModel(fixture.config, fixture.parameters, fixture.parameterOrder);
+          this.optimizer = createOptimizerState(this.model, fixture.optimizer);
+        }
+        this.run = undefined; this.contexts.clear();
         this.sessionId = request.sessionId; this.generationId = request.generationId;
-        return { ...tag, status: 'ready', snapshot: snapshotTraining(this.model, this.optimizer) };
+        const snapshot = snapshotTraining(this.model, this.optimizer);
+        return { ...tag, status: 'ready', snapshot, archivedSnapshot: await archiveSnapshot(snapshot) };
       }
       if (request.sessionId !== this.sessionId || request.generationId !== this.generationId) throw new Error('Stale session or generation');
       if (request.command === 'cancel') return { ...tag, status: 'cancelled' };
@@ -52,21 +70,50 @@ export class ModelSession {
         if (!this.run) throw new Error('Predict first to capture evidence');
         return { ...tag, status: 'detail', detail: attentionDetail(this.run, request.layer, request.head, request.query, request.key) };
       }
+      if (request.command === 'inspect') {
+        const context = this.contexts.get(request.sourceRunId);
+        return { ...tag, status: 'inspection', inspection: context ? context.inspect(request.target) : {
+          sourceRunId: request.sourceRunId, provenance: 'observed', availability: 'not_captured', graph: null,
+          reason: 'The live execution has been released. Use the archived snapshot for verified historical inspection.',
+        } };
+      }
       if (request.command !== 'predict' && request.command !== 'train') throw new Error('Unknown worker command');
       const { tokenIds, targetIds } = tokenize(this.model, request.document);
-      const learn = request.command === 'train' ? trainStep(this.model, this.optimizer, tokenIds, targetIds) : undefined;
-      const manifest: RunManifest = {
-        runId: request.runId, sessionId: this.sessionId, generationId: this.generationId,
-        model: { id: 'microgpt', version: fixture.reference.revision, architecture: this.model.config as unknown as RunManifest['model']['architecture'], capabilities: ['predict', 'learn', 'attentionDetail'] },
-        startingCheckpointId: this.optimizer.step === 0 ? `fixture-${fixture.reference.sha256}` : `${this.sessionId}:${this.generationId}:step-${this.optimizer.step}`,
-        startingSnapshotId: `${this.sessionId}:${this.generationId}:step-${this.optimizer.step}`,
-        input: tokenIds, targets: targetIds, numeric: { dtype: 'float64', policy: 'ECMAScript binary64; ordered scalar reductions' },
-        capture: { level: 'semantic', maxArtifacts: 1024, maxValues: 16384 }, runtimeVersion: 'model-lab-0.1.0',
+      const starting = await archiveSnapshot(snapshotTraining(this.model, this.optimizer));
+      const capture = (id: string, snapshot: ArchivedSnapshot) => {
+        const recorder = new TraceRecorder(runManifest(id, tag, snapshot, tokenIds, targetIds));
+        return { recorder, context: new CaptureContext(this.model, recorder) };
       };
-      const recorder = new TraceRecorder(manifest);
-      const result = predict(this.model, tokenIds, recorder);
-      this.run = recorder.finish();
-      return { ...tag, status: 'result', result: { ...result, run: this.run, tokenIds, targetIds, trainingStep: this.optimizer.step, ...(learn ? { learn } : {}) } };
+      if (request.command === 'predict') {
+        const { recorder, context } = capture(request.runId, starting);
+        const prediction = predict(this.model, tokenIds, context);
+        this.run = recorder.finish(); this.contexts.clear(); this.contexts.set(request.runId, context);
+        return { ...tag, status: 'result', result: { ...prediction, run: this.run, tokenIds, targetIds,
+          trainingStep: this.optimizer.step, snapshots: [starting], runs: [this.run] } };
+      }
+      // All three executions have their own immutable manifests and semantic evidence.
+      const before = capture(`${request.runId}:before`, starting);
+      predict(this.model, tokenIds, before.context);
+      const beforeRun = before.recorder.finish();
+      const training = capture(`${request.runId}:training`, starting);
+      const learn = trainStep(this.model, this.optimizer, tokenIds, targetIds, training.context);
+      const trainingRun = training.recorder.finish();
+      const resulting = await archiveSnapshot(snapshotTraining(this.model, this.optimizer));
+      const after = capture(request.runId, resulting);
+      const prediction = predict(this.model, tokenIds, after.context);
+      const afterRun = after.recorder.finish();
+      const experiment: LearningExperiment = {
+        id: `${request.runId}:learning`, startingSnapshotId: starting.id, resultingSnapshotId: resulting.id,
+        beforeRunId: beforeRun.manifest.runId, trainingRunId: trainingRun.manifest.runId,
+        afterRunId: afterRun.manifest.runId, backwardRunId: trainingRun.manifest.runId,
+        objective: { inputIds: tokenIds, targetIds, meanLoss: learn.meanLoss }, update: learn.update,
+      };
+      this.run = afterRun; this.contexts.clear();
+      this.contexts.set(trainingRun.manifest.runId, training.context);
+      this.contexts.set(afterRun.manifest.runId, after.context);
+      return { ...tag, status: 'result', result: { ...prediction, run: afterRun, tokenIds, targetIds,
+        trainingStep: this.optimizer.step, learn, experiment, snapshots: [starting, resulting],
+        runs: [beforeRun, trainingRun, afterRun] } };
     } catch (error) {
       return { ...tag, status: 'error', error: error instanceof Error ? error.message : String(error) };
     }
