@@ -183,3 +183,25 @@ test('Clear session during partial-batch cancellation cannot count old evidence 
   await page.getByRole('button', { name: 'Explore', exact: true }).click();
   await expect(page.getByTestId('history-count')).toHaveText(initialHistory!);
 });
+
+test('Guided depth navigation rebinds attention arithmetic and clamps the selected key', async ({ page }) => {
+  await page.goto('/'); await expect(page.getByTestId('status')).toContainText('Live prediction complete');
+  for (const action of ['#why-prediction', '#guided-explore', '#guided-microscope']) {
+    if (action !== '#why-prediction') {
+      await page.getByRole('button', { name: 'Guided', exact: true }).click();
+      await page.locator('#teach').click();
+      await expect(page.getByTestId('document-input')).toBeEnabled();
+    }
+    await page.getByRole('button', { name: 'Explore', exact: true }).click();
+    await page.locator('[data-query="4"][data-key="4"]').click();
+    await expect(page.getByTestId('attention-detail')).toContainText('all 5 available key logits');
+    await page.getByRole('button', { name: 'Guided', exact: true }).click();
+    await page.locator(action).click();
+    await expect(page.locator('[data-token="3"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('[data-query="3"][data-key="3"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('attention-detail')).toContainText('all 4 available key logits');
+    const arithmetic = await page.getByTestId('attention-detail').textContent();
+    await page.locator('[data-token="3"]').click();
+    await expect(page.getByTestId('attention-detail')).toHaveText(arithmetic!);
+  }
+});

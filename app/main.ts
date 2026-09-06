@@ -154,18 +154,19 @@ function bind(): void {
   document.querySelector('#cancel')!.addEventListener('click', () => void reset(true));
   document.querySelector('#clear-session')!.addEventListener('click', () => void reset(false, true));
   document.querySelectorAll<HTMLButtonElement>('button[data-mode]').forEach(button => button.addEventListener('click', () => { mode = button.dataset.mode as typeof mode; render(); }));
-  document.querySelector('#why-prediction')?.addEventListener('click', () => { if (mode === 'guided' && result) selectedToken = lessonPosition(result); mode = 'explore'; selectedKind = 'probabilities'; render(); });
+  document.querySelector('#why-prediction')?.addEventListener('click', () => { if (mode === 'guided' && result) selectedToken = lessonPosition(result); mode = 'explore'; selectedKind = 'probabilities'; refreshAttentionSelection(); });
   document.querySelector('#teach')?.addEventListener('click', () => void execute('train', 10, true));
   document.querySelector('#guided-explore')?.addEventListener('click', () => {
     if (!selectGuidedComparison()) return;
     mode = 'explore';
     if (result) selectedToken = guidedLearning && result.run.manifest.runId === guidedLearning.afterRunId ? guidedLearning.position : lessonPosition(result);
-    selectedKind = 'probabilities'; render();
+    selectedKind = 'probabilities'; refreshAttentionSelection();
   });
   document.querySelector('#guided-microscope')?.addEventListener('click', () => {
     if (!result || busy) return;
     if (!selectGuidedComparison()) return;
     selectedToken = guidedLearning && result.run.manifest.runId === guidedLearning.afterRunId ? guidedLearning.position : lessonPosition(result); selectedKind = 'probabilities';
+    refreshAttentionSelection();
     const artifact = selectedArtifact('probabilities');
     if (artifact) void inspect(result.run.manifest.runId, { kind: 'artifact', artifactId: artifact.id, index: result.targetIds[selectedToken]! }, `Target probability · position ${selectedToken}`);
   });
@@ -195,6 +196,14 @@ function bind(): void {
   document.querySelector('#layer')?.addEventListener('change', event => { layer = Number((event.target as HTMLSelectElement).value); detail = undefined; render(); void loadDetail(); });
   document.querySelector('#head')?.addEventListener('change', event => { head = Number((event.target as HTMLSelectElement).value); detail = undefined; render(); void loadDetail(); });
   document.querySelector('#parameter-select')?.addEventListener('change', event => { selectedParameter = Number((event.target as HTMLSelectElement).value); render(); });
+}
+
+/** Position changes must rebind both the attention label and its saved arithmetic. */
+function refreshAttentionSelection(): void {
+  key = Math.min(key, selectedToken);
+  detail = undefined;
+  render();
+  void loadDetail();
 }
 
 async function loadDetail(): Promise<void> {
