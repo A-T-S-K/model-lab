@@ -1,4 +1,5 @@
 import './style.css';
+import { forwardStages, trainingStages, greedySelection } from './source/stages.js';
 import fixture from '../fixtures/canonical.initial.json';
 import { TracePlayer } from '../trace/player.js';
 import { immutableCopy, type RecordedRun, type Artifact } from '../trace/types.js';
@@ -11,35 +12,7 @@ import { ModelWorkerClient } from './worker/client.js';
 import type { AttentionDetail, RunResult } from './worker/protocol.js';
 import { detailView, escapeHtml, learnView, number, probabilityView, tokenName, vectorView } from './views/evidence.js';
 
-// Root enables this only after Python/TypeScript forward, backward, and Adam conformance.
-const LEARN_NUMERICAL_GATE = true;
 const config = fixture.config;
-const stages: readonly [string, string, string][] = [
-  ['tokenEmbedding', 'Token embedding', 'Look up this token’s learned feature vector.'],
-  ['positionEmbedding', 'Position embedding', 'Look up the vector for this position.'],
-  ['embeddingSum', 'Embedding sum', 'Add token and position embeddings component by component.'],
-  ['embeddingNorm', 'Embedding RMSNorm', 'Normalize the embedding sum using its root mean square.'],
-  ['preAttentionNorm', 'Pre-attention RMSNorm', 'Normalize again at the block’s attention entrance; both norms are real operations.'],
-  ['q', 'Q · query', 'A linear projection asks which previous positions are relevant.'],
-  ['k', 'K · key', 'A linear projection describes what this position can be matched against.'],
-  ['v', 'V · value', 'A linear projection creates the information attention can mix.'],
-  ['attentionLogits', 'Attention scores', 'Each available Q·K dot product is scaled by 1/√head width.'],
-  ['attentionProbabilities', 'Attention softmax', 'Normalize scores across keys up to this query position.'],
-  ['headOutput', 'Weighted values', 'Mix the available value vectors with actual attention probabilities.'],
-  ['attentionProjection', 'Attention projection', 'Project the concatenated head outputs back into the residual stream.'],
-  ['attentionResidual', 'Attention residual', 'Add the attention output to the block’s incoming residual stream.'],
-  ['preMlpNorm', 'Pre-MLP RMSNorm', 'Normalize the residual stream before the MLP.'],
-  ['mlpUp', 'MLP up', 'Project to the wider hidden feature vector.'],
-  ['mlpRelu', 'ReLU', 'Keep positive activations and set negative activations to zero.'],
-  ['mlpDown', 'MLP down', 'Project the activated hidden features back to embedding width.'],
-  ['mlpResidual', 'MLP residual', 'Add the MLP output to the residual stream.'],
-  ['logits', 'Output logits', 'Project the final residual stream to one score per vocabulary token.'],
-  ['attentionOutput', 'Combined heads', 'Concatenate actual head outputs before projection.'],
-  ['loss', 'Position loss', 'Negative log probability of the actual target in the training execution.'],
-  ['gradient', 'Parameter gradients', 'The actual accumulated parameter gradients captured before Adam.'],
-  ['meanLoss', 'Mean loss', 'Average the position losses used for backward.'],
-  ['probabilities', 'Output softmax', 'Normalize output logits into the next-token distribution.'],
-];
 const client = new ModelWorkerClient();
 const inspector = new InspectorWorkerClient();
 let archive = new SessionArchive();
@@ -78,7 +51,6 @@ let ready = false;
 let status = 'Initializing the local model…';
 let error = '';
 let operation = 0;
-let detailOperation = 0;
 let parameterCount: number | undefined;
 
 function selectedArtifact(kind: string, token = selectedToken): Artifact | undefined {
@@ -99,33 +71,57 @@ function renderAttention(): string {
   }).join('')}</tbody></table>`;
 }
 
+
+/** Tokenization is lossless for this organism; read the immutable run, never the editor. */
+function runBindingView(): string {
+  if (!result) return '<span class="badge">NO RUN YET</span>';
+  const captured = result.tokenIds.slice(1).map(id => config.vocabulary[id]).join('');
+  const stale = captured !== documentText;
+  const state = stale ? 'STALE EVIDENCE' : result.run.manifest.runId === liveRunId ? 'LIVE RUN' : 'ARCHIVED RUN';
+  return `<span class="badge" data-testid="run-state">${state}</span><p>This run used: <code data-testid="captured-input">${escapeHtml(captured)}</code>${stale ? `<br>Current input: <code>${escapeHtml(documentText)}</code><br>Run Predict to update the evidence.` : ''}</p>`;
+}
+
+function stageEvidence(): string {
+  if (selectedKind === 'greedy') {
+    const values = selectedArtifact('probabilities')?.values;
+    return values ? `<p>Derived from this run’s observed probabilities: highest probability → <strong>${escapeHtml(tokenName(greedySelection(values), config.vocabulary))}</strong>.</p>` : '<p>Probability evidence is unavailable.</p>';
+  }
+  if (selectedKind === 'target') return result ? `<p>Target from this run’s sequence: ${escapeHtml(tokenName(result.targetIds[selectedToken]!, config.vocabulary))}</p>` : '<p>No run selected.</p>';
+  if (selectedKind === 'targetProbability') {
+    const value = result && selectedArtifact('probabilities')?.values?.[result.targetIds[selectedToken]!];
+    return `<p>Observed target probability in this selected run: ${number(value)}.</p>`;
+  }
+  if (['backward', 'adam', 'changedParameters', 'rerun'].includes(selectedKind)) return '<p>Follow the learning experiment below for the recorded backward, optimizer update, and before/after executions.</p>';
+  return vectorView(selectedArtifact(selectedKind));
+}
+
 function render(): void {
   const openDetails = new Set(Array.from(mount.querySelectorAll('details[open] > summary')).map(summary => summary.textContent));
   const focused = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
   const focusId = focused?.id;
   const probabilities = selectedArtifact('probabilities');
   const values = probabilities?.availability === 'available' ? probabilities.values : null;
-  const greedy = values?.reduce((best, value, index) => value > values[best]! ? index : best, 0);
-  const stage = stages.find(([kind]) => kind === selectedKind)!;
+  const greedy = values ? greedySelection(values) : undefined;
+  const stage = [...forwardStages, ...trainingStages].find(([kind]) => kind === selectedKind)!;
   mount.innerHTML = `<header><div class="eyebrow">AI Village / Model Lab</div><h1>A small model. Every step inspectable.</h1><p>Follow real scalar math from characters to a prediction, then inspect what one learning update changes.</p></header>
     <main data-mode="${mode}"><nav class="mode-tabs" aria-label="Evidence mode">${(['guided', 'explore', 'microscope'] as const).map(item => `<button data-mode="${item}" aria-pressed="${mode === item}" class="${mode === item ? 'primary' : ''}">${item[0]!.toUpperCase() + item.slice(1)}</button>`).join('')}</nav><div class="toolbar"><label for="document">Input · a, b, c · up to ${config.blockSize - 1} characters<input id="document" data-testid="document-input" value="${escapeHtml(documentText)}" maxlength="${config.blockSize - 1}" pattern="[abc]*" autocomplete="off" spellcheck="false" ${busy ? 'disabled' : ''}></label>
-      <button id="predict" class="primary" ${busy || !ready ? 'disabled' : ''}>Predict</button><button id="train" ${busy || !ready || !LEARN_NUMERICAL_GATE ? 'disabled' : ''}>Learn · one update</button>
+      <button id="predict" class="primary" ${busy || !ready ? 'disabled' : ''}>Predict</button><button id="train" ${busy || !ready ? 'disabled' : ''}>Learn · one update</button>
       <button id="reset" ${!ready && !busy ? 'disabled' : ''}>Reset model</button><button id="cancel" ${!busy && !inspectionPending ? 'disabled' : ''}>Cancel operation</button>
-      <button id="clear-session">Clear session</button><div><span class="badge">${result && result.run.manifest.runId !== liveRunId ? 'ARCHIVED RUN' : 'LIVE RUN'}</span><p data-testid="status" role="status" aria-live="polite">${escapeHtml(status)}</p></div></div>
+      <button id="clear-session">Clear session</button><div><div data-testid="run-binding">${runBindingView()}</div><p data-testid="status" role="status" aria-live="polite">${escapeHtml(status)}</p></div></div>
       ${error ? `<p class="error" role="alert">${escapeHtml(error)}</p>` : ''}
       <div class="note">Tiny teaching model · ${parameterCount ?? 'loading'} parameters · ${config.nLayer} layer · ${config.nHead} heads · width ${config.nEmbd}. Starts from fixed, untrained parameters. Runs locally in a browser worker using binary64 arithmetic. Training step: <strong data-testid="training-step">${liveTrainingStep}</strong>.</div>
       ${result?.run.manifest.intervention ? `<p class="note" data-testid="intervention-declaration">Selected run uses a declared intervention: ${escapeHtml(JSON.stringify(result.run.manifest.intervention))}. Its values describe this treated execution.</p>` : ''}${mode !== 'guided' ? renderHistory() : ''}<div class="grid"><section class="panel wide"><div class="eyebrow">01 / Input → tokens → position</div><h2>Choose a position to follow</h2><p class="muted">BOS marks the beginning. Each position predicts the next token from only its prefix.</p>
         <div class="tokens">${result?.tokenIds.map((id, index) => `<button class="token ${index === selectedToken ? 'active' : ''}" data-token="${index}" aria-pressed="${index === selectedToken}"><strong>${escapeHtml(tokenName(id, config.vocabulary))}</strong><small>position ${index} · ID ${id}</small></button>`).join('') ?? '<p class="muted">Waiting for a live run.</p>'}</div>
         ${result ? `<small>Selected prefix: <code>${escapeHtml(result.tokenIds.slice(0, selectedToken + 1).map(id => tokenName(id, config.vocabulary)).join(' · '))}</code> → target in this sequence: <strong>${escapeHtml(tokenName(result.targetIds[selectedToken]!, config.vocabulary))}</strong></small>` : ''}</section>
-      <section class="panel explore-panel"><div class="eyebrow">02 / Follow the computation</div><h2>The path through the model</h2><div class="flow">${stages.map(([kind, label]) => `<button data-stage="${kind}" class="${kind === selectedKind ? 'active' : ''}" aria-pressed="${kind === selectedKind}">${label}</button>`).join('')}<button data-stage="probabilities">Greedy next-token selection</button></div>
-        <h3>${escapeHtml(stage[1])} · position ${selectedToken}</h3><p class="muted">${escapeHtml(stage[2])}</p><div data-testid="vector-evidence">${vectorView(selectedArtifact(selectedKind))}</div>${sourceView(selectedKind)}</section>
+      <section class="panel explore-panel"><div class="eyebrow">02 / Follow the computation</div><h2>The path through the model</h2><h3>Forward prediction</h3><div class="flow" data-testid="forward-stages">${forwardStages.map(([kind, label]) => `<button data-stage="${kind}" class="${kind === selectedKind ? 'active' : ''}" aria-pressed="${kind === selectedKind}">${label}</button>`).join('')}</div><h3>Training · after the forward prediction</h3><div class="flow" data-testid="training-stages">${trainingStages.map(([kind, label]) => `<button data-stage="${kind}" class="${kind === selectedKind ? 'active' : ''}" aria-pressed="${kind === selectedKind}">${label}</button>`).join('')}</div>
+        <h3>${escapeHtml(stage[1])} · position ${selectedToken}</h3><p class="muted">${escapeHtml(stage[2])}</p><div data-testid="vector-evidence">${stageEvidence()}</div>${sourceView(selectedKind)}</section>
       <section class="panel"><div class="eyebrow">03 / Read the prediction</div><h2>Next-token probabilities</h2><p class="muted">At selected position ${selectedToken}, after the current token.</p><div data-testid="probabilities">${probabilityView(values, config.vocabulary)}</div>
         ${greedy === undefined ? '' : `<div class="note">Greedy selection: <strong data-testid="greedy-token">${escapeHtml(tokenName(greedy, config.vocabulary))}</strong>${greedy === config.bosTokenId ? ' (end of sequence)' : ''}. Choose the highest probability; no random sampling is used.</div>`}<button id="why-prediction">Why this prediction?</button><p class="muted">This deliberately tiny, initially untrained model is for inspecting mechanisms, not language quality.</p></section>
       <section class="panel explore-panel"><div class="eyebrow">04 / Inspect attention</div><h2>Who can this position attend to?</h2><div class="controls"><label>Layer<select id="layer">${Array.from({ length: config.nLayer }, (_, index) => `<option value="${index}" ${index === layer ? 'selected' : ''}>${index}</option>`).join('')}</select></label><label>Head<select id="head">${Array.from({ length: config.nHead }, (_, index) => `<option value="${index}" ${index === head ? 'selected' : ''}>${index}</option>`).join('')}</select></label></div>
         <div class="table-scroll">${renderAttention()}</div><p class="muted">Rows are query positions; columns are keys. Future cells are masked, so no observed zero is invented.</p></section>
       <section class="panel explore-panel"><div class="eyebrow">05 / Open one scalar calculation</div><h2>Q · K, one multiplication at a time</h2><p class="muted">Layer ${layer} · head ${head} · query ${selectedToken} · key ${key}</p><div data-testid="attention-detail">${detailView(detail)}</div></section>
       <section class="panel wide"><div class="eyebrow">06 / One real learning update</div><h2>Prediction → loss → gradient → Adam → changed parameters</h2>
-        ${!LEARN_NUMERICAL_GATE ? '<p class="note">Learn is awaiting the numerical conformance gate.</p>' : '<p class="muted">Learn uses the entered sequence and its next-token targets. It applies one actual optimizer update, then reruns the same fixed input.</p>'}
+        <p class="muted">Learn uses the entered sequence and its next-token targets. It applies one actual optimizer update, then reruns the same fixed input.</p>
         ${result?.experiment ? `<nav class="controls" aria-label="Learning experiment"><button data-experiment-run="${escapeHtml(result.experiment.beforeRunId)}" ${busy ? 'disabled' : ''}>Before state · inspect prediction</button><span>→</span><button data-experiment-run="${escapeHtml(result.experiment.trainingRunId)}" ${busy ? 'disabled' : ''}>Observed training · loss and backward</button><span>→</span><button data-experiment-run="${escapeHtml(result.experiment.afterRunId)}" ${busy ? 'disabled' : ''}>After state · inspect prediction</button></nav><p class="muted">Exact experiment ${escapeHtml(result.experiment.id)}. Both complete snapshots and all three executions are archived independently.</p>` : ''}
         <div data-testid="learn-evidence">${learnView(result?.learn, selectedParameter, selectedToken, config.vocabulary, result?.targetIds[selectedToken], archive.snapshots.get(result?.experiment?.startingSnapshotId ?? '')?.state.optimizer)}${result?.learn ? sourceView('adam') : ''}</div></section>${mode === 'microscope' ? `<section class="panel wide" id="microscope"><h2>Microscope · follow the calculation</h2><div data-testid="microscope-evidence">${microscopeView(inspection, inspectionPath, inspectionLabel, inspectionPending, inspectionWhole)}</div></section>` : ''}</div>
       <footer>Evidence is copied from real execution and replayed immutably. Displayed decimals are rounded; canonical values retain full precision. <a href="https://gist.github.com/karpathy/8627fe009c40f57531cb18360106ce95">Based on Andrej Karpathy’s microgpt</a>.</footer></main>`;
@@ -135,9 +131,9 @@ function render(): void {
 }
 
 function bind(): void {
-  document.querySelector<HTMLInputElement>('#document')!.addEventListener('input', event => { documentText = (event.target as HTMLInputElement).value; });
+  document.querySelector<HTMLInputElement>('#document')!.addEventListener('input', event => { documentText = (event.target as HTMLInputElement).value; document.querySelector('[data-testid="run-binding"]')!.innerHTML = runBindingView(); });
   document.querySelector('#predict')!.addEventListener('click', () => void execute('predict'));
-  document.querySelector('#train')!.addEventListener('click', () => { if (LEARN_NUMERICAL_GATE) void execute('train'); });
+  document.querySelector('#train')!.addEventListener('click', () => void execute('train'));
   document.querySelector('#reset')!.addEventListener('click', () => void reset(false));
   document.querySelector('#cancel')!.addEventListener('click', () => void reset(true));
   document.querySelector('#clear-session')!.addEventListener('click', () => void reset(false, true));
@@ -161,7 +157,7 @@ function bind(): void {
   document.querySelectorAll<HTMLButtonElement>('[data-token]').forEach(button => button.addEventListener('click', () => {
     selectedToken = Number(button.dataset.token); key = Math.min(key, selectedToken); detail = undefined; render(); void loadDetail();
   }));
-  document.querySelectorAll<HTMLButtonElement>('[data-stage]').forEach(button => button.addEventListener('click', () => { selectedKind = button.dataset.stage!; render(); }));
+  document.querySelectorAll<HTMLButtonElement>('[data-stage]').forEach(button => button.addEventListener('click', () => { selectedKind = button.dataset.stage!; if (trainingStages.some(([kind]) => kind === selectedKind) && result?.experiment) selectRun(result.experiment.trainingRunId); else render(); }));
   document.querySelectorAll<HTMLButtonElement>('[data-query]').forEach(button => button.addEventListener('click', () => {
     selectedToken = Number(button.dataset.query); key = Number(button.dataset.key); detail = undefined; render(); void loadDetail();
   }));
@@ -195,7 +191,6 @@ async function execute(command: 'predict' | 'train', count = 1): Promise<void> {
   if (!/^[abc]{0,7}$/.test(documentText)) { error = 'Use up to seven characters from a, b, and c.'; render(); return; }
   clearDisplayedInspection();
   const currentOperation = ++operation;
-  ++detailOperation;
   busy = true; error = ''; detail = undefined;
   status = command === 'train' ? 'Computing loss, backward, and one Adam update…' : 'Recording a live prediction…'; render();
   try {
@@ -235,7 +230,7 @@ async function execute(command: 'predict' | 'train', count = 1): Promise<void> {
 
 async function reset(cancelled: boolean, clear = false): Promise<void> {
   if (cancelled && !busy && inspectionPending) { ++inspectionOperation; inspector.cancel(); inspectionPending = false; status = 'Cancelled inspection · model and history preserved'; render(); return; }
-  const currentOperation = ++operation; ++detailOperation; ++inspectionOperation;
+  const currentOperation = ++operation; ++inspectionOperation;
   inspector.cancel(); inspectionPending = false;
   busy = true; ready = false; error = '';
   if (clear) {
@@ -303,7 +298,7 @@ function renderHistory(): string {
   const comparison = player && comparisonRun ? new TracePlayer(comparisonRun).compare(player.recordedRun) : undefined;
   const selected = selectedArtifact(selectedKind);
   const artifactComparison = comparison?.artifacts.find(entry => entry.after?.id === selected?.id);
-  return `<section class="panel history"><h2>Explore exact runs and checkpoints</h2><p data-testid="history-count">${archive.runs.size} runs · ${archive.snapshots.size} snapshots · ${archive.learningExperiments.size} learning experiments retained in this session. Estimated serialized evidence: ${(evidenceBytes / 1048576).toFixed(1)} MiB / 64 MiB.</p><div class="controls">
+  return `<section class="panel history"><h2>Explore exact runs and checkpoints</h2>${result ? `<details data-testid="runtime-provenance"><summary>Exact runtime provenance · available offline</summary><p>This selected run was recorded by Model Lab runtime <code data-testid="runtime-revision">${escapeHtml(result.run.manifest.runtimeRevision)}</code>. Historical inspection requires a compatible runtime.</p></details>` : ''}<p data-testid="history-count">${archive.runs.size} runs · ${archive.snapshots.size} snapshots · ${archive.learningExperiments.size} learning experiments retained in this session. Estimated serialized evidence: ${(evidenceBytes / 1048576).toFixed(1)} MiB / 64 MiB.</p><div class="controls">
     <label>Recorded run<select id="history-run" ${busy ? 'disabled' : ''}>${options(result?.run.manifest.runId ?? '')}</select></label>
     <label>Reset destination<select id="snapshot-select"><option value="">Canonical initial model</option>${[...archive.snapshots.values()].map(snapshot => `<option value="${snapshot.id}" ${snapshot.id === selectedSnapshotId ? 'selected' : ''}>step ${snapshot.state.optimizer.step} · ${snapshot.id.slice(0, 23)}…</option>`).join('')}</select></label>
     <label>Compare from<select id="compare-run"><option value="">Choose an earlier run</option>${options(comparisonRunId)}</select></label></div>

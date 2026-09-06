@@ -49,7 +49,7 @@ export class SessionArchive {
     if (!snapshot) throw new Error('Run references a missing starting snapshot');
     if (await snapshotId(snapshot.state) !== m.startingSnapshotId) throw new Error('Run snapshot content hash mismatch');
     if (m.startingCheckpointId !== snapshot.id) throw new Error('Run checkpoint reference does not identify archived state');
-    if (copy.formatVersion !== 1 || ![m.runId, m.sessionId, m.model.id, m.model.version, m.runtimeVersion, m.numeric.policy].every(value =>
+    if (copy.formatVersion !== 1 || ![m.runId, m.sessionId, m.model.id, m.model.version, m.runtimeVersion, m.runtimeRevision, m.numeric.policy].every(value =>
       typeof value === 'string' && value.length > 0) || !Number.isSafeInteger(m.generationId) || m.generationId < 0 ||
       m.numeric.dtype !== 'float64' || !exactData(m.model.architecture, snapshot.state.config)) throw new Error('Invalid run model/runtime identity');
     if (new Set(copy.artifacts.map(a => a.id)).size !== copy.artifacts.length || copy.artifacts.some(a =>

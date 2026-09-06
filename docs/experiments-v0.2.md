@@ -37,7 +37,7 @@ Reusable worker API:
 runHeadAblation(snapshot, inputIds, targetIds, { layer, head }, tag?)
 ```
 
-It returns an immutable `HeadAblationExperiment` containing the starting snapshot ID, selected boundary/head, `provenance: 'observed'`, two fresh `RecordedRun`s, and their comparison. The optional tag supplies `sessionId`, `generationId`, and a unique experiment `runId`; generated run IDs append `:baseline` and `:intervention`. UI integration should archive the two returned runs against the supplied source snapshot and clearly identify them as a new experiment. Executions belong in a disposable inspector worker, not on the UI thread.
+It returns an immutable `HeadAblationExperiment` containing the starting snapshot ID, selected boundary/head, `provenance: 'observed'`, two fresh `RecordedRun`s, and their comparison. The optional tag supplies `sessionId`, `generationId`, and a unique experiment `runId`; generated run IDs append `:baseline` and `:intervention`. The Explore UI archives both returned runs against the supplied source snapshot and identifies them as a new experiment. These executions run in the disposable inspector worker.
 
 ## Training-data substitution research
 

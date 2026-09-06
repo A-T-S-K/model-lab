@@ -23,6 +23,14 @@ for relative in paths:
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, target)
 print('Isolated source copy:', destination, flush=True)
+# The same exact production identity must survive a copy with no Git metadata.
+identity_command = ['node', '--input-type=module', '-e',
+    "import { runtimeIdentity } from './scripts/runtime-identity.mjs'; "
+    "console.log((await runtimeIdentity(process.cwd())).revision)"]
+original_revision = subprocess.check_output(identity_command, cwd=root / 'model-lab', text=True).strip()
+isolated_revision = subprocess.check_output(identity_command, cwd=destination, text=True).strip()
+if original_revision != isolated_revision:
+    raise SystemExit('Isolated runtime identity differs from source subtree')
 for command in [
     ['npm', 'ci'],
     ['npm', 'run', 'test:reference'],
@@ -31,4 +39,8 @@ for command in [
     ['npm', 'run', 'test:browser'],
 ]:
     subprocess.run(command, cwd=destination, check=True)
+generated = (destination / 'runtime/revision.ts').read_text()
+if f'"{original_revision}"' not in generated:
+    raise SystemExit('Isolated build did not embed the exact source runtime identity')
 print('PASS isolated install, reference, unit/conformance, production build, browser')
+print('PASS isolated runtime identity:', original_revision)

@@ -1,5 +1,7 @@
 # Model Lab v0.2 acceptance
 
+> Historical v0.2 record. Instructions and measurements below describe that completed pass; current work follows the v0.2.1 execution plan.
+
 Local implementation on the existing `model-lab` branch, starting at `6278f89`. All changes stay inside `docs/**` and `model-lab/**`. No push, remote modification, infrastructure change, license decision, or outstanding-PR surface change. The [active execution plan](../../docs/exec-plans/active/2026-09-05-model-lab-premerge.md) owns final gate status; the v0.1 acceptance and its execution record are preserved.
 
 ## Required behavior

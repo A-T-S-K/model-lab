@@ -32,7 +32,8 @@ export function validateLearningExperiment(experiment: LearningExperiment, start
   requireExperiment(after.manifest.startingSnapshotId === experiment.resultingSnapshotId, 'after run snapshot');
   for (const run of [training, backward, after]) {
     requireExperiment(exactData(run.manifest.model, before.manifest.model) &&
-      run.manifest.runtimeVersion === before.manifest.runtimeVersion && exactData(run.manifest.numeric, before.manifest.numeric), 'model/runtime identity');
+      run.manifest.runtimeVersion === before.manifest.runtimeVersion &&
+      run.manifest.runtimeRevision === before.manifest.runtimeRevision && exactData(run.manifest.numeric, before.manifest.numeric), 'model/runtime identity');
     requireExperiment(run.manifest.sessionId === before.manifest.sessionId && run.manifest.generationId === before.manifest.generationId, 'session/generation identity');
   }
   const { inputIds, targetIds, meanLoss } = experiment.objective;

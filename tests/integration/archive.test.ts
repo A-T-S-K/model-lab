@@ -19,7 +19,7 @@ function manifest(id: string, snapshot: string): RunManifest {
     model: { id: 'microgpt', version: fixture.reference.revision, architecture: fixture.config, capabilities: ['predict', 'learn'] },
     startingCheckpointId: snapshot, startingSnapshotId: snapshot, input: fixture.tokenIds, targets: fixture.targetIds,
     numeric: { dtype: 'float64', policy: 'ordered scalar binary64' },
-    capture: { level: 'semantic', maxArtifacts: 1024, maxValues: 16384 }, runtimeVersion: 'archive-test-v1' };
+    capture: { level: 'semantic', maxArtifacts: 1024, maxValues: 16384 }, runtimeVersion: 'archive-test-v1', runtimeRevision: 'synthetic-test-runtime' };
 }
 
 async function learning() {

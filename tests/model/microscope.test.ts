@@ -15,7 +15,7 @@ function fixture() {
     model: { id: 'microgpt', version: '1', architecture: {}, capabilities: ['predict', 'learn'] },
     startingCheckpointId: 'initial', input: initial.tokenIds, targets: initial.targetIds,
     numeric: { dtype: 'float64', policy: 'ECMAScript binary64' },
-    capture: { level: 'scalar', maxArtifacts: 10000, maxValues: 1000000 }, runtimeVersion: '1' });
+    capture: { level: 'scalar', maxArtifacts: 10000, maxValues: 1000000 }, runtimeVersion: '1', runtimeRevision: 'synthetic-test-runtime' });
   return { ...state, recorder, capture: new CaptureContext(state.model, recorder) };
 }
 function verifyAccumulation(graph: ScalarGraph): void {

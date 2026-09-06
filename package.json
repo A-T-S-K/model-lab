@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test tests/model/*.test.ts tests/trace/*.test.ts tests/integration/*.test.ts tests/app/*.test.ts",
+    "test": "node --import tsx --test tests/model/*.test.ts tests/trace/*.test.ts tests/integration/*.test.ts tests/app/*.test.ts tests/integration/*.test.mjs",
     "test:reference": "python3 -m unittest discover -s tests/reference -v && python3 reference/generate_fixture.py --check",
     "test:browser": "playwright test",
     "build": "npm run typecheck && vite build",
@@ -15,7 +15,14 @@
     "test:isolation": "python3 scripts/check_isolation.py",
     "benchmark:capture": "node --expose-gc --import tsx scripts/benchmark-capture.ts",
     "benchmark:training": "node --expose-gc --import tsx scripts/benchmark-training.ts",
-    "benchmark:experiments": "node --import tsx scripts/benchmark-experiments.ts"
+    "benchmark:experiments": "node --import tsx scripts/benchmark-experiments.ts",
+    "runtime:identity": "node scripts/runtime-identity.mjs",
+    "predev": "npm run runtime:identity",
+    "pretypecheck": "npm run runtime:identity",
+    "pretest": "npm run runtime:identity",
+    "prebenchmark:capture": "npm run runtime:identity",
+    "prebenchmark:training": "npm run runtime:identity",
+    "prebenchmark:experiments": "npm run runtime:identity"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

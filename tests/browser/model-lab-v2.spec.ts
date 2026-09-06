@@ -31,6 +31,13 @@ test('progressive disclosure follows live operands, preserves captured detail, a
   await page.getByTestId('vector-evidence').locator('[data-element="3"]').click();
   await expect(page.getByTestId('inspection-provenance')).toHaveText('VERIFIED RECOMPUTATION');
   await expect(page.getByTestId('verification')).toContainText('max absolute error');
+  // Reconstructed graph addresses support recursive navigation under this runtime revision.
+  const liveStep = await page.getByTestId('training-step').textContent();
+  await page.getByTestId('microscope-evidence').locator('.operand-list').first().locator('button').first().click();
+  await expect(page.getByTestId('inspection-provenance')).toHaveText('VERIFIED RECOMPUTATION');
+  await expect(page.getByTestId('scalar-operation')).toContainText('wte');
+  await expect(page.getByTestId('verification')).toContainText('max absolute error');
+  await expect(page.getByTestId('training-step')).toHaveText(liveStep!);
   // A new Predict invalidates an older in-flight inspection without losing the cache.
   await page.evaluate(() => {
     (document.querySelector('[data-testid="vector-evidence"] [data-element="4"]') as HTMLButtonElement).click();

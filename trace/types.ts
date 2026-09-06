@@ -24,7 +24,7 @@ export interface ModelCheckpoint {
 }
 
 /** Current RNG state is required where used; a seed alone cannot resume training. */
-export interface TrainingSnapshot {
+export interface TrainingStateRecord {
   readonly id: string;
   readonly checkpoint: ModelCheckpoint;
   readonly optimizer: {
@@ -59,6 +59,8 @@ export interface RunManifest {
   readonly numeric: { readonly dtype: 'float64'; readonly policy: string };
   readonly capture: CaptureRequest;
   readonly runtimeVersion: string;
+  /** Exact production source identity; scalar node IDs are local to this runtime and run. */
+  readonly runtimeRevision: string;
   readonly intervention?: JsonValue;
 }
 
@@ -126,6 +128,6 @@ export function createCheckpoint(checkpoint: ModelCheckpoint): ModelCheckpoint {
   return immutableCopy(checkpoint);
 }
 
-export function createTrainingSnapshot(snapshot: TrainingSnapshot): TrainingSnapshot {
+export function createTrainingStateRecord(snapshot: TrainingStateRecord): TrainingStateRecord {
   return immutableCopy(snapshot);
 }

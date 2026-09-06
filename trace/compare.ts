@@ -25,7 +25,7 @@ export interface RunComparison {
 /** Checkpoints may differ: fixed-input before/after training is a supported comparison. */
 export function compareRuns(before: RecordedRun, after: RecordedRun): RunComparison {
   const reasons: string[] = [];
-  for (const key of ['model', 'input', 'targets', 'numeric', 'runtimeVersion'] as const) {
+  for (const key of ['model', 'input', 'targets', 'numeric', 'runtimeVersion', 'runtimeRevision'] as const) {
     if (canonicalIdentity(before.manifest[key]) !== canonicalIdentity(after.manifest[key])) reasons.push(`${key} differs`);
   }
   if (reasons.length) return immutableCopy({ compatible: false, reasons, artifacts: [] });

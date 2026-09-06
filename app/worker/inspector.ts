@@ -32,7 +32,7 @@ export async function inspectHistorical(request: HistoricalRequest): Promise<Ins
   }
   const input = run.manifest.input as number[], targets = run.manifest.targets as number[];
   const expected = runManifest(run.manifest.runId, request, snapshot, input, targets);
-  for (const key of ['model', 'numeric', 'runtimeVersion'] as const) {
+  for (const key of ['model', 'numeric', 'runtimeVersion', 'runtimeRevision'] as const) {
     if (canonicalIdentity(expected[key]) !== canonicalIdentity(run.manifest[key])) return unavailable(`${key} differs from this runtime`);
   }
   const { model } = restoreTraining(snapshot.state);

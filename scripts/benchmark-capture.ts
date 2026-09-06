@@ -19,7 +19,7 @@ function measure(length: number, training: boolean) {
   const recorder = new TraceRecorder({ runId: 'benchmark', sessionId: 'benchmark', generationId: 0,
     model: { id: 'microgpt', version: '1', architecture: {}, capabilities: ['predict', 'learn'] },
     startingCheckpointId: 'initial', input, targets, numeric: { dtype: 'float64', policy: 'ECMAScript binary64' },
-    capture: { level: 'scalar', maxArtifacts: Number.MAX_SAFE_INTEGER, maxValues: Number.MAX_SAFE_INTEGER }, runtimeVersion: '1' });
+    capture: { level: 'scalar', maxArtifacts: Number.MAX_SAFE_INTEGER, maxValues: Number.MAX_SAFE_INTEGER }, runtimeVersion: '1', runtimeRevision: 'synthetic-test-runtime' });
   const start = performance.now();
   const capture = new CaptureContext(model, recorder);
   let forwardCaptureMs = performance.now() - start;

@@ -1,5 +1,7 @@
 # Pre-merge acceptance — September 5, 2026
 
+> Historical v0.1 record. Instructions and measurements below describe that completed pass; current work follows the v0.2.1 execution plan.
+
 All required completion gates 0–6 pass, including one real Learn update. Optional second-producer coverage (M11) also passes. Ablation and poisoning spikes (M12) are deferred; no public security or model-quality claim is made.
 
 ## Local boundary

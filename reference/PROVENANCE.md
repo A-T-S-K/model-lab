@@ -2,12 +2,14 @@
 
 The model organism is Andrej Karpathy's [microgpt gist](https://gist.github.com/karpathy/8627fe009c40f57531cb18360106ce95), explained in his [February 12, 2026 article](https://karpathy.github.io/2026/02/12/microgpt/).
 
-- Revalidated: September 5, 2026.
+- Source bytes and author discussion rechecked: September 6, 2026. Numerical comparison below remains the September 5 record.
 - Pinned gist revision: `14fb038816c7aae0bb9342c2dbf1a51dd134a5ff`.
 - [Immutable source](https://gist.githubusercontent.com/karpathy/8627fe009c40f57531cb18360106ce95/raw/14fb038816c7aae0bb9342c2dbf1a51dd134a5ff/microgpt.py).
 - Exact source bytes SHA-256: `d47d88c2fd432c8ebdc1048beab7f7eb64ea7e0e664e11b812d72a6d95ebccee`.
 
-The source header attributes `@karpathy`. The retrieved source has no license declaration; the article has no license statement. These are observations, not a permission or legal conclusion. We have not added or changed a license. The upstream source is **not vendored**. A downloaded copy was retained only under `/tmp` for local validation. `microgpt_reference.py` is a separately written mathematical oracle, with attribution here; it is not a preserved copy of upstream text. Deciding whether to vendor or distribute the original source is deferred.
+The pinned source file attributes `@karpathy` and contains no license header. Separately, on February 24, 2026, Andrej Karpathy [explicitly stated in the gist discussion](https://gist.github.com/karpathy/8627fe009c40f57531cb18360106ce95?permalink_comment_id=5999841#gistcomment-5999841): “microgpt is MIT licensed.” These are distinct source and author-statement facts. AI Village is not making a repository-level licensing decision in this pass; no license files are added or changed.
+
+The upstream source is **not vendored**. A downloaded copy under `/tmp` was used to recheck the pinned hash and header. `microgpt_reference.py` is a separately written mathematical oracle, with attribution here; it is not a preserved copy of upstream text.
 
 ## Fidelity and intentional differences
 

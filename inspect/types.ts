@@ -1,6 +1,8 @@
 import type { ConceptRef, Provenance } from '../trace/types.js';
 
-/** Plain worker boundary data. A scalar edge represents an operand occurrence. */
+/** Plain worker boundary data. A scalar edge represents an operand occurrence.
+ * Node IDs are internal addresses within one run and exact runtime revision,
+ * never portable semantic identities. Historical navigation requires verification. */
 export interface ParameterRef { index: number; name: string; row: number; column: number }
 export interface ScalarNode {
   id: number; operation: string; value: number; gradient?: number;

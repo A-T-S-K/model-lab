@@ -1,3 +1,4 @@
+import { RUNTIME_REVISION } from '../../runtime/revision.js';
 import fixture from '../../fixtures/canonical.initial.json';
 import type { ArchivedSnapshot } from '../../archive/session.js';
 import type { RunManifest } from '../../trace/types.js';
@@ -12,6 +13,7 @@ export function runManifest(runId: string, tag: RequestTag, snapshot: ArchivedSn
     startingCheckpointId: snapshot.id, startingSnapshotId: snapshot.id,
     input, targets, numeric: { dtype: 'float64', policy: 'ECMAScript binary64; ordered scalar reductions' },
     // Canonical maximum context fits the existing measured semantic budget; scalar capture is separate.
-    capture: { level: 'semantic', maxArtifacts: 1024, maxValues: 16384 }, runtimeVersion: 'model-lab-0.2.0',
+    capture: { level: 'semantic', maxArtifacts: 1024, maxValues: 16384 }, runtimeVersion: 'model-lab-0.2.1',
+    runtimeRevision: RUNTIME_REVISION,
   };
 }

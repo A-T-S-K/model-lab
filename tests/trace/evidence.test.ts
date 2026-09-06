@@ -4,7 +4,7 @@ import test from 'node:test';
 import { compareRuns } from '../../trace/compare.js';
 import { TracePlayer } from '../../trace/player.js';
 import { TraceRecorder } from '../../trace/recorder.js';
-import { createCheckpoint, createTrainingSnapshot, type CaptureLevel, type RunManifest } from '../../trace/types.js';
+import { createCheckpoint, createTrainingStateRecord, type CaptureLevel, type RunManifest } from '../../trace/types.js';
 
 function manifest(level: CaptureLevel = 'semantic'): RunManifest {
   return {
@@ -12,7 +12,7 @@ function manifest(level: CaptureLevel = 'semantic'): RunManifest {
     model: { id: 'tiny', version: '1', architecture: { width: 2 }, capabilities: ['predict'] },
     startingCheckpointId: 'checkpoint-0', input: [1, 2], targets: [2, 1],
     numeric: { dtype: 'float64', policy: 'ECMAScript binary64' },
-    capture: { level, maxArtifacts: 100, maxValues: 1000 }, runtimeVersion: '1',
+    capture: { level, maxArtifacts: 100, maxValues: 1000 }, runtimeVersion: '1', runtimeRevision: 'synthetic-test-runtime',
   };
 }
 
@@ -127,7 +127,7 @@ test('checkpoint and continuation snapshot preserve immutable parameters and cur
   const parameters = { weights: { shape: [2], values: [1, 2] } };
   const checkpoint = createCheckpoint({ id: 'cp', modelDefinitionId: 'tiny', modelDefinitionVersion: '1', parameters });
   const rngState = { current: 812, draws: 12 };
-  const snapshot = createTrainingSnapshot({
+  const snapshot = createTrainingStateRecord({
     id: 'snapshot', checkpoint,
     optimizer: { kind: 'adam', firstMoments: { weights: { shape: [2], values: [0.1, 0.2] } }, secondMoments: { weights: { shape: [2], values: [0.01, 0.02] } }, beta1: 0.9, beta2: 0.999, epsilon: 1e-8 },
     trainingStep: 4, schedule: { baseRate: 0.01, totalSteps: 20 }, datasetCursor: { example: 2 }, rngState,

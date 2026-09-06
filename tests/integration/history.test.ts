@@ -87,3 +87,55 @@ test('historical artifact IDs resolve by verified concept, and nonfinite source 
     assert.equal(failure.verification?.verified, false); assert.equal(failure.graph, null);
   }
 });
+
+test('archived runs retain exact runtime identity and reject unknown or missing revision', async () => {
+  const session = await start();
+  const prediction = result(await session.handle({ ...tag, runId: 'revision', command: 'predict', document: 'abca' }));
+  const archive = new SessionArchive();
+  await archive.addSnapshot(prediction.snapshots[0]);
+  await archive.addRun(prediction.run);
+  const run = archive.runs.get('revision')!;
+  assert.match(run.manifest.runtimeRevision, /^sha256:[a-f0-9]{64}$/);
+  assert.equal(run.manifest.runtimeRevision, prediction.run.manifest.runtimeRevision);
+  const target = { kind: 'artifact' as const, artifactId: run.artifacts.find(a => a.kind === 'probabilities')!.id, index: 0 };
+  const request = { ...tag, command: 'inspect' as const, snapshot: prediction.snapshots[0], run, target, backward: false };
+  assert.equal((await inspectHistorical(request)).verification?.verified, true);
+  for (const revision of ['sha256:' + '0'.repeat(64), undefined]) {
+    const changed = { ...run, manifest: { ...run.manifest, runtimeRevision: revision } } as typeof run;
+    const inspection = await inspectHistorical({ ...request, run: changed });
+    assert.equal(inspection.graph, null);
+    assert.match(inspection.reason!, /runtimeRevision differs/);
+    assert.equal(compareRuns(run, changed).compatible, false);
+  }
+});
+
+test('verified historical probability supports recursive operand navigation without changing live state', async () => {
+  const session = await start();
+  const old = result(await session.handle({ ...tag, runId: 'recursive-old', command: 'predict', document: 'abca' }));
+  const artifact = old.run.artifacts.find(a => a.kind === 'probabilities' && a.concept.token === 3)!;
+  const artifactTarget = { kind: 'artifact' as const, artifactId: artifact.id, index: 0 };
+  const whole = await session.handle({ ...tag, command: 'inspect', sourceRunId: old.run.manifest.runId, target: { kind: 'whole' } });
+  assert.equal(whole.status, 'inspection'); if (whole.status !== 'inspection') return;
+  const liveGraph = whole.inspection.graph!;
+  // Release the old graph and change live parameters before rebuilding its operands.
+  const current = result(await session.handle({ ...tag, runId: 'recursive-train', command: 'train', document: 'abca' }));
+  const request = { ...tag, command: 'inspect' as const, snapshot: old.snapshots[0], run: old.run, backward: false };
+  let inspection = await inspectHistorical({ ...request, target: artifactTarget });
+  for (let depth = 0; depth < 3; depth++) {
+    assert.equal(inspection.provenance, 'recomputed');
+    assert.equal(inspection.verification?.verified, true);
+    const graph = inspection.graph!;
+    const root = graph.roots[0];
+    const operand = graph.edges.find(edge => edge.child === root)!;
+    assert.ok(operand, `depth ${depth} has an actual operand`);
+    const expectedNode = liveGraph.nodes.find(node => node.id === operand.parent)!;
+    inspection = await inspectHistorical({ ...request, target: { kind: 'node', nodeId: operand.parent } });
+    assert.equal(inspection.verification?.verified, true);
+    assert.deepEqual(inspection.graph!.nodes.find(node => node.id === inspection.graph!.roots[0]), expectedNode);
+    assert.deepEqual(inspection.graph!.edges.filter(edge => edge.child === operand.parent),
+      liveGraph.edges.filter(edge => edge.child === operand.parent));
+  }
+  const unchanged = result(await session.handle({ ...tag, runId: 'recursive-unchanged', command: 'predict', document: 'abca' }));
+  assert.equal(unchanged.snapshots[0].id, current.snapshots[1].id);
+  assert.deepEqual(unchanged.probabilities, current.probabilities);
+});
