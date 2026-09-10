@@ -205,3 +205,85 @@ test('Guided depth navigation rebinds attention arithmetic and clamps the select
     await expect(page.getByTestId('attention-detail')).toHaveText(arithmetic!);
   }
 });
+
+for (const viewport of [{ width: 1920, height: 1080 }, { width: 1280, height: 720 }, { width: 390, height: 844 }]) {
+  test(`probability state stays local when inspection selects a pre-update run at ${viewport.width}px`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await page.goto('/');
+    await expect(page.getByTestId('status')).toContainText('Live prediction complete');
+    await page.locator('#teach').click();
+    await expect(page.locator('#teach')).toBeEnabled();
+    await expect(page.getByTestId('guided-completed')).toHaveText('10');
+    const completedBefore = await page.getByTestId('guided-before').getAttribute('data-value');
+    const completedAfter = await page.getByTestId('guided-after').getAttribute('data-value');
+    await page.locator('#guided-explore').click();
+    const afterRun = await page.locator('#history-run').inputValue();
+    const probabilities = page.getByTestId('probabilities');
+    const context = page.getByTestId('probability-context');
+    expect(Number(await probabilities.locator('code').first().getAttribute('title'))).toBeCloseTo(measured(10), 12);
+
+    let trainingRun = '';
+    for (const stage of ['Parameter gradients', 'Changed parameters']) {
+      await page.getByRole('button', { name: stage, exact: true }).click();
+      trainingRun = await page.locator('#history-run').inputValue();
+      expect(trainingRun).not.toBe(afterRun);
+      expect(Number(await probabilities.locator('code').first().getAttribute('title'))).toBeCloseTo(measured(9), 12);
+      await expect(context).toContainText('Before the update from model step 9 to 10');
+      await expect(context).toContainText('last single update in the 10-update Teach comparison (model steps 0 to 10)');
+      await expect(context).toContainText('Inspecting a recorded run does not change the live model');
+      await expect(context).toHaveAttribute('data-run-id', trainingRun);
+      await expect(page.getByTestId('training-step')).toHaveText('10');
+      await probabilities.scrollIntoViewIfNeeded();
+      await expect(context).toBeInViewport();
+      await page.getByRole('button', { name: 'Guided', exact: true }).click();
+      await expect(context).toContainText('Before the update from model step 9 to 10');
+      await expect(context).toHaveAttribute('data-run-id', trainingRun);
+      await expect(page.getByTestId('guided-before')).toHaveAttribute('data-value', completedBefore!);
+      await expect(page.getByTestId('guided-after')).toHaveAttribute('data-value', completedAfter!);
+      expect(Number(await probabilities.locator('code').first().getAttribute('title'))).toBeCloseTo(measured(9), 12);
+      await page.locator('#guided-microscope').click();
+      await expect(context).toHaveAttribute('data-run-id', afterRun);
+      await expect(context).toContainText('After the update from model step 9 to 10');
+      await page.getByRole('button', { name: 'Explore', exact: true }).click();
+      await page.locator('#history-run').selectOption(afterRun);
+      await expect(context).toContainText('After the update from model step 9 to 10');
+      await expect(context).toHaveAttribute('data-run-id', afterRun);
+      expect(Number(await probabilities.locator('code').first().getAttribute('title'))).toBeCloseTo(measured(10), 12);
+    }
+
+    for (const [name, step, relationship] of [
+      ['Before state · inspect prediction', 9, 'Before'],
+      ['Observed training · loss and backward', 9, 'Before'],
+      ['After state · inspect prediction', 10, 'After'],
+    ] as const) {
+      await page.getByRole('button', { name, exact: true }).click();
+      await expect(context).toContainText(`${relationship} the update from model step 9 to 10`);
+      await expect(context).toHaveAttribute('data-run-id', await page.locator('#history-run').inputValue());
+      expect(Number(await probabilities.locator('code').first().getAttribute('title'))).toBeCloseTo(measured(step), 12);
+      await expect(page.getByTestId('training-step')).toHaveText('10');
+      // The reset destination is not a claim about the live model's step.
+      await expect(page.locator('#snapshot-select')).toHaveValue('');
+    }
+
+    await page.getByRole('button', { name: 'Guided', exact: true }).click();
+    await expect(page.getByTestId('guided-before')).toHaveAttribute('data-value', completedBefore!);
+    await expect(page.getByTestId('guided-after')).toHaveAttribute('data-value', completedAfter!);
+    await page.locator('#teach').click();
+    await expect(page.locator('#teach')).toBeEnabled();
+    await expect(page.getByTestId('training-step')).toHaveText('20');
+    await page.locator('#guided-explore').click();
+    await expect(context).toContainText('After the update from model step 19 to 20');
+    await expect(context).toContainText('Teach comparison (model steps 10 to 20)');
+    await page.locator('#history-run').selectOption(trainingRun);
+    await expect(context).toContainText('Before the update from model step 9 to 10');
+    await expect(context).not.toContainText('Teach comparison');
+    await expect(context).toHaveAttribute('data-run-id', trainingRun);
+    await expect(page.getByTestId('training-step')).toHaveText('20');
+    await page.getByRole('button', { name: 'Microscope', exact: true }).click();
+    await expect(context).toContainText('Before the update from model step 9 to 10');
+    await page.getByTestId('document-input').fill('cccc');
+    await expect(page.getByTestId('run-state')).toHaveText('STALE EVIDENCE');
+    await expect(context).toHaveAttribute('data-run-id', trainingRun);
+    await expect(context).toContainText('Before the update from model step 9 to 10');
+  });
+}

@@ -26,6 +26,22 @@ export function lessonPosition(result: RunResult): number {
   return Math.max(0, result.tokenIds.length - 2);
 }
 
+/** Explain the selected execution beside its probabilities, independently of the live model. */
+export function probabilityContextView(result: RunResult | undefined, learning: GuidedLearning | undefined): string {
+  if (!result) return '';
+  const runId = result.run.manifest.runId;
+  const experiment = result.experiment;
+  const before = experiment && [experiment.beforeRunId, experiment.trainingRunId, experiment.backwardRunId].includes(runId);
+  const after = experiment?.afterRunId === runId;
+  const relationship = before || after
+    ? `${before ? 'Before' : 'After'} the update from model step ${experiment!.update.step} to ${experiment!.update.step + 1}`
+    : `Recorded prediction at model step ${result.trainingStep}`;
+  const sameTeaching = (before || after) && learning && experiment?.afterRunId === learning.afterRunId;
+  return `<div class="note" data-testid="probability-context" data-run-id="${escapeHtml(runId)}"><strong>${escapeHtml(relationship)}</strong>
+    ${sameTeaching ? `<p>This is the last single update in the ${learning.completed}-update Teach comparison (model steps ${learning.startingStep} to ${learning.startingStep + learning.completed}). Guided compares before the first update with after the last.</p>` : ''}
+    <p>Inspecting a recorded run does not change the live model.</p></div>`;
+}
+
 export function guidedView(result: RunResult | undefined, learning: GuidedLearning | undefined, vocabulary: readonly string[], currentDocument: string, liveRunId: string, busy: boolean, ready: boolean, mapIndex: number): string {
   const position = result ? lessonPosition(result) : 0;
   const captured = result?.tokenIds.slice(1).map(id => vocabulary[id]).join('') ?? '';
@@ -45,7 +61,7 @@ export function guidedView(result: RunResult | undefined, learning: GuidedLearni
       <p class="map-explanation" data-testid="map-explanation">${guidedMap[mapIndex]![2]}</p>
       <div class="lesson-prediction"><div><p>Follow this prefix from the recorded input:</p><div class="lesson-prefix"><span class="boundary">START / END</span> ${escapeHtml(prefix || '∅')}</div>
       <p>Known next character: <strong data-testid="guided-target">${escapeHtml(label(target))}</strong></p><p class="muted">The prediction uses the whole prefix. The known next character is the answer we can teach it.</p></div>
-      <div><h3>The model’s prediction</h3><div data-testid="probabilities">${probabilityView(values, [...vocabulary, 'START / END'])}</div></div></div>
+      <div><h3>The model’s prediction</h3>${probabilityContextView(result, learning)}<div data-testid="probabilities">${probabilityView(values, [...vocabulary, 'START / END'])}</div></div></div>
       <p class="muted">${current ? 'These numbers came from the run you just watched.' : 'These numbers belong to the recorded input shown above. Predict to use the current input and model.'}</p>
       <button id="why-prediction">Why this prediction? · Explore</button>
     </section>
