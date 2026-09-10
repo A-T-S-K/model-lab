@@ -3,7 +3,7 @@ import { RUNTIME_REVISION } from '../../runtime/revision.js';
 import { forwardStages, trainingStages } from '../../app/source/stages.js';
 
 test('edited valid and invalid inputs preserve and visibly unbind captured evidence', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/'); await page.locator('#activate-attract').click(); await expect(page.locator('#teach')).toBeEnabled(); await page.locator('details.session-controls').evaluate(el => { (el as HTMLDetailsElement).open = true; });
   await expect(page.getByTestId('status')).toContainText('Live prediction complete');
   await expect(page.getByTestId('run-state')).toHaveText('LIVE RUN');
   await expect(page.getByTestId('captured-input')).toHaveText('abca');
@@ -38,7 +38,7 @@ test('edited valid and invalid inputs preserve and visibly unbind captured evide
 test('forward and training paths are separate and Combined heads and gradients expose real source', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto('/');
+  await page.goto('/'); await page.locator('#activate-attract').click(); await expect(page.locator('#teach')).toBeEnabled(); await page.locator('details.session-controls').evaluate(el => { (el as HTMLDetailsElement).open = true; });
   await expect(page.getByTestId('status')).toContainText('Live prediction complete');
   await page.getByRole('button', { name: 'Explore', exact: true }).click();
   expect(await page.getByTestId('forward-stages').locator('button').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-stage')))).toEqual(forwardStages.map(([kind]) => kind));
@@ -58,7 +58,7 @@ test('forward and training paths are separate and Combined heads and gradients e
   await backwardSource.locator('summary').click();
   await expect(backwardSource).toContainText('model/autograd.ts · backward');
   await expect(backwardSource.locator('pre')).toContainText('parent.grad +=');
-  await expect(page.getByTestId('vector-evidence')).toContainText('observed');
+  await expect(page.getByTestId('vector-evidence')).toContainText('OBSERVED');
   expect(errors).toEqual([]);
 });
 
@@ -69,7 +69,7 @@ test('exact runtime provenance is visible offline for current and archived runs'
     if (!route.request().url().startsWith('http://127.0.0.1:4173/')) { external.push(route.request().url()); return route.abort(); }
     return route.continue();
   });
-  await page.goto('/');
+  await page.goto('/'); await page.locator('#activate-attract').click(); await expect(page.locator('#teach')).toBeEnabled(); await page.locator('details.session-controls').evaluate(el => { (el as HTMLDetailsElement).open = true; });
   await expect(page.getByTestId('status')).toContainText('Live prediction complete');
   await page.getByRole('button', { name: 'Explore', exact: true }).click();
   await page.getByTestId('runtime-provenance').locator('summary').click();

@@ -8,7 +8,7 @@ test('production browser Predict exposes real arithmetic; Learn applies Adam and
     if (!route.request().url().startsWith('http://127.0.0.1:4173/')) { externalRequests.push(route.request().url()); return route.abort(); }
     return route.continue();
   });
-  await page.goto('/');
+  await page.goto('/'); await page.locator('#activate-attract').click(); await expect(page.locator('#teach')).toBeEnabled(); await page.locator('details.session-controls').evaluate(el => { (el as HTMLDetailsElement).open = true; });
   await expect(page.getByTestId('status')).toContainText('Live prediction complete');
   await expect(page.getByTestId('training-step')).toHaveText('0');
   await expect(page.getByText('LIVE RUN', { exact: true })).toBeVisible();
@@ -55,7 +55,7 @@ test('production browser Predict exposes real arithmetic; Learn applies Adam and
 
 test('mobile layout and rapid reset leave a usable fresh model', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/');
+  await page.goto('/'); await page.locator('#activate-attract').click(); await expect(page.locator('#teach')).toBeEnabled(); await page.locator('details.session-controls').evaluate(el => { (el as HTMLDetailsElement).open = true; });
   await expect(page.getByTestId('status')).toContainText('Live prediction complete');
   await page.getByRole('button', { name: 'Explore', exact: true }).click();
   await page.evaluate(() => {

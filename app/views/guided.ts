@@ -1,13 +1,42 @@
-import { escapeHtml, probabilityView } from './evidence.js';
-import type { RunResult } from '../worker/protocol.js';
+import {
+  guidedReadModel,
+  type GuidedBatch,
+} from "../presentation/guided-read-model.js";
+import { instrumentView, sourceStrip } from "./instrument.js";
+import { escapeHtml } from "./evidence.js";
+import type { RunResult } from "../worker/protocol.js";
 
 export const guidedMap = [
-  ['characters', 'Characters', 'The model reads a sequence of characters: a, b, and c. START / END marks the sequence boundary.'],
-  ['embeddingSum', 'Tokens + position', 'A token is a character’s number ID. It selects a learned vector; a position vector tells the model where it appears.'],
-  ['attentionOutput', 'Attention', 'Attention mixes information from this position and earlier positions. It cannot look at future characters.'],
-  ['mlpRelu', 'MLP', 'A small neural network transforms the mixed information, using learned weights and a simple rule that keeps positive values.'],
-  ['logits', 'Scores', 'The model calculates a score for each possible next character. Parameters are the adjustable numbers used in these calculations.'],
-  ['probabilities', 'Probabilities', 'Scores become probabilities that sum to 100%. A probability describes how much of the model’s prediction goes to one possible next character.'],
+  [
+    "characters",
+    "Characters",
+    "The model reads a sequence of characters: a, b, and c. START / END marks the sequence boundary.",
+  ],
+  [
+    "embeddingSum",
+    "Tokens + position",
+    "A token is a character’s number ID. It selects a learned vector; a position vector tells the model where it appears.",
+  ],
+  [
+    "attentionOutput",
+    "Attention",
+    "Attention mixes information from this position and earlier positions. It cannot look at future characters.",
+  ],
+  [
+    "mlpRelu",
+    "MLP",
+    "A small neural network transforms the mixed information, using learned weights and a simple rule that keeps positive values.",
+  ],
+  [
+    "logits",
+    "Scores",
+    "The model calculates a score for each possible next character. Parameters are the adjustable numbers used in these calculations.",
+  ],
+  [
+    "probabilities",
+    "Probabilities",
+    "Scores become probabilities that sum to 100%. A probability describes how much of the model’s prediction goes to one possible next character.",
+  ],
 ] as const;
 
 export interface GuidedLearning {
@@ -27,55 +56,77 @@ export function lessonPosition(result: RunResult): number {
 }
 
 /** Explain the selected execution beside its probabilities, independently of the live model. */
-export function probabilityContextView(result: RunResult | undefined, learning: GuidedLearning | undefined): string {
-  if (!result) return '';
+export function probabilityContextView(
+  result: RunResult | undefined,
+  learning: GuidedLearning | undefined,
+): string {
+  if (!result) return "";
   const runId = result.run.manifest.runId;
   const experiment = result.experiment;
-  const before = experiment && [experiment.beforeRunId, experiment.trainingRunId, experiment.backwardRunId].includes(runId);
+  const before =
+    experiment &&
+    [
+      experiment.beforeRunId,
+      experiment.trainingRunId,
+      experiment.backwardRunId,
+    ].includes(runId);
   const after = experiment?.afterRunId === runId;
-  const relationship = before || after
-    ? `${before ? 'Before' : 'After'} the update from model step ${experiment!.update.step} to ${experiment!.update.step + 1}`
-    : `Recorded prediction at model step ${result.trainingStep}`;
-  const sameTeaching = (before || after) && learning && experiment?.afterRunId === learning.afterRunId;
+  const relationship =
+    before || after
+      ? `${before ? "Before" : "After"} the update from model step ${experiment!.update.step} to ${experiment!.update.step + 1}`
+      : `Recorded prediction at model step ${result.trainingStep}`;
+  const sameTeaching =
+    (before || after) &&
+    learning &&
+    experiment?.afterRunId === learning.afterRunId;
   return `<div class="note" data-testid="probability-context" data-run-id="${escapeHtml(runId)}"><strong>${escapeHtml(relationship)}</strong>
-    ${sameTeaching ? `<p>This is the last single update in the ${learning.completed}-update Teach comparison (model steps ${learning.startingStep} to ${learning.startingStep + learning.completed}). Guided compares before the first update with after the last.</p>` : ''}
+    ${sameTeaching ? `<p>This is the last single update in the ${learning.completed}-update Teach comparison (model steps ${learning.startingStep} to ${learning.startingStep + learning.completed}). Guided compares before the first update with after the last.</p>` : ""}
     <p>Inspecting a recorded run does not change the live model.</p></div>`;
 }
 
-export function guidedView(result: RunResult | undefined, learning: GuidedLearning | undefined, vocabulary: readonly string[], currentDocument: string, liveRunId: string, busy: boolean, ready: boolean, mapIndex: number): string {
-  const position = result ? lessonPosition(result) : 0;
-  const captured = result?.tokenIds.slice(1).map(id => vocabulary[id]).join('') ?? '';
-  const target = result?.targetIds[position];
-  const prefix = captured.slice(0, position);
-  const values = result?.probabilities[position];
-  const current = !!result && result.run.manifest.runId === liveRunId && captured === currentDocument;
-  const canTeach = current && /^[abc]{2,7}$/.test(currentDocument) && ready && !busy;
-  const label = (id: number | undefined) => id === undefined ? 'unavailable' : vocabulary[id] ?? 'START / END';
-  const percent = (value: number) => `${(100 * value).toFixed(2)}%`;
-  const learnedPrefix = learning?.document.slice(0, learning.position);
-  const earlier = learning && (learning.document !== captured || learning.document !== currentDocument || learning.afterRunId !== liveRunId || result?.run.manifest.runId !== learning.afterRunId);
-  return `<div class="guided-lesson" data-testid="guided-lesson">
-    <section class="panel lesson-predict"><div class="eyebrow">01 / Predict</div><h2>What comes next?</h2>
-      ${result?.run.manifest.intervention ? '<p class="note" data-testid="intervention-declaration">This recorded prediction used a changed model: one attention head’s output was disabled. Explore identifies the head and its measured effects.</p>' : ''}<p>This is a tiny GPT. It sees characters and tries to predict what comes next. The fixed starting model is untrained; teaching changes it.</p>
-      <ol class="model-map" aria-label="Map of the model">${guidedMap.map(([, name], index) => `<li><button data-map="${index}" aria-pressed="${index === mapIndex}" class="${index === mapIndex ? 'active' : ''}">${name}</button></li>`).join('')}</ol>
-      <p class="map-explanation" data-testid="map-explanation">${guidedMap[mapIndex]![2]}</p>
-      <div class="lesson-prediction"><div><p>Follow this prefix from the recorded input:</p><div class="lesson-prefix"><span class="boundary">START / END</span> ${escapeHtml(prefix || '∅')}</div>
-      <p>Known next character: <strong data-testid="guided-target">${escapeHtml(label(target))}</strong></p><p class="muted">The prediction uses the whole prefix. The known next character is the answer we can teach it.</p></div>
-      <div><h3>The model’s prediction</h3>${probabilityContextView(result, learning)}<div data-testid="probabilities">${probabilityView(values, [...vocabulary, 'START / END'])}</div></div></div>
-      <p class="muted">${current ? 'These numbers came from the run you just watched.' : 'These numbers belong to the recorded input shown above. Predict to use the current input and model.'}</p>
-      <button id="why-prediction">Why this prediction? · Explore</button>
-    </section>
-    <section class="panel lesson-teach"><div class="eyebrow">02 / Teach</div><h2>Give the model the next characters</h2>
-      <p>Teaching compares each prediction with the known next character. Its loss measures how far those predictions miss the answers. Each real update adjusts the model’s parameters, the adjustable numbers used in its calculations.</p>
-      <p>We’ll train on <strong>${escapeHtml(captured || '(empty input)')}</strong> for 10 updates, then predict the same input again. The starting example follows <strong>abc → a</strong>.</p>
-      <button id="teach" class="primary" ${canTeach ? '' : 'disabled'}>Teach · 10 real updates</button>
-      ${!current ? '<p class="note">Predict the current input first to start a new teaching comparison.</p>' : captured.length < 2 ? '<p class="note">Enter at least two characters and Predict to follow a character-to-character example.</p>' : '<p class="muted">Teach again to continue from the current model. No hidden reset.</p>'}
-    </section>
-    <section class="panel lesson-changed" data-testid="guided-change"><div class="eyebrow">03 / See what changed</div><h2>Did the target become more likely?</h2>
-      ${learning ? `<p>${earlier ? 'Earlier teaching comparison. ' : ''}This comparison used <strong>${escapeHtml(learning.document)}</strong>: after <strong>${escapeHtml(learnedPrefix!)}</strong>, target <strong>${escapeHtml(label(learning.target))}</strong>.</p>
-      <div class="lesson-comparison"><div><small>Before this teaching session</small><div class="lesson-number" data-testid="guided-before" data-value="${learning.before}">${percent(learning.before)}</div></div><span aria-hidden="true">→</span><div><small>After <strong data-testid="guided-completed">${learning.completed}</strong> real updates</small><div class="lesson-number" data-testid="guided-after" data-value="${learning.after}">${percent(learning.after)}</div></div></div>
-      <p>From model step ${learning.startingStep} to ${learning.startingStep + learning.completed}. These are the probabilities measured before the first update and after the last completed update.</p>
-      <p>Parameters changed, so the model’s prediction changed. A gradient tells training how a parameter affects loss; Explore shows the actual changes. Fitting this example does not show how well the model understands other text.</p>` : '<p>Teach the model to compare the target probability before and after real updates. No result is filled in ahead of time.</p>'}
-      <p class="muted">${learning ? 'The buttons below follow this teaching comparison’s recorded after prediction.' : 'The buttons below follow the current recorded prediction.'}</p><div class="controls"><button id="guided-explore">Why did that change? · Explore</button><button id="guided-microscope" ${!result || busy ? 'disabled' : ''}>Follow one number · Microscope</button></div>
-    </section></div>`;
+export function guidedView(
+  result: RunResult | undefined,
+  learning: GuidedLearning | undefined,
+  vocabulary: readonly string[],
+  currentDocument: string,
+  liveRunId: string,
+  busy: boolean,
+  ready: boolean,
+  mapIndex: number,
+  replay = false,
+  batch?: GuidedBatch,
+  pendingCommand?: "predict" | "train",
+): string {
+  const model = guidedReadModel(
+    result,
+    learning,
+    vocabulary,
+    currentDocument,
+    liveRunId,
+    busy,
+    ready,
+    replay,
+    batch,
+    pendingCommand,
+  );
+  const percent = (value: number | undefined) =>
+    value === undefined ? "—" : (value * 100).toFixed(1);
+  const comparison = model.comparison;
+  const showComparison =
+    comparison &&
+    comparison.afterRunId === result?.run.manifest.runId &&
+    comparison.document === currentDocument;
+  const distribution =
+    model.frame === "A1" || model.frame === "TEACH"
+      ? ""
+      : showComparison
+        ? `<div class="instrument-comparison" data-testid="guided-change"><p>${model.earlierComparison ? "Earlier teaching comparison. " : ""}This comparison used <b>${escapeHtml(comparison.document)}</b></p><div class="comparison-values"><span data-testid="guided-before" data-value="${comparison.before}">${percent(comparison.before)}%</span><span>→</span><span data-testid="guided-after" data-value="${comparison.after}">${percent(comparison.after)}%</span></div><div class="comparison-scale"><span class="current-mark" style="width:${100 * comparison.after}%"></span><span class="before-mark" style="left:${100 * comparison.before}%"></span></div><div class="probability-axis"><span>0%</span><span>100%</span></div><p class="pp-change">${comparison.after >= comparison.before ? "+" : ""}${percent(comparison.after - comparison.before)} pp</p><p><strong data-testid="guided-completed">${comparison.completed}</strong> REAL UPDATES</p><small>Reference line: before · filled mark: after</small></div>`
+        : `<div class="instrument-distribution" data-testid="probabilities"><div class="probability-axis"><span>0%</span><span>100%</span></div>${model.values?.map((value, i) => `<div class="probability-row" data-value="${value}"><span>${escapeHtml(vocabulary[i] ?? "START / END")}</span><div class="bar-track"><span class="bar" style="width:${100 * value}%"></span></div><code title="${value}">${percent(value)}%</code></div>`).join("") ?? "<p>NOT CAPTURED</p>"}</div>`;
+  const extended = model.earlierComparison && !showComparison;
+  const output = `<div class="instrument-result"><span>Next token <b data-testid="guided-target">${escapeHtml(model.target)}</b></span><div class="hero-probability" data-value="${model.probability ?? ""}">${percent(model.probability)}<small>%</small></div></div>${extended ? probabilityContextView(result, learning) : ""}${distribution}`;
+  return `<div class="instrument-guided ${extended ? "with-historical" : ""}" data-testid="guided-lesson" data-frame="${model.frame}"><div class="instrument-intro"><p class="eyebrow">A NEURAL NETWORK, OPEN TO INSPECTION</p><h1>Watch one real neural network learn.</h1></div>${instrumentView(model, mapIndex, output)}<section class="instrument-invitation">
+    ${model.frame === "A1" ? `<p>Teach it. Watch the prediction change.</p><button id="activate-attract" class="primary" ${busy || !ready ? "disabled" : ""}>TOUCH TO START</button><p class="replay-label">RECORDED RUN · REPLAY</p>` : model.frame === "TEACH" ? `<p>Teaching on ${escapeHtml(batch!.capturedDocument)}</p><div role="status" class="teach-progress" data-testid="teach-progress"><span aria-hidden="true">${"■".repeat(batch!.completedCount)}${"□".repeat(10 - batch!.completedCount)}</span> <b><span data-testid="guided-completed">${batch!.completedCount}</span> / 10 REAL UPDATES</b></div><button id="cancel-teach">Cancel teaching</button><p class="instrument-caption">Counts advance only when a real update completes.</p>` : `<p>${showComparison ? (comparison!.before === comparison!.after ? "Same context. Target probability unchanged." : "Same context. Same model. A changed prediction.") : `The model gives “${escapeHtml(model.target)}” a ${percent(model.probability)}% chance of coming next.`}</p><div class="instrument-actions">${showComparison ? '<button id="guided-explore" class="primary">Why did that change? · Explore</button><button id="guided-microscope">Follow one number · Microscope</button>' : `<button id="teach" class="primary" ${model.canTeach ? "" : "disabled"}>Teach · 10 real updates</button><button id="why-prediction">Why this prediction? · Explore</button>`}</div><p class="instrument-caption">${batch && batch.status !== "COMPLETE" && comparison ? `${batch.status} · ${comparison.completed} completed real updates. ` : ""}Teach on ${escapeHtml(model.source?.capturedDocument ?? currentDocument)} · the full ${result?.tokenIds.length ?? 5}-position objective.</p>`}
+    ${!replay && mapIndex !== 5 ? `<p data-testid="map-explanation" class="instrument-caption">${guidedMap[mapIndex]![2]}</p>` : '<span data-testid="map-explanation" class="sr-only"></span>'}
+  </section><footer class="instrument-footer">${sourceStrip(model)}<p>${replay ? "Recorded real run. Not live." : `Public example ${escapeHtml(model.prefix)} → ${escapeHtml(model.target)} · 1 of ${result?.tokenIds.length ?? 5} training positions · Next-token probability, not overall accuracy.`}</p></footer>
+  ${!replay && ((model.earlierComparison && !showComparison) || result?.run.manifest.intervention) ? `<div class="source-context-extra">${result?.run.manifest.intervention ? '<p data-testid="intervention-declaration">This recorded prediction used a declared head intervention.</p>' : ""}${comparison ? `<div data-testid="guided-change"><p>Earlier teaching comparison. This comparison used ${escapeHtml(comparison.document)}</p><span data-testid="guided-before" data-value="${comparison.before}">${percent(comparison.before)}%</span> → <span data-testid="guided-after" data-value="${comparison.after}">${percent(comparison.after)}%</span> · <span data-testid="guided-completed">${comparison.completed}</span> real updates <button id="guided-explore">Why did that change? · Explore</button><button id="guided-microscope">Follow one number · Microscope</button></div>` : ""}</div>` : ""}</div>`;
 }

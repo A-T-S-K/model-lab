@@ -4,14 +4,14 @@ test('progressive disclosure follows live operands, preserves captured detail, a
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.route('**/*', route => route.request().url().startsWith('http://127.0.0.1:4173/') ? route.continue() : route.abort());
-  await page.goto('/');
+  await page.goto('/'); await page.locator('#activate-attract').click(); await expect(page.locator('#teach')).toBeEnabled(); await page.locator('details.session-controls').evaluate(el => { (el as HTMLDetailsElement).open = true; });
   await expect(page.getByTestId('status')).toContainText('Live prediction complete');
   await expect(page.locator('#head')).toBeHidden();
   await page.getByRole('button', { name: 'Explore', exact: true }).click();
   const original = await page.locator('#history-run').inputValue();
   await page.locator('[data-stage="embeddingSum"]').click();
   await page.getByTestId('vector-evidence').locator('[data-element="2"]').click();
-  await expect(page.getByTestId('inspection-provenance')).toHaveText('OBSERVED LIVE SCALAR');
+  await expect(page.getByTestId('inspection-provenance')).toHaveText('OBSERVED SCALAR');
   await expect(page.getByTestId('scalar-operation')).toContainText('add');
   await page.getByTestId('microscope-evidence').locator('.source summary').last().click();
   await expect(page.getByTestId('microscope-evidence').locator('.source')).toContainText('Value.add');
@@ -27,7 +27,7 @@ test('progressive disclosure follows live operands, preserves captured detail, a
   await page.locator('#history-run').selectOption(original);
   await page.locator('[data-stage="embeddingSum"]').click();
   await page.getByTestId('vector-evidence').locator('[data-element="2"]').click();
-  await expect(page.getByTestId('inspection-provenance')).toHaveText('OBSERVED LIVE SCALAR');
+  await expect(page.getByTestId('inspection-provenance')).toHaveText('OBSERVED SCALAR');
   await page.getByTestId('vector-evidence').locator('[data-element="3"]').click();
   await expect(page.getByTestId('inspection-provenance')).toHaveText('VERIFIED RECOMPUTATION');
   await expect(page.getByTestId('verification')).toContainText('max absolute error');
@@ -49,7 +49,7 @@ test('progressive disclosure follows live operands, preserves captured detail, a
 });
 
 test('actual training exposes loss, contributions, Adam equations, compatible history, and distinct reset intents', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/'); await page.locator('#activate-attract').click(); await expect(page.locator('#teach')).toBeEnabled(); await page.locator('details.session-controls').evaluate(el => { (el as HTMLDetailsElement).open = true; });
   await expect(page.getByTestId('status')).toContainText('Live prediction complete');
   await page.getByRole('button', { name: 'Explore', exact: true }).click();
   const initial = await page.locator('#history-run').inputValue();
@@ -61,7 +61,7 @@ test('actual training exposes loss, contributions, Adam equations, compatible hi
   await expect(page.getByTestId('adam-equations')).toContainText('mathematical update');
   await expect(page.getByTestId('adam-equations')).toContainText('actual representable delta');
   await page.locator('#inspect-gradient').click();
-  await expect(page.getByTestId('inspection-provenance')).toHaveText('OBSERVED LIVE SCALAR');
+  await expect(page.getByTestId('inspection-provenance')).toHaveText('OBSERVED SCALAR');
   await expect(page.getByTestId('gradient-edges').locator('tbody tr').first()).toBeVisible();
   const equations = await page.getByTestId('gradient-edges').locator('tbody tr').evaluateAll(rows => rows.map(row => Array.from(row.querySelectorAll('td[title]')).map(cell => Number(cell.getAttribute('title')))));
   for (const [adjoint, derivative, contribution] of equations) expect(adjoint * derivative).toBeCloseTo(contribution, 13);
@@ -69,7 +69,7 @@ test('actual training exposes loss, contributions, Adam equations, compatible hi
   await page.locator('#history-run').selectOption(training!);
   await page.locator('[data-stage="loss"]').click();
   await page.getByTestId('vector-evidence').locator('[data-element="0"]').click();
-  await expect(page.getByTestId('inspection-provenance')).toHaveText('OBSERVED LIVE SCALAR');
+  await expect(page.getByTestId('inspection-provenance')).toHaveText('OBSERVED SCALAR');
   await page.locator('#compare-run').selectOption(initial);
   await expect(page.getByTestId('run-comparison')).toContainText('Artifact absent from before run');
   const history = await page.getByTestId('history-count').textContent();
@@ -83,14 +83,14 @@ test('actual training exposes loss, contributions, Adam equations, compatible hi
   await expect(page.getByTestId('training-step')).toHaveText('1');
   await expect(page.getByTestId('history-count')).toHaveText(history!);
   await page.locator('#clear-session').click();
-  await expect(page.getByTestId('status')).toContainText('Live prediction complete');
+  await expect(page.locator('#activate-attract')).toBeEnabled(); await page.locator('#activate-attract').click(); await expect(page.locator('#teach')).toBeEnabled(); await page.locator('details.session-controls').evaluate(el => { (el as HTMLDetailsElement).open = true; });
   await expect(page.locator('button[data-mode="guided"]')).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'Explore', exact: true }).click();
   await expect(page.getByTestId('history-count')).toContainText('1 runs · 1 snapshots · 0 learning experiments');
 });
 
 test('bounded training retains real checkpoints and complete capture displays statistics', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/'); await page.locator('#activate-attract').click(); await expect(page.locator('#teach')).toBeEnabled(); await page.locator('details.session-controls').evaluate(el => { (el as HTMLDetailsElement).open = true; });
   await expect(page.getByTestId('status')).toContainText('Live prediction complete');
   await page.getByRole('button', { name: 'Explore', exact: true }).click();
   await page.getByText('Bounded learning and complete capture', { exact: true }).click();
@@ -109,14 +109,14 @@ test('bounded training retains real checkpoints and complete capture displays st
   await page.locator('#history-run').selectOption(capturedRun);
   await page.locator('[data-stage="embeddingSum"]').click();
   await page.getByTestId('vector-evidence').locator('[data-element="6"]').click();
-  await expect(page.getByTestId('inspection-provenance')).toHaveText('OBSERVED LIVE SCALAR');
+  await expect(page.getByTestId('inspection-provenance')).toHaveText('OBSERVED SCALAR');
   await page.getByTestId('microscope-evidence').locator('.operand-list').first().locator('button').first().click();
-  await expect(page.getByTestId('inspection-provenance')).toHaveText('OBSERVED LIVE SCALAR');
+  await expect(page.getByTestId('inspection-provenance')).toHaveText('OBSERVED SCALAR');
   await expect(page.getByTestId('scalar-operation')).toContainText('wte');
 });
 
 test('head ablation compares fresh observed arms and inspects declared historical intervention', async ({ page }) => {
-  await page.goto('/'); await expect(page.getByTestId('status')).toContainText('Live prediction complete');
+  await page.goto('/'); await page.locator('#activate-attract').click(); await expect(page.locator('#teach')).toBeEnabled(); await page.locator('details.session-controls').evaluate(el => { (el as HTMLDetailsElement).open = true; }); await expect(page.getByTestId('status')).toContainText('Live prediction complete');
   await page.getByRole('button', { name: 'Explore', exact: true }).click();
   await page.getByText('Experiment · head ablation', { exact: true }).click();
   await page.locator('#ablate-head').click();
