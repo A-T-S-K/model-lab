@@ -1,0 +1,284 @@
+[
+  {
+    "frame": "A1",
+    "width": 1920,
+    "height": 1080,
+    "anchors": [
+      {
+        "stage": "Characters",
+        "x": 64,
+        "y": 305.234375,
+        "width": 223.546875
+      },
+      {
+        "stage": "Tokens + position",
+        "x": 319.546875,
+        "y": 305.234375,
+        "width": 268.28125
+      },
+      {
+        "stage": "Attention",
+        "x": 619.828125,
+        "y": 305.234375,
+        "width": 234.734375
+      },
+      {
+        "stage": "MLP",
+        "x": 886.5625,
+        "y": 305.234375,
+        "width": 212.390625
+      },
+      {
+        "stage": "Scores",
+        "x": 1130.953125,
+        "y": 305.234375,
+        "width": 190.03125
+      },
+      {
+        "stage": "Probabilities",
+        "x": 1352.984375,
+        "y": 305.234375,
+        "width": 503.015625
+      }
+    ],
+    "overlaps": false,
+    "errors": [],
+    "external": [],
+    "reducedMotionInformation": "identical"
+  },
+  {
+    "frame": "A2",
+    "width": 1920,
+    "height": 1080,
+    "anchors": [
+      {
+        "stage": "Characters",
+        "x": 64,
+        "y": 305.234375,
+        "width": 223.546875
+      },
+      {
+        "stage": "Tokens + position",
+        "x": 319.546875,
+        "y": 305.234375,
+        "width": 268.28125
+      },
+      {
+        "stage": "Attention",
+        "x": 619.828125,
+        "y": 305.234375,
+        "width": 234.734375
+      },
+      {
+        "stage": "MLP",
+        "x": 886.5625,
+        "y": 305.234375,
+        "width": 212.390625
+      },
+      {
+        "stage": "Scores",
+        "x": 1130.953125,
+        "y": 305.234375,
+        "width": 190.03125
+      },
+      {
+        "stage": "Probabilities",
+        "x": 1352.984375,
+        "y": 305.234375,
+        "width": 503.015625
+      }
+    ],
+    "overlaps": false,
+    "errors": [],
+    "external": [],
+    "reducedMotionInformation": "identical"
+  },
+  {
+    "frame": "A3",
+    "width": 1920,
+    "height": 1080,
+    "anchors": [
+      {
+        "stage": "Characters",
+        "x": 64,
+        "y": 305.234375,
+        "width": 223.546875
+      },
+      {
+        "stage": "Tokens + position",
+        "x": 319.546875,
+        "y": 305.234375,
+        "width": 268.28125
+      },
+      {
+        "stage": "Attention",
+        "x": 619.828125,
+        "y": 305.234375,
+        "width": 234.734375
+      },
+      {
+        "stage": "MLP",
+        "x": 886.5625,
+        "y": 305.234375,
+        "width": 212.390625
+      },
+      {
+        "stage": "Scores",
+        "x": 1130.953125,
+        "y": 305.234375,
+        "width": 190.03125
+      },
+      {
+        "stage": "Probabilities",
+        "x": 1352.984375,
+        "y": 305.234375,
+        "width": 503.015625
+      }
+    ],
+    "overlaps": false,
+    "errors": [],
+    "external": [],
+    "reducedMotionInformation": "identical"
+  },
+  {
+    "frame": "A1",
+    "width": 1280,
+    "height": 720,
+    "anchors": [
+      {
+        "stage": "Characters",
+        "x": 32,
+        "y": 208.796875,
+        "width": 149.796875
+      },
+      {
+        "stage": "Tokens + position",
+        "x": 201.796875,
+        "y": 208.796875,
+        "width": 179.75
+      },
+      {
+        "stage": "Attention",
+        "x": 401.546875,
+        "y": 208.796875,
+        "width": 149.796875
+      },
+      {
+        "stage": "MLP",
+        "x": 571.34375,
+        "y": 208.796875,
+        "width": 142.3125
+      },
+      {
+        "stage": "Scores",
+        "x": 733.65625,
+        "y": 208.796875,
+        "width": 119.84375
+      },
+      {
+        "stage": "Probabilities",
+        "x": 873.5,
+        "y": 208.796875,
+        "width": 374.484375
+      }
+    ],
+    "overlaps": false,
+    "errors": [],
+    "external": [],
+    "reducedMotionInformation": "identical"
+  },
+  {
+    "frame": "A2",
+    "width": 1280,
+    "height": 720,
+    "anchors": [
+      {
+        "stage": "Characters",
+        "x": 32,
+        "y": 208.796875,
+        "width": 149.796875
+      },
+      {
+        "stage": "Tokens + position",
+        "x": 201.796875,
+        "y": 208.796875,
+        "width": 179.75
+      },
+      {
+        "stage": "Attention",
+        "x": 401.546875,
+        "y": 208.796875,
+        "width": 149.796875
+      },
+      {
+        "stage": "MLP",
+        "x": 571.34375,
+        "y": 208.796875,
+        "width": 142.3125
+      },
+      {
+        "stage": "Scores",
+        "x": 733.65625,
+        "y": 208.796875,
+        "width": 119.84375
+      },
+      {
+        "stage": "Probabilities",
+        "x": 873.5,
+        "y": 208.796875,
+        "width": 374.484375
+      }
+    ],
+    "overlaps": false,
+    "errors": [],
+    "external": [],
+    "reducedMotionInformation": "identical"
+  },
+  {
+    "frame": "A3",
+    "width": 1280,
+    "height": 720,
+    "anchors": [
+      {
+        "stage": "Characters",
+        "x": 32,
+        "y": 208.796875,
+        "width": 149.796875
+      },
+      {
+        "stage": "Tokens + position",
+        "x": 201.796875,
+        "y": 208.796875,
+        "width": 179.75
+      },
+      {
+        "stage": "Attention",
+        "x": 401.546875,
+        "y": 208.796875,
+        "width": 149.796875
+      },
+      {
+        "stage": "MLP",
+        "x": 571.34375,
+        "y": 208.796875,
+        "width": 142.3125
+      },
+      {
+        "stage": "Scores",
+        "x": 733.65625,
+        "y": 208.796875,
+        "width": 119.84375
+      },
+      {
+        "stage": "Probabilities",
+        "x": 873.5,
+        "y": 208.796875,
+        "width": 374.484375
+      }
+    ],
+    "overlaps": false,
+    "errors": [],
+    "external": [],
+    "reducedMotionInformation": "identical"
+  }
+]

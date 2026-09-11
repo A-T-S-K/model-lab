@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import approved from "../../design-prototypes/guided/checks.json" with { type: "json" };
+import approved from "../fixtures/visual/guided-anchors.json" with { type: "json" };
 async function anchors(page: Page) {
   return page.locator("[data-anchor]").evaluateAll((nodes) =>
     nodes.map((node) => ({

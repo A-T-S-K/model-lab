@@ -14,7 +14,14 @@ test('beginner example executes with only model, fixture, and example sources', 
       await cp(fileURLToPath(new URL(`../../${folder}`, import.meta.url)), join(isolated, folder), { recursive: true });
     }
     await writeFile(join(isolated, 'package.json'), '{"type":"module"}\n');
-    const output = execFileSync(process.execPath, ['--import', import.meta.resolve('tsx'), 'examples/predict-teach.ts'], { cwd: isolated, encoding: 'utf8' });
+    const env = Object.fromEntries(
+      Object.entries(process.env).filter(([key]) => !key.startsWith('NODE_TEST_')),
+    );
+    const output = execFileSync(
+      process.execPath,
+      ['--import', import.meta.resolve('tsx'), 'examples/predict-teach.ts'],
+      { cwd: isolated, encoding: 'utf8', env },
+    );
     const before = Number(output.match(/Probability before: (\S+)/)?.[1]);
     const after = Number(output.match(/Probability after one real update: (\S+)/)?.[1]);
     assert.ok(Math.abs(before - 0.3591443770854818) < 1e-9);
