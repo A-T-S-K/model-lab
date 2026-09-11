@@ -1,0 +1,83 @@
+name: Model Lab Acceptance
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - run: npm ci
+
+      - name: Portable reference conformance
+        run: npm run test:reference:portable
+
+      - name: Unit and integration tests
+        run: npm test
+
+      - name: Model-only example
+        run: npm run example
+
+      - name: Production build
+        run: npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser acceptance
+        run: npm run test:browser
+
+      - name: Isolated repository acceptance
+        run: npm run test:isolation
+
+      - name: Build standalone container
+        run: docker build -t model-lab:acceptance .
+
+      - name: Smoke-test container without WAN
+        run: |
+          docker run --detach --rm \
+            --name model-lab-acceptance \
+            -p 127.0.0.1:4188:80 \
+            model-lab:acceptance
+
+          trap 'docker stop model-lab-acceptance' EXIT
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4188/ > /dev/null; then
+              break
+            fi
+            sleep 1
+          done
+
+          node --import tsx scripts/smoke-container.ts \
+            http://127.0.0.1:4188
+
+      - name: Check whitespace
+        run: git diff --check
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: failure()
+        with:
+          name: model-lab-browser-evidence
+          path: test-results/

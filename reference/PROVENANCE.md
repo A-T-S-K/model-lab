@@ -7,7 +7,7 @@ The model organism is Andrej Karpathy's [microgpt gist](https://gist.github.com/
 - [Immutable source](https://gist.githubusercontent.com/karpathy/8627fe009c40f57531cb18360106ce95/raw/14fb038816c7aae0bb9342c2dbf1a51dd134a5ff/microgpt.py).
 - Exact source bytes SHA-256: `d47d88c2fd432c8ebdc1048beab7f7eb64ea7e0e664e11b812d72a6d95ebccee`.
 
-The pinned source file attributes `@karpathy` and contains no license header. Separately, on February 24, 2026, Andrej Karpathy [explicitly stated in the gist discussion](https://gist.github.com/karpathy/8627fe009c40f57531cb18360106ce95?permalink_comment_id=5999841#gistcomment-5999841): “microgpt is MIT licensed.” These are distinct source and author-statement facts. AI Village is not making a repository-level licensing decision in this pass; no license files are added or changed.
+The pinned source file attributes `@karpathy` and contains no license header. Separately, on February 24, 2026, Andrej Karpathy [explicitly stated in the gist discussion](https://gist.github.com/karpathy/8627fe009c40f57531cb18360106ce95?permalink_comment_id=5999841#gistcomment-5999841): “microgpt is MIT licensed.” These are distinct source and author-statement facts. This repository currently makes no repository-level licensing decision; no project license file has been added.
 
 The upstream source is **not vendored**. A downloaded copy under `/tmp` was used to recheck the pinned hash and header. `microgpt_reference.py` is a separately written mathematical oracle, with attribution here; it is not a preserved copy of upstream text.
 
