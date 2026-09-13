@@ -1,3 +1,4 @@
+import { TrainingExecution } from './training-execution.js';
 import fixture from '../../fixtures/canonical.initial.json';
 import { loadModel, createOptimizerState, snapshotTraining, restoreTraining } from '../../model/state.js';
 import { predict, tokenize, forwardSequence, forwardBoundaries } from '../../model/microgpt.js';
@@ -38,6 +39,7 @@ export class ModelSession {
   private contexts = new Map<string, CaptureContext>();
   private generationId = -1;
   private sessionId = '';
+  private training?: TrainingExecution;
   private active?: {
     id: string; sequence: number; sent: number;
     cursor: ReturnType<typeof forwardSequence>; boundaries: ReturnType<typeof forwardBoundaries>;
@@ -66,16 +68,31 @@ export class ModelSession {
           this.model = loadModel(fixture.config, fixture.parameters, fixture.parameterOrder);
           this.optimizer = createOptimizerState(this.model, fixture.optimizer);
         }
-        this.active = undefined; this.run = undefined; this.contexts.clear();
+        this.training = undefined; this.active = undefined; this.run = undefined; this.contexts.clear();
         this.sessionId = request.sessionId; this.generationId = request.generationId;
         const snapshot = snapshotTraining(this.model, this.optimizer);
         return { ...tag, status: 'ready', snapshot, archivedSnapshot: await archiveSnapshot(snapshot) };
       }
       if (request.sessionId !== this.sessionId || request.generationId !== this.generationId) throw new Error('Stale session or generation');
-      if (request.command === 'cancel') { this.active = undefined; return { ...tag, status: 'cancelled' }; }
+      if (request.command === 'cancel') { this.training = undefined; this.active = undefined; return { ...tag, status: 'cancelled' }; }
       if (request.command === 'cancelForward') {
+        if (this.training?.id === request.executionId) this.training = undefined;
         if (this.active?.id === request.executionId) this.active = undefined;
         return { ...tag, status: 'cancelled' };
+      }
+      if (request.command === 'advanceTraining') {
+        if (!this.training || this.training.id !== request.executionId) throw new Error('Stale execution');
+        return { ...tag, status: 'forward', progress: await this.training.advance(request.permit, request.budget, request.pin, request.stop) };
+      }
+      if (request.command === 'acceptTraining') {
+        const a = this.training;
+        if (!a || a.id !== request.executionId || a.phase !== 'ready' || a.result?.snapshots[1].id !== request.candidateId) throw new Error('Stale candidate');
+        rollback = a.starting.state;
+        const response: WorkerResponse = { ...tag, status: 'result', result: a.result };
+        publishTrainingResult?.(response);
+        this.model = a.working.model; this.optimizer = a.working.optimizer;
+        this.run = a.result.run; this.contexts = a.acceptedContexts(); this.training = undefined;
+        return response;
       }
       if (request.command === 'advanceForward') {
         const a = this.active;
@@ -105,19 +122,23 @@ export class ModelSession {
       }
       if (request.command === 'inspect') {
         const context = this.active?.id === request.sourceRunId ? this.active.context : this.contexts.get(request.sourceRunId);
-        return { ...tag, status: 'inspection', inspection: context ? context.inspect(request.target) : {
+        return { ...tag, status: 'inspection', inspection: this.training?.inspect(request.sourceRunId, request.target) ?? (context ? context.inspect(request.target) : {
           sourceRunId: request.sourceRunId, provenance: 'observed', availability: 'not_captured', graph: null,
           reason: 'The live execution has been released. Use the archived snapshot for verified historical inspection.',
-        } };
+        }) };
       }
-      if (this.active) throw new Error('Cancel or complete the active prediction before another model command');
-      if (request.command !== 'predict' && request.command !== 'train' && request.command !== 'startForward') throw new Error('Unknown worker command');
+      if (this.active || this.training) throw new Error('Cancel or complete the active prediction before another model command');
+      if (request.command !== 'predict' && request.command !== 'train' && request.command !== 'startForward' && request.command !== 'startTraining') throw new Error('Unknown worker command');
       const { tokenIds, targetIds } = tokenize(this.model, request.document);
       const starting = await archiveSnapshot(snapshotTraining(this.model, this.optimizer));
       const capture = (id: string, snapshot: ArchivedSnapshot) => {
         const recorder = new TraceRecorder(runManifest(id, tag, snapshot, tokenIds, targetIds));
         return { recorder, context: new CaptureContext(this.model, recorder) };
       };
+      if (request.command === 'startTraining') {
+        this.training = new TrainingExecution(request.runId, tag, starting, tokenIds, targetIds);
+        return { ...tag, status: 'forward', progress: this.training.progress() };
+      }
       if (request.command === 'startForward') {
         const { recorder, context } = capture(request.runId, starting);
         const boundaries = forwardBoundaries(this.model, tokenIds);
@@ -162,6 +183,7 @@ export class ModelSession {
       this.contexts.set(afterRun.manifest.runId, after.context);
       return response;
     } catch (error) {
+      if ((request.command === 'advanceTraining' || request.command === 'acceptTraining') && request.sessionId === this.sessionId && request.generationId === this.generationId && this.training?.id === request.executionId && !/Stale|Duplicate or out-of-order|Invalid work budget/.test(String(error))) this.training = undefined;
       if (request.command === 'advanceForward' && request.sessionId === this.sessionId && request.generationId === this.generationId && this.active?.id === request.executionId && !/Stale execution|Duplicate or out-of-order permit/.test(String(error))) this.active = undefined;
       if (rollback) {
         const restored = restoreTraining(rollback);

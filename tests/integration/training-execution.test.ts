@@ -1,0 +1,101 @@
+import { test, mock } from 'node:test';
+import assert from 'node:assert/strict';
+import fixture from '../../fixtures/canonical.initial.json';
+import { Value } from '../../model/value.js';
+import { backwardSequence } from '../../model/autograd.js';
+import { adamProposals, applyAdam } from '../../model/training.js';
+import { loadModel, createOptimizerState, snapshotTraining } from '../../model/state.js';
+import { ModelSession } from '../../app/worker/controller.js';
+import { TraceRecorder } from '../../trace/recorder.js';
+import type { WorkerRequest, WorkerResponse, ForwardProgress } from '../../app/worker/protocol.js';
+const tag={sessionId:'training',generationId:0};
+const p=(r:WorkerResponse)=>{assert.equal(r.status,'forward');if(r.status!=='forward')throw Error();return r.progress;};
+const result=(r:WorkerResponse)=>{assert.equal(r.status,'result');if(r.status!=='result')throw Error();return r.result;};
+async function setup(){const s=new ModelSession();await s.handle({...tag,runId:'init',command:'initialize'});return s;}
+async function advance(s:ModelSession,progress:ForwardProgress, budget=128,stop=false,pin=0){return p(await s.handle({...tag,runId:`permit${progress.sequence}`,command:'advanceTraining',executionId:progress.executionId,permit:progress.sequence+1,budget,stop,pin}));}
+async function until(s:ModelSession,progress:ForwardProgress,phase:string){for(let i=0;i<3000&&progress.training!.phase!==phase;i++)progress=await advance(s,progress);assert.equal(progress.training!.phase,phase);return progress;}
+const accept=(s:ModelSession,progress:ForwardProgress,publish?:(r:WorkerResponse)=>void)=>s.handle({...tag,runId:'accept'+progress.executionId,command:'acceptTraining',executionId:progress.executionId,candidateId:progress.training!.candidateId!},publish);
+
+test('T01 exact shared all-field mathematics and two consecutive accepted updates',async()=>{
+ const fast=await setup(),slow=await setup();
+ for(let i=0;i<2;i++) {
+  const a=result(await fast.handle({...tag,runId:'fast'+i,command:'train',document:'abca'}));
+  let progress=p(await slow.handle({...tag,runId:'slow'+i,command:'startTraining',document:'abca'}));
+  const starting=progress.start!.snapshot;
+  progress=await until(slow,progress,'ready');
+  assert.equal(progress.training!.acceptedStep,i);
+  const internal=slow as any;assert.deepEqual(snapshotTraining(internal.model,internal.optimizer),starting.state);
+  const b=result(await accept(slow,progress));
+  assert.deepEqual(a.learn,b.learn);assert.deepEqual(a.snapshots,b.snapshots);assert.deepEqual(a.probabilities,b.probabilities);
+  for(let run=0;run<3;run++)assert.deepEqual(a.runs[run].artifacts.map(({id,...v})=>v),b.runs[run].artifacts.map(({id,...v})=>v));
+  assert.equal((await accept(slow,progress)).status,'error');
+  await slow.handle({...tag,runId:'latecancel',command:'cancelForward',executionId:progress.executionId});
+  assert.equal(result(await slow.handle({...tag,runId:'check',command:'predict',document:'abca'})).trainingStep,i+1);
+ }
+});
+test('T02 independent grad setters prove real ordered repeated operand writes and suspension',()=>{
+ const a=new Value(3), shared=a.mul(a), out=shared.add(shared);const writes:number[]=[];let gradient=0;
+ Object.defineProperty(a,'grad',{get:()=>gradient,set:v=>{writes.push(v);gradient=v;}});
+ const events:any[]=[];const cursor=backwardSequence(out,e=>events.push({...e}));
+ assert.deepEqual(writes,[]);cursor.next();assert.deepEqual(writes,[]);
+ cursor.next();assert.equal(shared.grad,2);assert.deepEqual(writes,[]);assert.equal(events.length,2);
+ cursor.next();assert.deepEqual(writes,[6,12]);assert.deepEqual(events.slice(-2).map(e=>e.operand),[0,1]);
+ const frozen=structuredClone(events.map(({child,parent,...e})=>e));cursor.next();assert.deepEqual(frozen,events.map(({child,parent,...e})=>e));
+});
+test('T02 pinned stop happens inside chunk; inspection and old envelopes cannot advance or mutate',async()=>{
+ const s=await setup();let progress=await until(s,p(await s.handle({...tag,runId:'pin',command:'startTraining',document:'abca'})),'backward');
+ while(!progress.training!.contributions.length)progress=await advance(s,progress,128,true);
+ assert(progress.training!.stopped);assert(progress.training!.processed<=128);assert(!progress.training!.final);
+ const frozen=JSON.stringify(progress),seq=progress.sequence;
+ for(let i=0;i<3;i++)await s.handle({...tag,runId:'inspect'+i,command:'inspect',sourceRunId:'pin:training',target:{kind:'node',nodeId:progress.training!.contributions.at(-1)!.child!}});
+ assert.equal((s as any).training.sequence,seq);
+ const next=await advance(s,progress,1);assert.equal(JSON.stringify(progress),frozen);assert.equal(next.sequence,seq+1);
+});
+test('T03 actual proposal read suspension, prior momentum with zero gradient, validate before writes',()=>{
+ const model=loadModel(fixture.config,fixture.parameters,fixture.parameterOrder),state=createOptimizerState(model,fixture.optimizer);
+ state.step=1;state.m.fill(.2);state.v.fill(.3);const before=snapshotTraining(model,state);
+ const first=model.parameters[model.parameterOrder[0]][0][0],later=model.parameters[model.parameterOrder[0]][0][1];
+ let reads=0;Object.defineProperty(later,'grad',{get:()=>{reads++;return 0;},set:()=>{}});
+ const cursor=adamProposals(model,state);assert.equal(reads,0);
+ const a=cursor.next();assert(!a.done);assert.equal(a.value.mBefore,.2);assert.equal(a.value.gradient,0);assert.notEqual(a.value.delta,0);
+ // Initial finite validation visits gradients once, arithmetic for later proposals has not run.
+ const validationReads=reads;cursor.next();assert.equal(reads,validationReads+1);assert.equal(first.data,before.parameters[model.parameterOrder[0]][0][0]);assert.deepEqual(snapshotTraining(model,state),before);
+ let done=cursor.next();while(!done.done)done=cursor.next();
+ done.value.parameters.at(-1)!.after=NaN;
+ assert.throws(()=>applyAdam(model,state,done.value as any));assert.deepEqual(snapshotTraining(model,state),before);
+});
+for(const phase of ['baseline forward','training forward','loss','backward','optimizer proposal','candidate application','candidate forward','ready'])test('T04 cancel at '+phase+' preserves full accepted state and releases transaction',async()=>{
+ const s=await setup();let progress=p(await s.handle({...tag,runId:'cancel',command:'startTraining',document:'abca'}));const before=progress.start!.snapshot;
+ progress=await until(s,progress,phase);if(['backward','optimizer proposal','candidate forward'].includes(phase))progress=await advance(s,progress,1);
+ await s.handle({...tag,runId:'cancel-now',command:'cancelForward',executionId:'cancel'});assert.equal((s as any).training,undefined);
+ assert.deepEqual(result(await s.handle({...tag,runId:'check',command:'predict',document:'abca'})).snapshots[0],before);
+});
+test('T05/T06 Ready blocks permits and commands; identity checks, publication failure, cancel ordering',async()=>{
+ const s=await setup();let progress=p(await s.handle({...tag,runId:'race',command:'startTraining',document:''}));const before=progress.start!.snapshot;
+ for(const override of [{sessionId:'wrong'},{generationId:1},{executionId:'wrong'},{permit:2}]) {
+  const r=await s.handle({...tag,runId:'bad',command:'advanceTraining',executionId:'race',permit:1,budget:128,pin:0,stop:false,...override} as WorkerRequest);assert.equal(r.status,'error');assert.equal((s as any).training.sequence,0);
+ }
+ progress=await until(s,progress,'ready');
+ assert.equal((await s.handle({...tag,runId:'extra',command:'advanceTraining',executionId:'race',permit:progress.sequence+1,budget:128,pin:0,stop:false})).status,'error');
+ assert.equal((await s.handle({...tag,runId:'train',command:'train',document:''})).status,'error');
+ assert.equal((await accept(s,progress,()=>{throw Error('publication failure');})).status,'error');
+ assert.deepEqual(result(await s.handle({...tag,runId:'check',command:'predict',document:''})).snapshots[0],before);
+ progress=await until(s,p(await s.handle({...tag,runId:'race2',command:'startTraining',document:''})),'ready');
+ const [accepted,cancelled]=await Promise.all([accept(s,progress),s.handle({...tag,runId:'cancel',command:'cancelForward',executionId:'race2'})]);
+ assert.equal(accepted.status,'result');assert.equal(cancelled.status,'cancelled');assert.equal((s as any).optimizer.step,1);
+});
+for(const failure of ['hash','assembly','candidate-forward','application'])test('T06 injected '+failure+' failure releases candidate and retains authority',async()=>{
+ const s=await setup();let progress=p(await s.handle({...tag,runId:'fault',command:'startTraining',document:''}));const before=progress.start!.snapshot;
+ progress=await until(s,progress,failure==='assembly'?'candidate forward':'candidate application');
+ const restores:(()=>void)[]=[];
+ if(failure==='hash'){const original=crypto.subtle.digest;crypto.subtle.digest=()=>Promise.reject(Error('hash'));restores.push(()=>{crypto.subtle.digest=original;});}
+ if(failure==='assembly'){const original=TraceRecorder.prototype.finish;TraceRecorder.prototype.finish=()=>{throw Error('assembly');};restores.push(()=>{TraceRecorder.prototype.finish=original;});}
+ if(failure==='application')(s as any).training.update.parameters.at(-1).after=NaN;
+ if(failure==='candidate-forward'){progress=await advance(s,progress);const original=Value.prototype.mul;Value.prototype.mul=()=>{throw Error('candidate-forward');};restores.push(()=>{Value.prototype.mul=original;});}
+ try{let response:WorkerResponse;do{response=await s.handle({...tag,runId:'fault-permit',command:'advanceTraining',executionId:'fault',permit:progress.sequence+1,budget:128,pin:0,stop:false});if(response.status==='forward')progress=response.progress;}while(response.status==='forward');assert.equal(response.status,'error');}finally{restores.forEach(f=>f());}
+ assert.equal((s as any).training,undefined);assert.deepEqual(result(await s.handle({...tag,runId:'check',command:'predict',document:''})).snapshots[0],before);
+});
+for(const document of ['', 'abcb','abcabca'])test('T07 input coverage '+JSON.stringify(document),async()=>{
+ const fast=await setup(),slow=await setup();const a=result(await fast.handle({...tag,runId:'fast',command:'train',document}));
+ const progress=await until(slow,p(await slow.handle({...tag,runId:'slow',command:'startTraining',document})),'ready');const b=result(await accept(slow,progress));assert.deepEqual(a.learn,b.learn);assert.deepEqual(a.snapshots,b.snapshots);
+});

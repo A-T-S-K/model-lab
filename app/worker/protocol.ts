@@ -11,7 +11,9 @@ export type WorkerRequest = RequestTag & (
   { command: 'initialize' | 'reset' } |
   { command: 'restore'; snapshot: ArchivedSnapshot } |
   { command: 'predict' | 'train'; document: string } |
-  { command: 'startForward'; document: string } |
+  { command: 'startForward' | 'startTraining'; document: string } |
+  { command: 'advanceTraining'; executionId: string; permit: number; budget: number; pin: number; stop: boolean } |
+  { command: 'acceptTraining'; executionId: string; candidateId: string } |
   { command: 'advanceForward'; executionId: string; permit: number } |
   { command: 'cancelForward'; executionId: string } |
   { command: 'inspect'; sourceRunId: string; target: InspectionTarget } |
@@ -34,6 +36,7 @@ export interface RunResult {
 }
 /** Transient envelope: artifacts retain the ordinary vocabulary, never enter history until finish. */
 export interface ForwardProgress {
+  training?: import('./training-execution.js').TrainingProgress;
   executionId: string; sequence: number; total: number;
   last?: ForwardBoundary; next?: ForwardBoundary;
   artifacts: readonly Artifact[]; capture: RecordedRun['capture'];
