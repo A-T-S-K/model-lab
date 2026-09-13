@@ -68,8 +68,10 @@ export function forwardReadModel(run: RecordedRun, snapshot: ArchivedSnapshot | 
     const probabilities=output&&address.kind==="headOutput"?get("attentionProbabilities",address.token,address.head):undefined;
     const points=probabilities?probabilities.map((_,key)=>get("v",key)?.slice((address.head??0)*width,((address.head??0)+1)*width)):undefined;
     const complete=points?.every(p=>p?.length===width);
+    const declaration=run.manifest.intervention as {kind?:string;head?:number;layer?:number}|undefined;
+    const zeroed=address.kind==='headOutput'&&declaration?.kind==='head_ablation'&&declaration.layer===0&&declaration.head===address.head;
     const mixture=complete&&probabilities?affineMixture(points as number[][],probabilities):undefined;
-    return {address,definition,output,headWidth:width,heads,artifact:artifact(address),indexValid,observed:indexValid?output?.[element]:undefined,inputs,parameter,terms,
+    return {address,definition,output,zeroed,headWidth:width,heads,artifact:artifact(address),indexValid,observed:indexValid?output?.[element]:undefined,inputs,parameter,terms,
       maximum,scoreInputs,exponentials,denominator,meanSquare,normScale,pairs,before,derivative:!output||before===undefined?undefined:Number(before>0),
       probabilities,points,mixture,simplex:address.kind==="probabilities"&&output?.length===4?probabilitySimplex(output):undefined,
       lookupRow:address.kind==="tokenEmbedding"?input[address.token]:address.token,

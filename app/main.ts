@@ -1,3 +1,4 @@
+import { forwardReadModel } from './spatial/forward.js';
 import "./style.css";
 import { ForwardDriver } from "./worker/forward-driver.js";
 import "./spatial/style.css";
@@ -144,6 +145,7 @@ let documentText = fixture.document;
 let result: RunResult | undefined;
 let player: TracePlayer | undefined;
 let beforeForward: RunResult | undefined;
+let readyComparison = true;
 let beforeForwardLocation: ReturnType<SpatialPresenter['captureLocation']> | undefined;
 let beforeForwardExperiment = '';
 function restoreExecutionView() {
@@ -199,6 +201,20 @@ function executionExplore(event: Event) {
 }
 for (const type of ['pointerdown','wheel','keydown','change','click']) mount.addEventListener(type, executionExplore, { capture: true });
 function bindForwardControls() {
+    mount.querySelectorAll<HTMLButtonElement>('[data-compare-arm]').forEach(button=>button.addEventListener('click',()=>{
+      const prepared=forwardDriver.progress?.training?.readyOutputs;
+      const arm=button.dataset.compareArm;
+      clearDisplayedInspection(); spatialPresenter.learningStage=undefined; spatialPresenter.lens=true;
+      if(prepared && forwardDriver.preview){
+        readyComparison=arm==='pair';
+        const run=arm==='before'?prepared.before:prepared.after;
+        result={...forwardDriver.preview,run,snapshots:[prepared.starting,...forwardDriver.preview.snapshots]};
+        forwardDriver.follow=false; render();
+      } else if(!forwardDriver.active && !busy){
+        const e=[...archive.interventionExperiments.values()].find(e=>e.baselineRun.manifest.runId===result?.run.manifest.runId||e.interventionRun.manifest.runId===result?.run.manifest.runId);
+        if(e)selectRun(arm==='before'?e.baselineRun.manifest.runId:e.interventionRun.manifest.runId);
+      }
+    }));
     mount.querySelectorAll<HTMLButtonElement>('[data-live-child]').forEach(button => button.addEventListener('click', () => {
       const source = button.dataset.liveSource;
       if (source) void inspect(source, { kind: 'node', nodeId: Number(button.dataset.liveChild) }, 'Actual processed contribution');
@@ -222,7 +238,7 @@ function syncTrainingPin() {
 }
 async function startForward(training = false) {
   if (busy || !ready || forwardDriver.active || evidenceBytes >= SESSION_BUDGET) return;
-  beforeForwardLocation = spatialPresenter.captureLocation(); beforeForwardExperiment = spatialExperimentId;
+  readyComparison=true; beforeForwardLocation = spatialPresenter.captureLocation(); beforeForwardExperiment = spatialExperimentId;
   spatialPresenter.invalidate(); spatialPresenter.learningStage = undefined; spatialExperimentId = '';
   clearDisplayedInspection(); operation++; beforeForward = result; result = undefined; player = undefined; error = ''; status = 'Preparing captured input and checkpoint…';
   spatialSelection.query = 0; spatialSelection.key = 0; spatialSelection.head = 0;
@@ -540,8 +556,16 @@ function render(): void {
     const source = result && sourceBinding(result.run, config.vocabulary, result.trainingStep, liveRunId, documentText, "SPATIAL ATTENTION");
     const model = result && source && spatialReadModel(result.run, sourceSnapshot(source.sourceSnapshotId ?? ""), source, spatialSelection);
     const learning = spatialLearningModel();
+    const ablation=[...archive.interventionExperiments.values()].find(e=>e.baselineRun.manifest.runId===result?.run.manifest.runId||e.interventionRun.manifest.runId===result?.run.manifest.runId);
+    const ablationPair=ablation?{before:forwardReadModel(ablation.baselineRun,sourceSnapshot(ablation.startingSnapshotId)),after:forwardReadModel(ablation.interventionRun,sourceSnapshot(ablation.startingSnapshotId))}:undefined;
     mount.innerHTML = spatialPresenter.render(model, {
       document: documentText, busy, ready, status, error, execution: forwardDriver.active ? forwardDriver : undefined,
+      outputPair:ablation?{before:ablation.baselineRun,after:ablation.interventionRun}:undefined,
+      comparisonLabels:ablation?['Baseline','Head output zeroed']:undefined,
+      intervention:ablation?{head:ablation.selection.head,snapshot:ablation.startingSnapshotId,arm:result?.run.manifest.runId===ablation.baselineRun.manifest.runId?'Baseline':'Head output zeroed'}:undefined,
+      comparison: ablationPair ?? (readyComparison && forwardDriver.progress?.training?.readyOutputs ? {
+        before:forwardReadModel(forwardDriver.progress.training.readyOutputs.before,forwardDriver.progress.training.readyOutputs.starting),
+        after:forwardReadModel(forwardDriver.progress.training.readyOutputs.after,sourceSnapshot(forwardDriver.progress.training.candidateId!))} : undefined),
       learning, experimentId: spatialExperimentId, liveStep: liveTrainingStep,
       experiments: [...archive.learningExperiments.values()].map(e => ({id:e.id,step:e.update.step+1})),
       canLearn: !forwardDriver.active && !!result && result.run.manifest.runId === liveRunId && source?.capturedDocument === documentText && !busy && ready,
@@ -793,6 +817,7 @@ async function inspectSpatialGradient(child?: number) {
     await inspect(m.experiment.trainingRunId,{kind:"node",nodeId:child},"Captured contribution child",[child]);
 }
 function bindSpatialLearning() {
+  mount.querySelector('#spatial-ablate')?.addEventListener('click',()=>{syncSpatialSelection();void ablateHead();});
   const on = (id:string, action:()=>void) => mount.querySelector(id)?.addEventListener("click",action);
   on("#spatial-learn",()=>{if(result?.run.manifest.runId===liveRunId&&!busy&&ready&&sourceBinding(result.run,config.vocabulary,result.trainingStep,liveRunId,documentText,"LEARN").capturedDocument===documentText)void execute("train");});
   mount.querySelector("#spatial-experiment")?.addEventListener("change",event=>{
@@ -807,7 +832,8 @@ function bindSpatialLearning() {
     selectRun(button.dataset.learningPhase==="before"?m.experiment.beforeRunId:button.dataset.learningPhase==="training"?m.experiment.trainingRunId:m.experiment.afterRunId);
   }));
   on("#spatial-current",()=>{
-    if(busy||!liveRunId)return;
+    if(busy||forwardDriver.active||!liveRunId)return;
+    spatialPresenter.learningStage=undefined;clearDisplayedInspection();
     spatialExperimentId=[...archive.learningExperiments.values()].find(e=>e.afterRunId===liveRunId)?.id??"";
     selectRun(liveRunId);
   });
@@ -2427,6 +2453,7 @@ for (const event of ["dragover", "drop"])
   });
 
 async function ablateHead(): Promise<void> {
+  if (forwardDriver.active) { error='Finish/cancel execution or accept/discard the candidate before testing a head.';render();return; }
   if (busy || !result || evidenceBytes >= SESSION_BUDGET) return;
   const source = result;
   const snapshot = sourceSnapshot(source.run.manifest.startingSnapshotId ?? "");
@@ -2460,7 +2487,8 @@ async function ablateHead(): Promise<void> {
     comparisonRunId = experiment.baselineRun.manifest.runId;
     busy = false;
     selectRun(experiment.interventionRun.manifest.runId);
-    selectedKind = "probabilities";
+    selectedKind = "headOutput";
+    spatialPresenter.learningStage=undefined;spatialPresenter.kind='headOutput';spatialPresenter.parameter=undefined;spatialPresenter.lens=true;
     status = `Observed ablation complete · layer ${experiment.selection.layer}, head ${experiment.selection.head} · live training state unchanged`;
     render();
   } catch (failure) {

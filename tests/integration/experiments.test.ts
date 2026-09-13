@@ -62,3 +62,22 @@ test('data substitution retains matched continuation and authentic triggered/con
   assert.equal(report.cleanTask.cleanArmMeanLoss, means.reduce((a, b) => a + b, 0) / means.length);
   await assert.rejects(runPoisoningTrial(snapshot, { ...options, substitutions: [{ step: 0, original: 'wrong', replacement: 'abcc' }] }), /substitution/);
 });
+
+test('U04/U05 both heads and short/maximum contexts preserve upstream and copy actual zeroed channels into downstream computation',async()=>{
+ for(const head of [0,1])for(const input of [[3],[3,0,1,2,0,1,2,0]]){
+  const snapshot=await initial(),saved=JSON.stringify(snapshot);
+  const e=await runHeadAblation(snapshot,input,input.map((_,i)=>input[i+1]??3),{layer:0,head});
+  assert.equal(JSON.stringify(snapshot),saved);
+  for(const key of ['startingSnapshotId','input','targets','model','numeric','runtimeRevision'] as const)assert.deepEqual(e.baselineRun.manifest[key],e.interventionRun.manifest[key]);
+  const read=(run:typeof e.baselineRun,kind:string,token:number,h?:number)=>run.artifacts.find(a=>a.kind===kind&&a.concept.token===token&&(h===undefined||a.concept.head===h))!.values!;
+  for(let token=0;token<input.length;token++){
+   for(const kind of ['q','k','v','attentionLogits','attentionProbabilities'])assert.deepEqual(e.baselineRun.artifacts.filter(a=>a.kind===kind&&a.concept.token===token).map(a=>a.values),e.interventionRun.artifacts.filter(a=>a.kind===kind&&a.concept.token===token).map(a=>a.values));
+   assert.deepEqual(read(e.interventionRun,'headOutput',token,head),[0,0,0,0]);
+   assert.deepEqual(read(e.interventionRun,'headOutput',token,1-head),read(e.baselineRun,'headOutput',token,1-head));
+   const concat=[...read(e.interventionRun,'headOutput',token,0),...read(e.interventionRun,'headOutput',token,1)];
+   assert.deepEqual(read(e.interventionRun,'attentionOutput',token),concat);
+   const projected=snapshot.state.parameters['layer0.attn_wo'].map(row=>row.reduce((s,w,i)=>s+w*concat[i],0));
+   assert.deepEqual(read(e.interventionRun,'attentionProjection',token),projected);
+  }
+ }
+});
