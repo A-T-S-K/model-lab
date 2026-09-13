@@ -31,7 +31,7 @@ export function validateOptimizerState(model: Model, state: OptimizerState): voi
 }
 
 /** Apply the pinned Adam update and retain the exact numbers used by the optimizer. */
-export function adamStep(model: Model, state: OptimizerState): AdamUpdate {
+export function* adamProposals(model: Model, state: OptimizerState): Generator<ParameterUpdate, AdamUpdate> {
   validateOptimizerState(model, state);
   if (parameterValues(model).some(parameter => !Number.isFinite(parameter.data) || !Number.isFinite(parameter.grad))) throw new Error('Nonfinite parameter or gradient');
   const step = state.step;
@@ -41,7 +41,7 @@ export function adamStep(model: Model, state: OptimizerState): AdamUpdate {
   const parameters: ParameterUpdate[] = [];
   let index = 0;
   for (const name of model.parameterOrder) {
-    model.parameters[name].forEach((rowValues, row) => rowValues.forEach((parameter, column) => {
+    for (const [row, rowValues] of model.parameters[name].entries()) for (const [column, parameter] of rowValues.entries()) {
       const before = parameter.data;
       const gradient = parameter.grad;
       const mBefore = state.m[index];
@@ -54,22 +54,34 @@ export function adamStep(model: Model, state: OptimizerState): AdamUpdate {
       if (![mAfter, vAfter, mHat, vHat, after].every(Number.isFinite)) throw new Error('Nonfinite Adam update');
       parameters.push({ index, name, row, column, before, gradient, mBefore, mAfter, vBefore, vAfter,
         mHat, vHat, biasCorrection1, biasCorrection2, delta: after - before, after });
+      yield parameters[parameters.length - 1];
       index++;
-    }));
+    }
   }
-  // Validate the complete update before mutating any live state.
-  for (const update of parameters) {
-    const parameter = model.parameters[update.name][update.row][update.column];
-    parameter.data = update.after;
-    parameter.grad = 0;
-    state.m[update.index] = update.mAfter;
-    state.v[update.index] = update.vAfter;
-  }
-  state.step++;
   return { step, effectiveLearningRate, parameters,
     mBefore: parameters.map(p => p.mBefore), mAfter: parameters.map(p => p.mAfter),
     vBefore: parameters.map(p => p.vBefore), vAfter: parameters.map(p => p.vAfter),
     mHat: parameters.map(p => p.mHat), vHat: parameters.map(p => p.vHat), delta: parameters.map(p => p.delta) };
+}
+
+/** Proposals are complete and validated before any persistent write. */
+export function applyAdam(model: Model, state: OptimizerState, update: AdamUpdate): void {
+  validateOptimizerState(model, state);
+  if (update.step !== state.step || update.parameters.length !== parameterValues(model).length ||
+      update.parameters.some((p, i) => p.index !== i || ![p.after,p.mAfter,p.vAfter].every(Number.isFinite) || p.vAfter < 0 ||
+        model.parameters[p.name]?.[p.row]?.[p.column]?.data !== p.before || state.m[i] !== p.mBefore || state.v[i] !== p.vBefore)) throw new Error('Invalid complete Adam proposal');
+  for (const p of update.parameters) {
+    const parameter = model.parameters[p.name][p.row][p.column];
+    parameter.data = p.after; parameter.grad = 0;
+    state.m[p.index] = p.mAfter; state.v[p.index] = p.vAfter;
+  }
+  state.step++;
+}
+export function adamStep(model: Model, state: OptimizerState): AdamUpdate {
+  const cursor = adamProposals(model, state);
+  let step = cursor.next(); while (!step.done) step = cursor.next();
+  applyAdam(model, state, step.value);
+  return step.value;
 }
 
 export interface TrainStepResult {

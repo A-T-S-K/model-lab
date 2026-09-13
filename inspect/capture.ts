@@ -77,6 +77,8 @@ export class CaptureContext implements Observer {
     this.live.length = 0;
   }
 
+  nodeId(value: Value): number | undefined { return this.ids.get(value); }
+
   inspect(target: InspectionTarget): InspectionResult {
     const unavailable = (reason: string): InspectionResult => immutableCopy({
       sourceRunId: this.recorder.manifest.runId, provenance: 'observed', availability: 'not_captured', graph: null, reason,

@@ -174,12 +174,20 @@ export function predict(model: Model, tokenIds: readonly number[], observer?: Ob
 export function loss(model: Model, inputIds: readonly number[], targetIds: readonly number[], observer?: Observer): SequenceResult & { mean: Value; perPosition: Value[] } {
   if (inputIds.length !== targetIds.length || targetIds.some(id => !Number.isInteger(id) || id < 0 || id > model.config.vocabulary.length)) throw new Error('Targets must match the valid input positions');
   const result = forward(model, inputIds, observer);
-  const perPosition = result.probabilities.map((probabilities, token) => {
+  const cursor = objectiveSequence(result, targetIds, observer);
+  let step = cursor.next(); while (!step.done) step = cursor.next();
+  return step.value;
+}
+export function* objectiveSequence(result: SequenceResult, targetIds: readonly number[], observer?: Observer): Generator<number, SequenceResult & { mean: Value; perPosition: Value[] }> {
+  const perPosition: Value[] = [];
+  for (let token = 0; token < result.probabilities.length; token++) {
+    const probabilities = result.probabilities[token];
     const value = probabilities[targetIds[token]].log().neg();
     structure.target(observer, targetIds[token], probabilities[targetIds[token]], token);
     observeScalar(observer, 'loss', value, token);
-    return value;
-  });
+    perPosition.push(value);
+    yield token + 1;
+  }
   const mean = sum(perPosition).div(perPosition.length);
   observeScalar(observer, 'meanLoss', mean);
   return { ...result, perPosition, mean };
