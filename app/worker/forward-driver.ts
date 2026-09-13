@@ -8,7 +8,11 @@ export class ForwardDriver {
   preview?: RunResult;
   phase: 'idle' | 'starting' | 'paused' | 'running' | 'pausing' | 'cancelling' = 'idle';
   follow = true;
-  pin = 0;
+  private pinned = 0;
+  get pin() { return this.pinned; }
+  set pin(pin: number) { if (pin !== this.pinned) { this.pinned = pin; if (this.active) this.pause(); } }
+  private gradientIntent?: { epoch: number; executionId: string; pin: number; sequence: number };
+  get runningToGradient() { return !!this.gradientIntent; }
   stopAtPin = false;
   private accepting?: Promise<void>;
   private epoch = 0;
@@ -23,7 +27,7 @@ export class ForwardDriver {
   get pending() { return this.inFlight; }
   private clearTimer() { if (this.timer !== undefined) clearTimeout(this.timer); this.timer = undefined; }
   /** Used before a worker reset: immediately invalidate all continuations. */
-  discard() { this.stopAtPin = false; this.epoch++; this.clearTimer(); this.phase = 'idle'; this.inFlight = false; this.progress = undefined; this.preview = undefined; this.artifacts = []; }
+  discard() { this.gradientIntent = undefined; this.stopAtPin = false; this.epoch++; this.clearTimer(); this.phase = 'idle'; this.inFlight = false; this.progress = undefined; this.preview = undefined; this.artifacts = []; }
   async start(document: string, training = false) {
     if (this.active) return;
     this.discard(); const epoch = this.epoch; this.phase = 'starting'; this.follow = true; this.changed();
@@ -54,27 +58,43 @@ export class ForwardDriver {
     this.accept(response.progress); this.changed();
   }
   pause() {
-    this.clearTimer();
+    this.gradientIntent = undefined; this.stopAtPin = false; this.clearTimer();
     if (this.phase === 'running') this.phase = this.inFlight ? 'pausing' : 'paused';
     this.changed();
   }
   explore() { if (!this.active) return; this.follow = false; this.pause(); }
-  continue() { if (this.phase !== 'paused' || this.progress?.training?.phase === 'ready') return; this.phase = 'running'; this.changed(); this.schedule(); }
-  private schedule() { this.clearTimer(); if (this.phase === 'running') this.timer = setTimeout(() => { this.timer = undefined; void this.next(); }, this.progress?.training ? 0 : this.pace); }
-  async next() {
+  continue() { this.gradientIntent = undefined; this.stopAtPin = false; this.resume(); }
+  runToContribution() {
+    const p = this.progress;
+    if (this.phase !== 'paused' || this.inFlight || !p?.training || p.training.final) return;
+    this.gradientIntent = { epoch: this.epoch, executionId: p.executionId, pin: this.pin, sequence: p.sequence };
+    this.stopAtPin = false; this.resume();
+  }
+  runToProposal() { this.gradientIntent = undefined; this.stopAtPin = true; this.resume(); }
+  private resume() { if (this.phase !== 'paused' || this.progress?.training?.phase === 'ready') return; this.phase = 'running'; this.changed(); this.schedule(); }
+  private schedule() { this.clearTimer(); if (this.phase === 'running') this.timer = setTimeout(() => { this.timer = undefined; void this.advance(); }, this.progress?.training ? 0 : this.pace); }
+  async next() { this.pause(); await this.advance(); }
+  private async advance() {
     if (this.inFlight || !this.progress || !['paused', 'running'].includes(this.phase)) return;
     const epoch = this.epoch, id = this.progress.executionId, permit = this.progress.sequence + 1;
     this.inFlight = true; this.changed();
     try {
-      const response: WorkerResponse = await this.client.request(this.progress.training ? { command: 'advanceTraining', executionId: id, permit, budget: this.phase === 'running' ? 128 : 1, pin: this.pin, stop: this.stopAtPin } : { command: 'advanceForward', executionId: id, permit });
+      let response: WorkerResponse = await this.client.request(this.progress.training ? { command: 'advanceTraining', executionId: id, permit, budget: this.phase === 'running' ? 128 : 1, pin: this.pin, stop: this.stopAtPin || (!!this.gradientIntent && this.gradientIntent.epoch === epoch && this.gradientIntent.executionId === id && this.gradientIntent.pin === this.pin && this.progress.sequence >= this.gradientIntent.sequence && this.progress.training.phase === 'backward') } : { command: 'advanceForward', executionId: id, permit });
       if (epoch !== this.epoch) return;
+      if (response.status === 'forward' && (response.progress.executionId !== id || response.progress.sequence !== permit)) throw new Error('Unexpected forward acknowledgement');
+      // A pin can change while an admitted unit finishes. Refresh read-only evidence
+      // before exposing that acknowledgement under the new parameter's label.
+      while (response.status === 'forward' && response.progress.training && response.progress.training.pin !== this.pin && !this.cancelling) {
+        response = await this.client.request({ command: 'inspectTraining', executionId: id, pin: this.pin });
+        if (epoch !== this.epoch) return;
+      }
       this.inFlight = false;
       if (response.status === 'result') {
         this.discard(); await this.completed(response.result); return;
       }
       if (response.status !== 'forward' || response.progress.executionId !== id || response.progress.sequence !== permit) throw new Error('Unexpected forward acknowledgement');
       this.accept(response.progress);
-      if (this.progress?.training?.phase === 'ready' || this.progress?.training?.stopped) { this.phase = 'paused'; this.stopAtPin = false; }
+      if (this.progress?.training?.phase === 'ready' || this.progress?.training?.stopped) { if (!this.cancelling) this.phase = 'paused'; this.gradientIntent = undefined; this.stopAtPin = false; }
       if (this.phase === 'pausing') this.phase = 'paused';
       this.changed(); this.schedule();
     } catch (error) {
@@ -103,7 +123,7 @@ export class ForwardDriver {
   async cancel() {
     if (this.accepting) { await this.accepting; return; }
     if (!this.active) return;
-    this.clearTimer();
+    this.gradientIntent = undefined; this.stopAtPin = false; this.clearTimer();
     const id = this.progress?.executionId;
     // A start awaiting its acknowledgement has no ID yet. Its request runId is unknown;
     // the serial cancel command releases that sole cursor after start returns.

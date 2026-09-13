@@ -137,3 +137,17 @@ test('U01 Ready endpoints are the prepared immutable runs, never admitted before
  assert.deepEqual(snapshotTraining((s as any).model,(s as any).optimizer),start.state);
  const accepted=result(await accept(s,progress));assert.deepEqual(pair.before,accepted.runs[0]);assert.deepEqual(pair.after,accepted.run);
 });
+
+for(const repeated of [true,false])test('S03 synthetic worker stop retains '+(repeated?'both repeated operands':'genuine zero occurrence'),async()=>{
+ const s=await setup();let progress=await until(s,p(await s.handle({...tag,runId:'synthetic',command:'startTraining',document:'a'})),'backward seed');
+ // Only this fixture replaces the objective, before the existing worker callback is installed.
+ const transaction=(s as any).training,parameter=transaction.working.model.parameters.wte[0][0];
+ transaction.objectiveResult.mean=repeated?parameter.mul(parameter):parameter.mul(0);
+ progress=await advance(s,progress,1);assert.equal(progress.training!.phase,'backward');
+ progress=await advance(s,progress,128,true);const t=progress.training!;
+ assert(t.stopped&&!t.final);assert.equal(t.processed,1);assert.equal(t.contributions.length,repeated?2:1);
+ assert.deepEqual(t.contributions.map(c=>c.operand),repeated?[0,1]:[0]);
+ assert.equal(t.gradient,t.contributions.at(-1)!.after);
+ if(repeated)assert.equal(t.contributions[1].before,t.contributions[0].after);else assert.equal(t.contributions[0].contribution,0);
+ await s.handle({...tag,runId:'cancel-synthetic',command:'cancelForward',executionId:progress.executionId});
+});

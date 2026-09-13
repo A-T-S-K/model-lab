@@ -222,7 +222,7 @@ function bindForwardControls() {
     }));
     mount.querySelector('#step-learning')?.addEventListener('click', () => void startForward(true));
     mount.querySelector('#execution-accept')?.addEventListener('click', () => void forwardDriver.acceptUpdate());
-    mount.querySelector('#execution-pin')?.addEventListener('click', () => { syncTrainingPin(); forwardDriver.stopAtPin = true; forwardDriver.continue(); });
+    mount.querySelector('#execution-pin')?.addEventListener('click', () => { syncTrainingPin(); if (forwardDriver.progress?.training?.phase === 'optimizer proposal') forwardDriver.runToProposal(); else forwardDriver.runToContribution(); });
     mount.querySelector('#step-prediction')?.addEventListener('click', () => void startForward());
     mount.querySelector('#execution-next')?.addEventListener('click', () => { syncTrainingPin(); void forwardDriver.next(); });
     mount.querySelector('#execution-continue')?.addEventListener('click', () => { syncTrainingPin(); forwardDriver.continue(); });

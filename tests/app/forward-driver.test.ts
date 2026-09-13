@@ -41,7 +41,8 @@ test('T05/T06 controlled driver Ready barrier and delayed acceptance serialize c
  const driver=new ForwardDriver(client,()=>{},async()=>{completed++;},e=>{throw e;},0);
  await driver.start('',true);
  // Drive bounded Continue work without a timer per test iteration.
- while(driver.progress?.training?.phase!=='ready') {driver.phase='running';await driver.next();driver.pause();}
+ driver.continue();
+ while(driver.progress?.training?.phase!=='ready') await new Promise(r=>setTimeout(r,5));
  const count=commands.length;driver.continue();await new Promise(r=>setTimeout(r,10));assert.equal(commands.length,count);
  const accepted=driver.acceptUpdate();await new Promise(r=>setTimeout(r,5));const cancelled=driver.cancel();
  assert.equal(commands.filter(c=>c.command==='cancelForward').length,0);assert.equal(completed,0);

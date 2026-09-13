@@ -34,7 +34,7 @@ test('five corrections: public same-session route, scalar arms, compact Ready an
  await page.locator('#spatial-operation').selectOption('probabilities');
  await expect(page.getByTestId('prediction-summary')).toContainText('Highest-probability token: END');await expect(page.getByTestId('prediction-summary')).toContainText('Inspected component: a [0]');await expect(page.getByTestId('prediction-summary')).toContainText('target END');
  await page.locator('[data-forward-element="3"]').click();await expect(page.getByTestId('prediction-summary')).toContainText('Inspected component: END [3]');await page.getByTestId('prediction-summary').scrollIntoViewIfNeeded();await capture(page,'prediction');
- await page.locator('#step-learning').click();await expect(page.getByTestId('learning-guidance')).toContainText('Next step until backward');await capture(page,'guidance');
+ await page.locator('#step-learning').click();await expect(page.getByTestId('learning-guidance')).toContainText('Run to next gradient contribution');await capture(page,'guidance');
  await page.locator('#execution-continue').click();await expect(page.locator('#execution-controls')).toHaveAttribute('data-training-phase','ready',{timeout:60000});await capture(page,'ready');
  const rect=await page.locator('[data-testid="live-local-construction"]>rect').first().boundingBox();expect(rect!.width).toBeGreaterThan(400);
  await expect(page.locator('#execution-accept')).toBeInViewport();await expect(page.locator('#execution-cancel')).toBeInViewport();await expect(page.getByTestId('inspected-arm')).toBeInViewport();
