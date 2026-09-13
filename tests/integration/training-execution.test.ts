@@ -126,3 +126,14 @@ test('T06 cancelled Ready rejects late acceptance and reset invalidates the gene
  progress=p(await s.handle({...tag,runId:'reset-active',command:'startTraining',document:''}));await s.handle({...tag,generationId:1,runId:'reset',command:'reset'});
  assert.equal((await s.handle({...tag,runId:'old',command:'advanceTraining',executionId:progress.executionId,permit:1,budget:1,pin:0,stop:false})).status,'error');assert.equal((s as any).training,undefined);
 });
+
+test('U01 Ready endpoints are the prepared immutable runs, never admitted before explicit acceptance',async()=>{
+ const s=await setup();let progress=p(await s.handle({...tag,runId:'ready-outputs',command:'startTraining',document:'abca'}));
+ const start=progress.start!.snapshot;assert.equal(progress.training!.readyOutputs,undefined);
+ progress=await until(s,progress,'ready');const pair=progress.training!.readyOutputs!;
+ assert(pair);assert.equal(pair.starting.id,start.id);assert.equal(pair.before.manifest.startingSnapshotId,start.id);
+ assert.equal(pair.after.manifest.startingSnapshotId,progress.training!.candidateId);
+ assert.throws(()=>{(pair.before.artifacts as any[]).pop();});
+ assert.deepEqual(snapshotTraining((s as any).model,(s as any).optimizer),start.state);
+ const accepted=result(await accept(s,progress));assert.deepEqual(pair.before,accepted.runs[0]);assert.deepEqual(pair.after,accepted.run);
+});

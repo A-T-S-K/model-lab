@@ -13,6 +13,7 @@ import type { ForwardProgress, RequestTag, RunResult } from './protocol.js';
 export type TrainingPhase = 'baseline forward' | 'training forward' | 'loss' | 'backward seed' | 'backward' | 'optimizer proposal' | 'candidate application' | 'candidate forward' | 'ready';
 export interface LiveContribution { child: number | undefined; operand: number; childAdjoint: number; localDerivative: number; contribution: number; before: number; after: number; ordinal: number }
 export interface TrainingProgress {
+  readyOutputs?: { before: RecordedRun; after: RecordedRun; starting: ArchivedSnapshot };
   phase: TrainingPhase; count: number; processed: number; acceptedStep: number; candidateId?: string;
   pin: number; gradient: number; final: boolean; contributions: LiveContribution[]; proposal?: ParameterUpdate;
   losses: { target: number; value?: number }[]; mean?: number;
@@ -64,6 +65,7 @@ export class TrainingExecution {
     return immutableCopy({ executionId: this.id, sequence: this.sequence, total: this.boundaries.length, ...delta, start,
       ...(this.phase.endsWith('forward') ? { last: this.boundaries[this.count - 1], next: this.boundaries[this.count] } : {}),
       training: { phase: this.phase, count: this.count, processed, acceptedStep: this.starting.state.optimizer.step, candidateId: this.candidate?.id,
+        ...(this.phase === 'ready' && this.result ? { readyOutputs: { before: this.beforeRun!, after: this.result.run, starting: this.starting } } : {}),
         losses: this.losses, mean: this.objectiveResult?.mean.data,
         old: { parameter: oldParameters[this.pin], m: oldOptimizer.m[this.pin], v: oldOptimizer.v[this.pin] },
         optimizer: { beta1: oldOptimizer.beta1, beta2: oldOptimizer.beta2, epsilon: oldOptimizer.epsilon, effectiveLearningRate: oldOptimizer.learningRate * (1 - oldOptimizer.step / oldOptimizer.numSteps) },
