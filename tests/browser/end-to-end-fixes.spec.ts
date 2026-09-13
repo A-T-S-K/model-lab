@@ -72,3 +72,11 @@ test('learning instructions: manual steps reach pinned partial contribution with
  await capture(page,'scalar-active-backward');await page.locator('#execution-cancel').click();
  await writeFile(`${dir}/manual-step-count.json`,JSON.stringify({steps,phaseTimedPause:false}));
 });
+
+test('public presentation entry leaves narrow source controls clickable',async({page})=>{
+ await page.setViewportSize({width:390,height:844});await page.goto('/');await page.locator('#activate-attract').click();
+ await page.getByRole('button',{name:'Why this prediction? · Explore'}).click();
+ await page.getByText('Source controls and other evidence',{exact:true}).click();
+ await expect(page.locator('.attention-controls')).toHaveAttribute('open','');
+ await page.locator('#presentation-toggle').click();await expect(page.locator('#step-learning')).toBeEnabled();
+});

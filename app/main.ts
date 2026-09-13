@@ -872,7 +872,12 @@ function syncSpatialSelection(): void {
 }
 function bind(): void {
   if (!attract) {
-    if (!spatialActive) mount.insertAdjacentHTML("beforeend", '<button id="presentation-toggle" class="classic-toggle">Spatial presentation · controlled learning</button>');
+    if (!spatialActive) {
+      const entry = '<button id="presentation-toggle" class="classic-toggle">Spatial presentation · controlled learning</button>';
+      const header = mount.querySelector('.instrument-header');
+      if (header) header.insertAdjacentHTML('beforeend', entry);
+      else mount.insertAdjacentHTML('afterbegin', entry);
+    }
     mount.querySelector("#presentation-toggle")?.addEventListener("click", async () => {
       if (forwardDriver.active) await cancelForward();
       spatialPresenter.invalidate();
