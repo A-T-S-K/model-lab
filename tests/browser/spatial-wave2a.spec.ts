@@ -30,6 +30,10 @@ test('E01–E08 real HTTP paused frontier, produced scalar, ReLU marks, explore/
  expect(await page.locator('[data-world-kind="q"] [data-world-value]').count()).toBe(8);
  await page.waitForTimeout(1000);await expect(page.locator('#execution-controls')).toHaveAttribute('data-sequence','6');
  await page.getByRole('button',{name:'Inspect selected scalar',exact:true}).click();await expect(page.locator('#microscope')).toContainText('OBSERVED');
+ await page.locator('#spatial-head').selectOption('1');
+ await expect(page.getByTestId('component-guide')).toHaveAttribute('data-head','1');
+ await expect(page.getByTestId('component-guide')).toHaveAttribute('data-component','4');
+ await page.locator('#spatial-head').selectOption('0');
  await page.screenshot({path:`${directory}/q-paused-1920x1080.png`});
  await page.locator('#spatial-key').selectOption('1');await page.locator('#spatial-operation').selectOption('attentionLogits');
  await expect(page.getByTestId('pending-output')).toContainText('NOT APPLICABLE');

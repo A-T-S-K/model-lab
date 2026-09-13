@@ -17,7 +17,7 @@ export function reticle(x:number,y:number,w:number,h:number) {return `<path clas
 const compact:Record<string,string>={tokenEmbedding:"TE",positionEmbedding:"PE",embeddingSum:"+",embeddingNorm:"RN",preAttentionNorm:"RN",q:"Q",k:"K",v:"V",attentionLogits:"s",attentionProbabilities:"α",headOutput:"Σ",attentionOutput:"∥",attentionProjection:"WO",attentionResidual:"+",preMlpNorm:"RN",mlpUp:"32",mlpRelu:"ReLU",mlpDown:"8",mlpResidual:"+",logits:"z",probabilities:"P"};
 const title:Record<string,string>={tokenEmbedding:"Token",positionEmbedding:"Position",embeddingSum:"Add",embeddingNorm:"RMSNorm",preAttentionNorm:"Pre-attn",q:"Q",k:"K",v:"V",attentionLogits:"Scores",attentionProbabilities:"Softmax",headOutput:"Σ αV",attentionOutput:"Concat",attentionProjection:"WO",attentionResidual:"Residual",preMlpNorm:"Pre-MLP",mlpUp:"Expand · 32",mlpRelu:"ReLU · 32",mlpDown:"Contract · 8",mlpResidual:"Residual",logits:"Logits",probabilities:"Probability"};
 export function sceneSvg(f:ForwardModel,selected:Address,key:number,parameter:string|undefined,labels:string[],query=selected.token,comparison?:{before:ForwardModel;after:ForwardModel},learningMarkup?:string,execution?:ForwardProgress,element=0) {
-  const head=selected.head??0;
+  const head=selected.head??(["q","k","v"].includes(selected.kind)?Math.floor(element/f.width):0);
   const valuesFor=(s:Station,source=f)=>{
     const values=source.values({kind:s.kind,token:s.kind==="k"||s.kind==="v"?key:query,...(headKinds.has(s.kind)?{head:s.head}: {})});
     return ["q","k","v"].includes(s.kind)?values?.slice((s.head??0)*f.width,((s.head??0)+1)*f.width):values;
@@ -61,9 +61,10 @@ export function sceneSvg(f:ForwardModel,selected:Address,key:number,parameter:st
       return `<path class="parameter-edge" d="M${x+65} 965 C${x+65} 905 ${s.x+50} 935 ${s.x+50} ${s.y+s.height}"/>${["q","k","v"].includes(kind)?`<path class="parameter-edge" d="M${x+65} 965 C${x+65} 905 ${stationFor(kind,1).x+50} 935 ${stationFor(kind,1).x+50} ${stationFor(kind,1).y+170}"/>`:""}<g role="button" tabindex="0" data-world-parameter="${name}" aria-label="Parameter ${name}" class="parameter-bank"><text x="${x}" y="942">${({wte:"wte",wpe:"wpe","layer0.attn_wq":"Wq","layer0.attn_wk":"Wk","layer0.attn_wv":"Wv","layer0.attn_wo":"WO","layer0.mlp_fc1":"W1","layer0.mlp_fc2":"W2",lm_head:"Wout"} as Record<string,string>)[name]}</text><rect x="${x}" y="965" width="140" height="105"/>${matrix?[matrix,...(afterMatrix?[afterMatrix]:[])].flatMap((endpoint,side)=>endpoint.flatMap((row,r)=>row.map((v,c)=>`<rect x="${x+(c+(comparison?side*.5:0))*140/cols}" y="${965+r*105/rows}" width="${140/cols/(comparison?2:1)}" height="${105/rows}" data-parameter-value="${v}" data-endpoint="${comparison?(side?"after":"before"):"selected"}" data-domain="${max}" fill="${comparison?(side?"#62C7E8":"#A7B2BC"):v<0?"#7A8791":"#A7B2BC"}" fill-opacity="${max===0?0:Math.abs(v)/max}" stroke="#3B454D" stroke-width=".6"><title>[${r},${c}] ${v}</title></rect>`))).join(""):""}<text class="station-meta" x="${x}" y="1100">${rows} × ${cols} · checkpoint</text>${parameter===name?reticle(x,965,140,105):""}</g>`;
     }).join("")}
     ${!parameter&&['q','mlpRelu'].includes(selected.kind)&&f.values(selected)?(()=>{
-      const e=f.explain(selected,element),s=stationFor(selected.kind,selected.head);
+      const e=f.explain(selected,element),s=stationFor(selected.kind,head);
       const text=selected.kind==='mlpRelu'?`[${element}] ${e.before?.toPrecision(5)} → ReLU → ${e.observed?.toPrecision(5)}`:`[${element}] Σ input × Wq → ${e.observed?.toPrecision(5)}`;
-      const from=stationFor(selected.kind==='mlpRelu'?'mlpUp':'preAttentionNorm');
+      if(selected.kind==='q') return `<g class="component-guide" data-testid="component-guide" data-component="${element}" data-head="${head}"><path d="M${s.x+s.width/2} ${s.y+s.height} v55"/><text x="${s.x-70}" y="${s.y+s.height+85}">${esc(text)}</text></g>`;
+      const from=stationFor('mlpUp');
       const count=selected.kind==='mlpRelu'?32:8;
       const ax=from.x+10+(element+.3)*(from.width-20)/count,bx=s.x+10+(element+.3)*(s.width-20)/count;
       return `<g class="component-guide" data-testid="component-guide" data-component="${element}"><path d="M${ax} ${from.y+from.height} V${from.y+from.height+55} H${bx} V${s.y+s.height}"/><text x="${from.x}" y="${s.y+s.height+85}">${esc(text)}</text></g>`;
