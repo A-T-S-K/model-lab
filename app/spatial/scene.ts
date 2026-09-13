@@ -21,7 +21,7 @@ export function sceneSvg(f:ForwardModel,selected:Address,key:number,parameter:st
     const values=source.values({kind:s.kind,token:s.kind==="k"||s.kind==="v"?key:query,...(headKinds.has(s.kind)?{head:s.head}: {})});
     return ["q","k","v"].includes(s.kind)?values?.slice((s.head??0)*f.width,((s.head??0)+1)*f.width):values;
   };
-  const line=(a:Station,b:Station,cls="activation")=>`<path class="${cls}" d="M${a.x+a.width} ${a.y+a.height/2} C${a.x+a.width+45} ${a.y+a.height/2} ${b.x-45} ${b.y+b.height/2} ${b.x} ${b.y+b.height/2}"/>`;
+  const line=(a:Station,b:Station,cls="activation")=>`<path data-edge-from="${a.kind}" data-edge-to="${b.kind}" class="${cls}" d="M${a.x+a.width} ${a.y+a.height/2} C${a.x+a.width+45} ${a.y+a.height/2} ${b.x-45} ${b.y+b.height/2} ${b.x} ${b.y+b.height/2}"/>`;
   const field=(s:Station)=>{
     const values=valuesFor(s,comparison?.before??f),afterValues=comparison?valuesFor(s,comparison.after):undefined,prob=s.kind.includes("Probabilities")||s.kind==="probabilities";
     const domain=prob?1:Math.max(0,...[...(values??[]),...(afterValues??[])].map(Math.abs));
@@ -47,7 +47,7 @@ export function sceneSvg(f:ForwardModel,selected:Address,key:number,parameter:st
     ${line(stations[0],stations[2])}${line(stations[1],stations[2])}${line(stations[2],stations[3])}${line(stations[3],stations[4])}
     ${[0,1].map(h=>{
       const get=(kind:string)=>stationFor(kind,h),q=get("q"),k=get("k"),v=get("v"),scores=get("attentionLogits"),weights=get("attentionProbabilities"),mix=get("headOutput");
-      return line(stations[4],q)+`<path class="activation" d="M${q.x+q.width} ${q.y+85} C${q.x+q.width+25} ${q.y+85} ${q.x+q.width+10} ${q.y-65} ${q.x+q.width+40} ${q.y-65} H${scores.x+55} V${scores.y}"/>`+(key<=query?`<path data-selected-key-edge="${key}" class="activation" d="M${k.x+k.width} ${k.y+85} H${k.x+k.width+15} V${k.y+k.height+35} H${scores.x+35} V${scores.y+scores.height}"/>`:"")+line(scores,weights)+line(weights,mix)+(key<=query?`<path data-selected-value-edge="${key}" class="activation" d="M${v.x+v.width/2} ${v.y+v.height} V${v.y+v.height+70} H${mix.x+55} V${mix.y+mix.height}"/>`:"")+line(mix,stationFor("attentionOutput"));
+      return line(stations[4],q)+`<path data-edge-from="q" data-edge-to="attentionLogits" class="activation" d="M${q.x+q.width} ${q.y+85} C${q.x+q.width+25} ${q.y+85} ${q.x+q.width+10} ${q.y-65} ${q.x+q.width+40} ${q.y-65} H${scores.x+55} V${scores.y}"/>`+(key<=query?`<path data-edge-from="k" data-edge-to="attentionLogits" data-selected-key-edge="${key}" class="activation" d="M${k.x+k.width} ${k.y+85} H${k.x+k.width+15} V${k.y+k.height+35} H${scores.x+35} V${scores.y+scores.height}"/>`:"")+line(scores,weights)+line(weights,mix)+(key<=query?`<path data-edge-from="v" data-edge-to="headOutput" data-selected-value-edge="${key}" class="activation" d="M${v.x+v.width/2} ${v.y+v.height} V${v.y+v.height+70} H${mix.x+55} V${mix.y+mix.height}"/>`:"")+line(mix,stationFor("attentionOutput"));
     }).join("")}
     ${stations.slice(17,-1).map((s,i)=>line(s,stations[18+i])).join("")}
     <path class="residual-edge" d="M570 480 C570 15 2390 15 2390 480 M2370 480 C2370 105 3520 105 3520 480"/>

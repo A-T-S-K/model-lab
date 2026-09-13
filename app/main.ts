@@ -454,7 +454,7 @@ function render(): void {
       scalar: microscopeView(inspection, inspectionPath, inspectionLabel, inspectionPending, inspectionWhole, inspectionRelationship(), inspectionBinding),
     });
     bind();
-    spatialPresenter.bind(model, () => { syncSpatialSelection(); clearDisplayedInspection(); }, render);
+    spatialPresenter.bind(model, spatialSelectionChanged, render, selectExplanationPhase);
     bindSpatialLearning();
     mount.querySelectorAll<HTMLElement>("[data-scroll-region]").forEach(element => {
       const scroll = regionScroll.get(element.dataset.scrollRegion);
@@ -673,6 +673,12 @@ function selectGuidedComparison(): boolean {
   return false;
 }
 
+// Stable callbacks do not retain a render frame (including its previously focused DOM).
+function spatialSelectionChanged(){syncSpatialSelection();clearDisplayedInspection();}
+function selectExplanationPhase(phase:string){
+  const m=spatialLearningModel();
+  if(m.available){const id=phase==='after'?m.experiment.afterRunId:m.experiment.trainingRunId;if(result?.run.manifest.runId!==id)selectRun(id);}
+}
 function spatialLearningModel() {
   const experiment = archive.learningExperiments.get(spatialExperimentId) ??
     (result?.experiment?.id === spatialExperimentId ? result.experiment : undefined);
@@ -684,22 +690,24 @@ function spatialLearningModel() {
 }
 async function inspectSpatialGradient(child?: number) {
   const m = spatialLearningModel(); if (!m.available || busy) return;
-  const epoch = operation, experiment = spatialExperimentId, parameter = m.parameter.index;
+  const epoch = operation, generation=spatialPresenter.playback.generation, experiment = spatialExperimentId, parameter = m.parameter.index;
   if (result?.run.manifest.runId !== m.experiment.trainingRunId) selectRun(m.experiment.trainingRunId);
   selectedParameter = parameter;
   await inspect(m.experiment.trainingRunId,{kind:"gradient",parameterIndex:parameter},`${m.pin.name}[${m.pin.row},${m.pin.column}] · objective gradient`);
-  if (child !== undefined && operation === epoch && spatialExperimentId === experiment && selectedParameter === parameter && result?.run.manifest.runId === m.experiment.trainingRunId)
+  if (child !== undefined && generation===spatialPresenter.playback.generation && operation === epoch && spatialExperimentId === experiment && selectedParameter === parameter && result?.run.manifest.runId === m.experiment.trainingRunId)
     await inspect(m.experiment.trainingRunId,{kind:"node",nodeId:child},"Captured contribution child",[child]);
 }
 function bindSpatialLearning() {
   const on = (id:string, action:()=>void) => mount.querySelector(id)?.addEventListener("click",action);
   on("#spatial-learn",()=>{if(result?.run.manifest.runId===liveRunId&&!busy&&ready&&sourceBinding(result.run,config.vocabulary,result.trainingStep,liveRunId,documentText,"LEARN").capturedDocument===documentText)void execute("train");});
   mount.querySelector("#spatial-experiment")?.addEventListener("change",event=>{
+    spatialPresenter.invalidate();
     spatialExperimentId=(event.target as HTMLSelectElement).value;
     const m=spatialLearningModel();clearDisplayedInspection();
     if(m.available)selectRun(m.experiment.afterRunId);else render();
   });
   mount.querySelectorAll<HTMLElement>("[data-learning-phase]").forEach(button=>button.addEventListener("click",()=>{
+    spatialPresenter.invalidate();
     const m=spatialLearningModel();if(!m.available||busy)return;
     selectRun(button.dataset.learningPhase==="before"?m.experiment.beforeRunId:button.dataset.learningPhase==="training"?m.experiment.trainingRunId:m.experiment.afterRunId);
   }));
@@ -741,6 +749,7 @@ function bind(): void {
   if (spatialEnabled) {
     if (!spatialActive) mount.insertAdjacentHTML("beforeend", '<button id="presentation-toggle" class="classic-toggle">Spatial presentation</button>');
     mount.querySelector("#presentation-toggle")?.addEventListener("click", () => {
+      spatialPresenter.invalidate();
       spatialActive = !spatialActive;
       if (spatialActive) {
         attract = false;
@@ -998,6 +1007,7 @@ function bind(): void {
   document
     .querySelector<HTMLInputElement>("#document")
     ?.addEventListener("input", (event) => {
+      spatialPresenter.invalidate();
       documentText = (event.target as HTMLInputElement).value;
       render();
     });
@@ -1357,6 +1367,7 @@ async function execute(
   guided = false,
 ): Promise<void> {
   if (busy || !ready) return;
+  spatialPresenter.invalidate();
   if (evidenceBytes >= SESSION_BUDGET) {
     error =
       "Session evidence limit reached (64 MiB). Clear session before starting more work.";
@@ -1548,6 +1559,7 @@ async function execute(
 }
 
 async function reset(cancelled: boolean, clear = false): Promise<void> {
+  spatialPresenter.invalidate();
   if (cancelled && !busy && inspectionPending) {
     ++inspectionOperation;
     inspector.cancel();
@@ -2063,6 +2075,7 @@ async function inspect(
     render();
     return;
   }
+  const guideGeneration=spatialPresenter.playback.generation;
   const current = ++inspectionOperation;
   const cacheKey = `${sourceRunId}:${JSON.stringify(target)}`;
   mode = "microscope";
@@ -2083,6 +2096,7 @@ async function inspect(
       });
       if (
         current !== inspectionOperation ||
+        (spatialActive && guideGeneration!==spatialPresenter.playback.generation) ||
         inspectionBinding !== binding ||
         !inspectionIsCurrent(binding, inspectionSelection(), operation)
       )
@@ -2107,6 +2121,7 @@ async function inspect(
       }
       if (
         current !== inspectionOperation ||
+        (spatialActive && guideGeneration!==spatialPresenter.playback.generation) ||
         inspectionBinding !== binding ||
         !inspectionIsCurrent(binding, inspectionSelection(), operation)
       )
@@ -2126,6 +2141,7 @@ async function inspect(
     }
     if (
       current !== inspectionOperation ||
+        (spatialActive && guideGeneration!==spatialPresenter.playback.generation) ||
       inspectionBinding !== binding ||
       !inspectionIsCurrent(binding, inspectionSelection(), operation)
     )
@@ -2151,6 +2167,7 @@ async function inspect(
   } catch (failure) {
     if (
       current !== inspectionOperation ||
+        (spatialActive && guideGeneration!==spatialPresenter.playback.generation) ||
       inspectionBinding !== binding ||
       !inspectionIsCurrent(binding, inspectionSelection(), operation)
     )
@@ -2158,7 +2175,8 @@ async function inspect(
     binding.availability = "NOT CAPTURED";
     error = failure instanceof Error ? failure.message : String(failure);
   } finally {
-    if (
+    if(spatialActive && guideGeneration!==spatialPresenter.playback.generation && current===inspectionOperation){clearDisplayedInspection();render();}
+    else if (
       current === inspectionOperation &&
       inspectionBinding === binding &&
       inspectionIsCurrent(binding, inspectionSelection(), operation)

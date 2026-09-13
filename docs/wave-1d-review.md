@@ -1,0 +1,11 @@
+# Wave 1D progress / review
+
+Working in `/Users/joshuahansen/dev/model-lab`, existing `wave-1a-spatial`, starting clean at `7bd88dcbb9d0497dd37cd38e25424889e0396372`. No additional checkout or support-worktree edits. C report paths/status are historical.
+
+Implementation in progress: one bounded explanation clock, frozen run/experiment and selection/pin, Forward (21 operations) and Learning (5 calculation stops), existing camera follow, interruption/resume, source/lifecycle invalidation, source-generation inspection guards. Existing arithmetic/geometry reused; Q/K products added; Adam gradient separated from persistent state. No playback model commands or numerical tweening.
+
+Focused controller unit PASS. Build/typecheck PASS. Initial real-browser D probe exposed stale status text after keyboard pan; corrected to update transient status without rebuilding the scene. First unit/browser invocation encountered sandbox localhost EPERM; reruns require approved localhost execution. Final acceptance, lifecycle coverage, full-size review, paced recording and identities remain pending.
+
+Focused B/C routes PASS (4 checks). D arithmetic, hidden-tab / late inspection lifecycle and resource sampling PASS (3 checks). Resource test initially reproduced linear detached DOM/listener retention. Stable callbacks outside `render()` remove retained render frames: after 10/20/30 cycles, 4,662 DOM nodes and 182 listeners at each sample (Chromium 153.0.8010.12; explicit full GC). Twenty measured cycles took 8.538 s; JS used heap 3.23 → 3.26 → 3.29 MB. Source caches retain existing 64 MiB admission bound; camera history retains 40 locations; playback owns one timer and no new evidence cache. No frame-by-frame SVG rebuilding: phase ticks change a transient data attribute, semantic steps render source-bound calculations.
+
+The old waypoint toolbar was consolidated into the new explanation controls, retaining its navigation IDs for A/B regression compatibility. All 21 operations have input/calculation/result text and existing exact-value detail. Learning uses objective, contribution, Adam, checkpoint, and fresh comparison stops. Deliberate source switches inside that route stay in its retained experiment; manual source switches invalidate the route.

@@ -134,3 +134,21 @@ body.spatial-mode { background:#0B0F12; color:#F2F5F7; font-family:Plex,sans-ser
 .endpoint-track span { position:absolute; height:8px; }
 .endpoint-before { top:3px; background:#A7B2BC; }
 .endpoint-after { top:14px; background:#62C7E8; }
+/* D: static emphasis preserves the numerical faces and quantitative colors. */
+.explanation { flex:none; border:1px solid #3B454D; padding:6px 10px; margin-bottom:8px; }
+.explanation nav { display:flex; flex-wrap:wrap; gap:7px; align-items:center; }
+.explanation p { color:#8B969E; font-size:11px; margin:4px 0 0; }
+.explanation button,.explanation select { padding:4px 8px; font-size:12px; }
+.explanation input { accent-color:#FFD166; }
+.teaching-step { border-left:2px solid #FFD166; padding:0 10px; font-size:14px; }
+.spatial-world .explanation-active .field,.spatial-world .explanation-active>rect { stroke:#FFD166; stroke-width:5; }
+.spatial-world .explanation-input .field { stroke:#F2F5F7; stroke-width:4; }
+.spatial-world .explanation-link { stroke:#FFD166; stroke-width:5; fill:none; }
+.spatial-shell details>summary { cursor:pointer; padding:7px 0; color:#C2CAD0; }
+.spatial-shell details { min-width:0; }
+@media(max-width:1400px) { .explanation nav { gap:5px; } .explanation { padding:4px 7px; } .waypoint-controls { font-size:11px; padding-top:5px; } .waypoint-controls button { padding:4px 7px; } }
+.explanation-phase { color:#8B969E; font-size:11px; }
+[data-explanation-phase="0"] .explanation-phase span:nth-child(1),[data-explanation-phase="1"] .explanation-phase span:nth-child(2),[data-explanation-phase="2"] .explanation-phase span:nth-child(3) { color:#FFD166; text-decoration:underline; }
+[data-explanation-phase="0"] .teaching-step p:nth-child(1),[data-explanation-phase="1"] .teaching-step p:nth-child(2),[data-explanation-phase="2"] .teaching-step p:nth-child(3) { border-right:2px solid #FFD166; }
+[data-explanation-phase="0"] .spatial-world .explanation-link { stroke:#C2CAD0; }
+[data-explanation-phase="2"] .spatial-world .explanation-active .field { stroke:#F2F5F7; }
