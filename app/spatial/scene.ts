@@ -1,3 +1,4 @@
+import { outputTokenName } from './comparison.js';
 import type { ForwardProgress } from '../worker/protocol.js';
 import type { ForwardModel, Address } from "./forward.js";
 import { operations, parameterOwners, headKinds } from "./forward.js";
@@ -14,7 +15,7 @@ export const stations:Station[]=[
 const bankX:Record<string,number>={wte:150,wpe:315,"layer0.attn_wq":850,"layer0.attn_wk":1040,"layer0.attn_wv":1230,"layer0.attn_wo":2070,"layer0.mlp_fc1":2740,"layer0.mlp_fc2":3210,lm_head:3860};
 export function stationFor(kind:string,head=0):Station {return stations.find(s=>s.kind===kind&&(s.head===undefined||s.head===head))??{kind,x:bankX[kind]??0,y:965,width:150,height:120};}
 export function reticle(x:number,y:number,w:number,h:number) {return `<path class="external-reticle" d="M${x-10} ${y+20} v-30 h30 M${x+w-20} ${y-10} h30 v30 M${x-10} ${y+h-20} v30 h30 M${x+w-20} ${y+h+10} h30 v-30"/>`;}
-const compact:Record<string,string>={tokenEmbedding:"TE",positionEmbedding:"PE",embeddingSum:"+",embeddingNorm:"RN",preAttentionNorm:"RN",q:"Q",k:"K",v:"V",attentionLogits:"s",attentionProbabilities:"α",headOutput:"Σ",attentionOutput:"∥",attentionProjection:"WO",attentionResidual:"+",preMlpNorm:"RN",mlpUp:"32",mlpRelu:"ReLU",mlpDown:"8",mlpResidual:"+",logits:"z",probabilities:"P"};
+const compact:Record<string,string>={tokenEmbedding:"TE",positionEmbedding:"PE",embeddingSum:"+",embeddingNorm:"RN",preAttentionNorm:"RN",q:"Q",k:"K",v:"V",attentionLogits:"s",attentionProbabilities:"α",headOutput:"Σ",attentionOutput:"∥",attentionProjection:"WO",attentionResidual:"+",preMlpNorm:"RN",mlpUp:"32",mlpRelu:"ReLU",mlpDown:"8",mlpResidual:"+",logits:"z",probabilities:"Tokens"};
 const title:Record<string,string>={tokenEmbedding:"Token",positionEmbedding:"Position",embeddingSum:"Add",embeddingNorm:"RMSNorm",preAttentionNorm:"Pre-attn",q:"Q",k:"K",v:"V",attentionLogits:"Scores",attentionProbabilities:"Softmax",headOutput:"Σ αV",attentionOutput:"Concat",attentionProjection:"WO",attentionResidual:"Residual",preMlpNorm:"Pre-MLP",mlpUp:"Expand · 32",mlpRelu:"ReLU · 32",mlpDown:"Contract · 8",mlpResidual:"Residual",logits:"Logits",probabilities:"Probability"};
 export function sceneSvg(f:ForwardModel,selected:Address,key:number,parameter:string|undefined,labels:string[],query=selected.token,comparison?:{before:ForwardModel;after:ForwardModel},learningMarkup?:string,execution?:ForwardProgress,element=0) {
   const head=selected.head??(["q","k","v"].includes(selected.kind)?Math.floor(element/f.width):0);
@@ -35,7 +36,7 @@ export function sceneSvg(f:ForwardModel,selected:Address,key:number,parameter:st
     return `<g class="world-object ${atFrontier?'execution-frontier':''}" role="button" tabindex="0" data-computation="${values?'computed':availability}" data-world-kind="${s.kind}" ${s.head===undefined?"":`data-world-head="${s.head}"`} aria-label="${esc(title[s.kind])}${s.head===undefined?"":` head ${s.head}`}" aria-pressed="${selectedHere}"><title>${esc(operations.find(o=>o.kind===s.kind)?.purpose??s.kind)} ${!values?"Output not available; no numerical domain yet.":prob?"Probability domain 0…1.":`Signed domain −${domain}…${domain}; independent per vector. Zero is the baseline.`}</title><text class="station-title" x="${s.x}" y="${s.y-22}">${esc(title[s.kind])}</text><text class="overview-label" x="${s.x}" y="${s.y-22}">${compact[s.kind]}</text>
     <path class="depth" d="M${s.x} ${s.y} l10 -10 h${s.width} l-10 10 M${s.x+s.width} ${s.y} l10 -10 v${s.height} l-10 10"/>
     <rect class="field" x="${s.x}" y="${s.y}" width="${s.width}" height="${s.height}" rx="3"/>
-    ${simplex?simplexGlyph(simplex.vertices,simplex.point,s.x+s.width/2,s.y+75,39):`<path class="zero-axis" d="M${s.x+8} ${baseline} h${s.width-16}"/>`}
+    ${simplex?simplexGlyph(simplex.vertices,simplex.point,s.x+s.width/2,s.y+75,39,Array.from({length:values?.length??0},(_,i)=>outputTokenName(i,f.vocabulary))):`<path class="zero-axis" d="M${s.x+8} ${baseline} h${s.width-16}"/>`}
     ${!values?`<text class="unavailable" x="${s.x+5}" y="${s.y+65}">${availability==='pending'?`<tspan x="${s.x+5}">Not yet</tspan><tspan x="${s.x+5}" dy="20">computed</tspan>`:availability.replaceAll('_',' ')}</text>`:[values,...(afterValues?[afterValues]:[])].flatMap((endpoint,side)=>endpoint.map((v,i)=>{
       if(prob&&(v<0||v>1||!Number.isFinite(v))) return `<text class="unavailable" x="${s.x}" y="${s.y+80}">P outside [0,1]</text>`;
       const magnitude=domain===0?0:Math.abs(v)/domain*height;
@@ -72,7 +73,7 @@ export function sceneSvg(f:ForwardModel,selected:Address,key:number,parameter:st
     ${learningMarkup??`<path class="training-placeholder" d="M4260 650 C4480 1280 100 1280 170 1080"/><text class="training-label" x="1220" y="1230">TRAINING / BACKWARD / ADAM RETURN · UNIMPLEMENTED IN B</text>`}
   </svg>`;
 }
-export function simplexGlyph(vertices:readonly (readonly number[])[],point:readonly number[],ox:number,oy:number,scale:number) {
+export function simplexGlyph(vertices:readonly (readonly number[])[],point:readonly number[],ox:number,oy:number,scale:number,labels?:readonly string[]) {
   const ps=vertices.map(project3),p=project3(point),xy=(v:readonly number[])=>`${ox+v[0]*scale},${oy+v[1]*scale}`;
-  return `<g class="simplex">${ps.flatMap((a,i)=>ps.slice(i+1).map(b=>`<path d="M${xy(a)} L${xy(b)}"/>`)).join("")}${ps.map((v,i)=>`<circle cx="${ox+v[0]*scale}" cy="${oy+v[1]*scale}" r="3"/><text x="${ox+v[0]*scale+5}" y="${oy+v[1]*scale-4}">${i}</text>`).join("")}<circle data-testid="simplex-point" data-coordinates="${point.join(",")}" cx="${ox+p[0]*scale}" cy="${oy+p[1]*scale}" r="5" class="barycenter"/></g>`;
+  return `<g class="simplex">${ps.flatMap((a,i)=>ps.slice(i+1).map(b=>`<path d="M${xy(a)} L${xy(b)}"/>`)).join("")}${ps.map((v,i)=>`<circle cx="${ox+v[0]*scale}" cy="${oy+v[1]*scale}" r="3"/><text x="${ox+v[0]*scale+5}" y="${oy+v[1]*scale-4}">${esc(labels?.[i]??String(i))}</text>`).join("")}<circle data-testid="simplex-point" data-coordinates="${point.join(",")}" cx="${ox+p[0]*scale}" cy="${oy+p[1]*scale}" r="5" class="barycenter"/></g>`;
 }

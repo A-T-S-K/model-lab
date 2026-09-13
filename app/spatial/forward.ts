@@ -77,7 +77,7 @@ export function forwardReadModel(run: RecordedRun, snapshot: ArchivedSnapshot | 
       lookupRow:address.kind==="tokenEmbedding"?input[address.token]:address.token,
       upstream:deps,downstream:downstream(address)};
   };
-  return {input,heads,width,addresses,executionState,matrix,artifact,values,upstream,downstream,explain,sourceSnapshotId:compatible?snapshot?.id:undefined};
+  return {input,targets:run.manifest.targets as readonly number[],vocabulary:architecture.vocabulary as readonly string[],heads,width,addresses,executionState,matrix,artifact,values,upstream,downstream,explain,sourceSnapshotId:compatible?snapshot?.id:undefined};
 }
 export type ForwardModel=ReturnType<typeof forwardReadModel>;
 export type Explanation=ReturnType<ForwardModel["explain"]>;

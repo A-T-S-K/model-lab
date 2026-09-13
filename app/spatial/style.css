@@ -181,3 +181,29 @@ body.spatial-mode { background:#0B0F12; color:#F2F5F7; font-family:Plex,sans-ser
  .decision-summary nav button{min-height:30px;padding:3px 7px}.output-comparison table{line-height:1.2}.output-comparison small{font-size:10px;line-height:1.2}.decision-summary{padding:6px 10px}
  .context-lens .lens-heading{padding:8px 12px}.context-lens .lens-context{padding:5px 12px}.context-lens .lens-context button{min-height:30px;padding:3px 8px}
 }
+
+/* End-to-end corrections: readable scalar and locally scrollable exact tables. */
+.spatial-shell #microscope .equation { background:#202c34; color:#F2F5F7; }
+.spatial-shell #microscope .equation strong { color:inherit; }
+.component-table-scroll { max-height:150px; overflow:auto; overscroll-behavior:contain; }
+.spatial-shell .paired-components table { font-family:PlexMono,monospace; font-size:12px; }
+.learning-guidance { max-width:1100px; }
+@media (min-width:851px) and (max-width:1400px) {
+ .spatial-shell button { min-height:30px; }
+ .spatial-shell .execution p { line-height:1.35; }
+ .spatial-shell .decision-summary { padding:5px 10px; }
+ .output-comparison { gap:14px; }
+ .output-table-scroll { max-height:86px; overflow:auto; }
+ .output-comparison details>summary { padding:3px 0; }
+ .spatial-shell .output-comparison table { font-family:PlexMono,monospace; font-size:12px; }
+ .spatial-shell .output-comparison small { font-size:11px; }
+ .component-table-scroll { max-height:100px; }
+ .spatial-shell .teaching-step { font-size:14px; padding:0 8px; }
+ .spatial-shell .teaching-step p { line-height:1.35; margin:5px 0; }
+ .spatial-shell .lens-heading h2 { font-size:17px; }
+ .spatial-shell .lens-heading { padding:5px 10px; }
+ .spatial-shell .lens-context { padding:3px 10px; }
+ .spatial-shell .live-learning .adam-chain { gap:0; }
+ .spatial-shell .live-learning .adam-chain section { padding:4px 7px; line-height:1.35; }
+ .spatial-shell .live-learning h3 { margin:6px 0; }
+}

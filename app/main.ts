@@ -561,7 +561,7 @@ function render(): void {
     const ablationPair=ablation?{before:forwardReadModel(ablation.baselineRun,sourceSnapshot(ablation.startingSnapshotId)),after:forwardReadModel(ablation.interventionRun,sourceSnapshot(ablation.startingSnapshotId))}:undefined;
     mount.innerHTML = spatialPresenter.render(model, {
       ablationPending: activeAblation!==undefined,
-      inspectedArm:forwardDriver.progress?.training?.readyOutputs?(result?.run.manifest.runId===forwardDriver.progress.training.readyOutputs.before.manifest.runId?'Current · accepted checkpoint':'Candidate · provisional checkpoint'):undefined,
+      inspectedArm:forwardDriver.progress?.training?.readyOutputs?(result?.run.manifest.runId===forwardDriver.progress.training.readyOutputs.before.manifest.runId?'Current · accepted checkpoint':'Candidate · provisional checkpoint'):ablation?(result?.run.manifest.runId===ablation.baselineRun.manifest.runId?'Baseline':'Head output zeroed'):undefined,
       document: documentText, busy, ready, status, error, execution: forwardDriver.active ? forwardDriver : undefined,
       outputPair:ablation?{before:ablation.baselineRun,after:ablation.interventionRun}:undefined,
       comparisonLabels:ablation?['Baseline','Head output zeroed']:undefined,
@@ -871,8 +871,8 @@ function syncSpatialSelection(): void {
   if (parameter) selectedParameter = parameter.index;
 }
 function bind(): void {
-  if (spatialEnabled) {
-    if (!spatialActive) mount.insertAdjacentHTML("beforeend", '<button id="presentation-toggle" class="classic-toggle">Spatial presentation</button>');
+  if (!attract) {
+    if (!spatialActive) mount.insertAdjacentHTML("beforeend", '<button id="presentation-toggle" class="classic-toggle">Spatial presentation · controlled learning</button>');
     mount.querySelector("#presentation-toggle")?.addEventListener("click", async () => {
       if (forwardDriver.active) await cancelForward();
       spatialPresenter.invalidate();
@@ -2495,7 +2495,7 @@ async function ablateHead(): Promise<void> {
     busy = false;
     selectRun(experiment.interventionRun.manifest.runId);
     selectedKind = "headOutput";
-    spatialPresenter.learningStage=undefined;spatialPresenter.kind='headOutput';spatialPresenter.parameter=undefined;spatialPresenter.lens=true;
+    spatialPresenter.learningStage=undefined;spatialPresenter.kind='headOutput';spatialPresenter.parameter=undefined;spatialPresenter.lens=true;spatialPresenter.focusSelection();
     status = `Observed ablation complete · layer ${experiment.selection.layer}, head ${experiment.selection.head} · live training state unchanged`;
     render();
   } catch (failure) {
