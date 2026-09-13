@@ -1,0 +1,12 @@
+import {readFile,writeFile} from 'node:fs/promises';
+const root='test-results/abq-overnight',dir=root+'/soak';
+const samples=(await readFile(dir+'/resource-samples.jsonl','utf8')).trim().split('\n').map(JSON.parse);
+const run=JSON.parse(await readFile(dir+'/soak.json','utf8'));
+const stats=values=>{const v=values.filter(Number.isFinite);if(!v.length)return null;const mean=v.reduce((a,b)=>a+b,0)/v.length;return {n:v.length,min:Math.min(...v),max:Math.max(...v),mean,standardDeviation:Math.sqrt(v.reduce((a,b)=>a+(b-mean)**2,0)/v.length)};};
+const settled=new Map();for(const s of samples)if(s.label==='idle-between-visitors'&&s.cycle>=2){const group=settled.get(s.cycle)??[];group.push(s);settled.set(s.cycle,group);}
+// Compare the third (180-second) passive sample of complete reset intervals.
+const comparable=[...settled.values()].filter(g=>g.length>=3).map(g=>g[2]);
+const metrics=s=>({pageHeapBytes:s.heap.JSHeapUsedSize,domNodes:s.dom.nodes,eventListeners:s.dom.jsEventListeners,activeWorkers:s.activeWorkers,playwrightWorkers:s.playwrightWorkers,evidenceBytes:s.retention?.bytes,archiveRuns:s.retention?.runs,processRSSKiB:s.processes?.reduce((n,p)=>n+(p.rssKiB??0),0)});
+const keys=Object.keys(metrics(samples[0]));
+const summary={status:run.status,qualified120Minutes:run.qualified120Minutes,elapsedSeconds:run.elapsedSeconds,runtime:run.runtime,cycles:run.cycles,sampleCount:samples.length,comparableResetCycles:comparable.map(s=>s.cycle),allSamples:Object.fromEntries(keys.map(k=>[k,stats(samples.map(s=>metrics(s)[k]))])),settledPostReset:Object.fromEntries(keys.map(k=>[k,stats(comparable.map(s=>metrics(s)[k]))])),firstThreeSettled:Object.fromEntries(keys.map(k=>[k,stats(comparable.slice(0,3).map(s=>metrics(s)[k]))])),lastThreeSettled:Object.fromEntries(keys.map(k=>[k,stats(comparable.slice(-3).map(s=>metrics(s)[k]))])),scope:'Post-reset comparison excludes startup/first reset cycle and uses the third passive sample of complete 180-second reset intervals. Page heap and CDP detached-node counters can vary with natural GC. Process RSS aggregates the observed browser processes and includes native/worker allocations; it is not worker heap. No forced GC, process restart, or arbitrary zero-leak threshold.',interpretation:'Review variance and early/late equivalent states before drawing a retention conclusion.'};
+await writeFile(root+'/resource-summary.json',JSON.stringify(summary,null,2)+'\n');console.log(JSON.stringify(summary,null,2));

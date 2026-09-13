@@ -27,7 +27,7 @@ Confirm the connected model and **RECORDED RUN · REPLAY / Recorded real run. No
 
 ## Visitor and facilitated use
 
-**Start · explore a real prediction** → **Sample abca · q3 / h0 / k0** shows the chosen position, known target, highest-probability token and full distribution. Q/K scores → Softmax → Value mixture → Residual opens scene calculations. For another input, explicitly enter it and Predict; the sample control does not overwrite it. **Values / arithmetic / source** retains exact components, operands, consumers and source. Camera buttons, Home and Back are navigation only.
+**Start · explore a real prediction** → **Sample abca · q3 / h0 / k0** shows the chosen position, known target, highest-probability token and full distribution. Q/K scores → Softmax → Value mixture → Residual opens scene calculations. For another input, explicitly enter it and Predict; the sample control does not overwrite it. **Values / arithmetic / source** retains exact components, operands, consumers and source. Camera buttons, Home and Back are navigation only. On a 1280px display, collapse the Short teaching route disclosure after choosing a landmark to give the calculation more room, or scroll its local panel; reopen the route to choose another landmark.
 
 **Step through learning** → **Run to next gradient contribution** is the untimed two-action route. Wait for the actual partial accumulator. Continue runs toward **Candidate ready — not accepted**. Compare Current/Candidate, then explicitly **Accept update** or **Discard candidate**. Lower loss on this example does not imply generalization. Never call an idle reset an acceptance decision.
 
