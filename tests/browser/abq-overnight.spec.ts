@@ -1,0 +1,53 @@
+import {test,expect,type Page} from '@playwright/test';
+import {mkdir,writeFile} from 'node:fs/promises';
+const dir=process.env.ABQ_EVIDENCE_DIR??'test-results/abq-overnight/focused';
+test.describe.configure({mode:'parallel'});
+async function audit(page:Page){await page.addInitScript(()=>{
+ const w=window as any;w.abq={commands:[],lastReady:undefined,lastResult:undefined,progress:undefined};
+ const send=Worker.prototype.postMessage,seen=new WeakSet();
+ Worker.prototype.postMessage=function(m:any,...rest:any[]){w.abq.commands.push({command:m.command,executionId:m.executionId});if(!seen.has(this)){seen.add(this);this.addEventListener('message',e=>{const r=e.data;if(r.status==='ready')w.abq.lastReady=r.archivedSnapshot;if(r.status==='result')w.abq.lastResult=r.result;if(r.status==='forward')w.abq.progress=r.progress;});}return Reflect.apply(send,this,[m,...rest]);};
+});}
+async function entry(page:Page){await page.goto('/?presentation=spatial&kiosk=1');await expect(page.locator('#exhibit-start')).toBeEnabled();}
+async function start(page:Page){await page.locator('#exhibit-start').click();await expect(page.getByTestId('status')).toContainText('Live prediction complete');}
+async function ready(page:Page){await page.locator('#step-learning').click();await page.locator('#execution-pin').click();await expect(page.locator('#execution-next')).toBeEnabled({timeout:60000});await page.locator('#execution-continue').click();await expect(page.locator('#execution-controls')).toHaveAttribute('data-training-phase','ready',{timeout:60000});}
+for(const [width,height] of [[1920,1080],[1280,720]])test(`Q01/Q03 entry and source-bound chain ${width}`,async({page})=>{
+ await mkdir(dir,{recursive:true});await page.setViewportSize({width,height});await audit(page);await entry(page);
+ await expect(page.locator('#spatial-world')).toBeVisible();await expect(page.locator('.exhibit-entry')).toContainText('Recorded real run. Not live.');await page.screenshot({path:`${dir}/entry-${width}.png`});
+ const idle=await page.evaluate(()=>(window as any).abq.commands);await page.waitForTimeout(1100);expect(await page.evaluate(()=>(window as any).abq.commands)).toEqual(idle);
+ const begin=Date.now();if(width===1280)await page.locator('#exhibit-start').press('Enter');else await page.locator('#exhibit-start').click();await expect(page.getByTestId('status')).toContainText('Live prediction complete');const elapsedMs=Date.now()-begin;
+ await page.locator('#short-sample').click();await expect(page.getByTestId('scene-construction')).toContainText('Known target: a');
+ for(const stop of [1,2,3,4]){await page.locator(`[data-short-stop="${stop}"]`).click();await expect(page.locator('.context-lens')).toBeHidden();await expect(page.getByTestId('scene-construction')).toBeVisible();await page.screenshot({path:`${dir}/chain-${stop}-${width}.png`});const box=await page.getByTestId('scene-construction').boundingBox();expect(box!.height).toBeGreaterThan(150);expect(box!.y+box!.height).toBeLessThanOrEqual(height);}
+ await expect(page.getByTestId('scene-construction')).toContainText('Saved embeddingNorm');await page.locator('[data-short-stop="1"]').click();await expect(page.getByTestId('scene-construction')).toContainText('All 4 original component products');
+ await page.locator('#spatial-key').selectOption('1');await page.locator('#spatial-head').selectOption('1');await expect(page.getByTestId('scene-construction')).toContainText('K: 1 · a · head 1');
+ const a=await page.evaluate(()=>(window as any).abq);expect(a.commands.filter((c:any)=>c.command==='predict')).toHaveLength(2);expect(a.commands.some((c:any)=>/train|ablate/i.test(c.command))).toBe(false);
+ await writeFile(`${dir}/activation-${width}.json`,JSON.stringify({elapsedMs,actionsToPrediction:1,actionsToExplanation:2,commands:a.commands,source:await page.getByTestId('scene-construction').getAttribute('data-run')},null,2));
+});
+test('Q02 complete public reset across completed, forward, partial, Ready, historical and intervention',async({page})=>{
+ test.setTimeout(240000);await audit(page);await entry(page);const matrix=[];
+ for(const state of ['completed','forward','partial','ready','historical','intervention']){
+  await start(page);
+  if(state==='forward'){await page.locator('#step-prediction').click();await page.locator('#execution-continue').click();}
+  if(state==='partial'){await page.locator('#step-learning').click();await page.locator('#execution-pin').click();await expect(page.locator('#execution-next')).toBeEnabled({timeout:60000});}
+  if(['ready','historical'].includes(state)){await ready(page);if(state==='historical'){await page.locator('#execution-accept').click();await page.locator('#operator-controls').click();await page.locator('#spatial-experiment').selectOption({index:1});await page.locator('[data-learning-phase="before"]').click();}}
+  if(state==='intervention'){await page.locator('#spatial-operation').selectOption('headOutput');await page.locator('#spatial-ablate').click();await expect(page.getByTestId('spatial-intervention')).toBeVisible({timeout:30000});}
+  const acceptCount=await page.evaluate(()=>(window as any).abq.commands.filter((c:any)=>c.command==='acceptTraining').length);
+  await page.locator('#clear-session').click();await expect(page.locator('#exhibit-start')).toBeEnabled();await page.waitForTimeout(250);await expect(page.locator('#spatial-world')).toHaveAttribute('viewBox','0 0 4500 1700');await expect(page.locator('#execution-controls')).toHaveCount(0);await expect(page.locator('.context-lens')).toBeHidden();await expect(page.locator('#spatial-back')).toBeDisabled();
+  const a=await page.evaluate(()=>(window as any).abq);expect(a.commands.filter((c:any)=>c.command==='acceptTraining')).toHaveLength(acceptCount);expect(a.lastReady.state.optimizer.step).toBe(0);matrix.push({state,acceptedByReset:false,home:true});
+ }
+ await mkdir(dir,{recursive:true});await writeFile(`${dir}/reset-matrix.json`,JSON.stringify(matrix,null,2));
+});
+test('Q02 warning, Keep session, wheel activity and expiry use real event ownership with fake time',async({page})=>{
+ await page.clock.install();await audit(page);await entry(page);await start(page);await page.clock.runFor(281000);await expect(page.locator('#exhibit-warning')).toBeVisible();await expect(page.locator('#exhibit-warning')).toContainText('Unaccepted candidate');await page.locator('#stay-here').click();await page.clock.runFor(1000);await expect(page.locator('#exhibit-warning')).toHaveCount(0);await page.clock.runFor(270000);await page.mouse.wheel(0,10);await page.clock.runFor(20000);await expect(page.locator('#exhibit-warning')).toHaveCount(0);await page.clock.runFor(281000);await expect(page.locator('#exhibit-start')).toBeEnabled();await expect(page.locator('#spatial-world')).toBeVisible();
+});
+test('Q04/Q05 short route detour, keyboard, reduced motion and source invalidation',async({page})=>{
+ await page.emulateMedia({reducedMotion:'reduce'});await entry(page);await start(page);await page.locator('#short-sample').press('Enter');await page.locator('[data-short-stop="1"]').press('Enter');const run=await page.getByTestId('scene-construction').getAttribute('data-run');await page.locator('#spatial-operation').selectOption('mlpRelu');await expect(page.locator('.short-guide')).toContainText('Exploring a detour');await page.locator('#short-resume').click();await expect(page.getByTestId('scene-construction')).toContainText('Attention scores');expect(await page.getByTestId('scene-construction').getAttribute('data-run')).toBe(run);
+ await page.locator('#document').fill('a');await page.locator('#predict').click();await expect(page.getByTestId('status')).toContainText('Live prediction complete');expect(await page.getByTestId('scene-construction').getAttribute('data-run')).not.toBe(run);await expect(page.getByTestId('scene-construction')).not.toContainText('NaN');
+});
+test('Q08 test-only serialized-estimate fixture refuses new work visibly and Clear recovers',async({page})=>{
+ await page.addInitScript(()=>{const original=TextEncoder.prototype.encode;TextEncoder.prototype.encode=function(input?:string){const bytes=original.call(this,input);if((window as any).abqBudgetFixture&&input?.includes('"runs":[')&&input.includes('"snapshots":[')){Object.defineProperty(bytes,'byteLength',{value:64*1024*1024});(window as any).abqBudgetFixture=false;}return bytes;};});
+ await audit(page);await entry(page);await start(page);await page.evaluate(()=>(window as any).abqBudgetFixture=true);await page.locator('#predict').click();await expect(page.getByTestId('status')).toContainText('Live prediction complete');
+ expect(await page.evaluate(()=>(window as any).abqBudgetFixture)).toBe(false);const count=await page.evaluate(()=>(window as any).abq.commands.length);await page.locator('#step-learning').click();await expect(page.getByRole('alert')).toContainText('Session evidence limit');expect(await page.evaluate(()=>(window as any).abq.commands.length)).toBe(count);
+ await page.locator('#spatial-operation').selectOption('headOutput');await page.locator('#spatial-ablate').click();await expect(page.getByRole('alert')).toContainText('Clear session');expect(await page.evaluate(()=>(window as any).abq.commands.length)).toBe(count);
+ await mkdir(dir,{recursive:true});await page.screenshot({path:`${dir}/budget-state.png`});await page.locator('#clear-session').click();await expect(page.locator('#exhibit-start')).toBeEnabled();await start(page);await expect(page.getByRole('alert')).toHaveCount(0);
+ await writeFile(`${dir}/budget-fixture.json`,JSON.stringify({method:'Test-only override of one main-thread JSON serialization byteLength to production 64 MiB threshold; no production policy or numerical bytes changed.',clearRecovered:true,refusedCommands:0},null,2));
+});

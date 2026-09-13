@@ -238,7 +238,8 @@ function syncTrainingPin() {
   }
 }
 async function startForward(training = false) {
-  if (busy || !ready || forwardDriver.active || evidenceBytes >= SESSION_BUDGET) return;
+  if (busy || !ready || forwardDriver.active) return;
+  if (evidenceBytes >= SESSION_BUDGET) { error = "Session evidence limit reached (64 MiB estimate). Clear session before starting more work."; render(); return; }
   readyComparison=true; beforeForwardLocation = spatialPresenter.captureLocation(); beforeForwardExperiment = spatialExperimentId;
   spatialPresenter.invalidate(); spatialPresenter.learningStage = undefined; spatialExperimentId = '';
   clearDisplayedInspection(); operation++; beforeForward = result; result = undefined; player = undefined; error = ''; status = 'Preparing captured input and checkpoint…';
@@ -554,12 +555,15 @@ function render(): void {
   document.body.classList.toggle("spatial-mode", spatialActive);
   document.body.classList.toggle("instrument-mode", !spatialActive);
   if (spatialActive) {
-    const source = result && sourceBinding(result.run, config.vocabulary, sourceSnapshot(result.run.manifest.startingSnapshotId??"")?.state.optimizer.step??result.trainingStep, liveRunId, documentText, "SPATIAL ATTENTION");
-    const model = result && source && spatialReadModel(result.run, sourceSnapshot(source.sourceSnapshotId ?? ""), source, spatialSelection);
+    const displayed = attract && kioskEnabled ? attractReplay?.result : result;
+    const source = displayed && sourceBinding(displayed.run, config.vocabulary, sourceSnapshot(displayed.run.manifest.startingSnapshotId??"")?.state.optimizer.step??displayed.trainingStep, liveRunId, documentText, "SPATIAL ATTENTION");
+    const model = displayed && source && spatialReadModel(displayed.run, sourceSnapshot(source.sourceSnapshotId ?? "") ?? displayed.snapshots.find(s=>s.id===source.sourceSnapshotId), source, spatialSelection);
     const learning = spatialLearningModel();
     const ablation=[...archive.interventionExperiments.values()].find(e=>e.baselineRun.manifest.runId===result?.run.manifest.runId||e.interventionRun.manifest.runId===result?.run.manifest.runId);
     const ablationPair=ablation?{before:forwardReadModel(ablation.baselineRun,sourceSnapshot(ablation.startingSnapshotId)),after:forwardReadModel(ablation.interventionRun,sourceSnapshot(ablation.startingSnapshotId))}:undefined;
     mount.innerHTML = spatialPresenter.render(model, {
+      attract: attract && kioskEnabled, exhibit: kioskEnabled,
+      retention:{bytes:evidenceBytes,runs:archive.runs.size,snapshots:archive.snapshots.size,experiments:archive.learningExperiments.size},
       ablationPending: activeAblation!==undefined,
       inspectedArm:forwardDriver.progress?.training?.readyOutputs?(result?.run.manifest.runId===forwardDriver.progress.training.readyOutputs.before.manifest.runId?'Current · accepted checkpoint':'Candidate · provisional checkpoint'):ablation?(result?.run.manifest.runId===ablation.baselineRun.manifest.runId?'Baseline':'Head output zeroed'):undefined,
       document: documentText, busy, ready, status, error, execution: forwardDriver.active ? forwardDriver : undefined,
@@ -578,6 +582,7 @@ function render(): void {
     spatialPresenter.bind(model, spatialSelectionChanged, render, selectExplanationPhase);
     bindSpatialLearning();
     bindForwardControls();
+    mount.querySelector("#exhibit-opt-out")?.addEventListener("click",()=>{ kioskEnabled=false; saveExhibitConfiguration(); clearExhibitBanner(); render(); });
     mount.querySelectorAll<HTMLElement>("[data-scroll-region]").forEach(element => {
       const scroll = regionScroll.get(element.dataset.scrollRegion);
       if (scroll && priorSpatialSelection === mount.querySelector(".context-lens")?.getAttribute("data-selection")) { element.scrollTop = scroll.top; element.scrollLeft = scroll.left; }
@@ -1715,7 +1720,9 @@ async function reset(cancelled: boolean, clear = false): Promise<void> {
   error = "";
   const acceptedAtCancellation = cancelled ? lastAcceptedResult : undefined;
   if (clear) {
-    spatialExperimentId = ""; spatialPresenter.learningStage = undefined;
+    spatialExperimentId = ""; spatialPresenter.resetVisitor();
+    beforeForward = undefined; beforeForwardLocation = undefined; beforeForwardExperiment = "";
+    inspectedExecutionRevision = undefined; readyComparison = true; clearDisplayedInspection();
     lastActivity = Date.now();
     clearExhibitBanner();
     sessionControlsOpen = false;
@@ -1940,7 +1947,7 @@ async function prepareAttract(currentOperation: number): Promise<void> {
   if (response.status !== "result")
     throw new Error("Attract bootstrap did not return a recorded Predict");
   attractReplay = bindAttractReplay(response.result);
-  attract = !spatialActive;
+  attract = !spatialActive || kioskEnabled;
   liveRunId = "";
   result = undefined;
   player = undefined;
@@ -2379,7 +2386,7 @@ function checkExhibitIdle(): void {
     banner.id = "exhibit-warning";
     banner.setAttribute("role", "alert");
     banner.innerHTML =
-      'Public Reset in <b data-testid="idle-countdown"></b> seconds. <button id="stay-here">Keep this session</button>';
+      'Public Reset in <b data-testid="idle-countdown"></b> seconds. Unaccepted candidate will be discarded and visitor history cleared. <button id="stay-here">Keep this session</button>';
     document.body.insertBefore(banner, mount);
     banner.querySelector("#stay-here")!.addEventListener("click", () => {
       lastActivity = Date.now();
@@ -2391,6 +2398,7 @@ function checkExhibitIdle(): void {
   );
 }
 function recordVisitorActivity(event: Event): void {
+  if ((event.target as Element).closest?.("#exhibit-warning")) return;
   const now = Date.now();
   if (
     exhibitState(kioskEnabled, attract, lastActivity, now, exhibitConfiguration)
@@ -2411,17 +2419,19 @@ function recordVisitorActivity(event: Event): void {
 for (const event of ["pointerup", "pointercancel", "touchend", "touchcancel"])
   window.addEventListener(
     event,
-    () => {
+    (event) => {
+      if ((event.target as Element).closest?.("#exhibit-warning")) return;
       visitorPointerDown = false;
       clearExhibitBanner();
     },
     { capture: true },
   );
-for (const event of ["pointerdown", "keydown", "touchstart"])
+for (const event of ["pointerdown", "keydown", "touchstart", "wheel"])
   window.addEventListener(event, recordVisitorActivity, { capture: true });
 window.addEventListener(
   "pointermove",
-  () => {
+  (event) => {
+    if ((event.target as Element).closest?.("#exhibit-warning")) return;
     if (
       exhibitState(
         kioskEnabled,
@@ -2464,7 +2474,8 @@ for (const event of ["dragover", "drop"])
 
 async function ablateHead(): Promise<void> {
   if (forwardDriver.active) { error='Finish/cancel execution or accept/discard the candidate before testing a head.';render();return; }
-  if (busy || !result || evidenceBytes >= SESSION_BUDGET) return;
+  if (busy || !result) return;
+  if (evidenceBytes >= SESSION_BUDGET) { error="Session evidence limit reached (64 MiB estimate). Clear session before testing another head.";render();return; }
   const source = result;
   if(source.run.manifest.runtimeRevision!==RUNTIME_REVISION){error='Selected source runtime differs; choose a compatible completed run.';render();return;}
   const snapshot = sourceSnapshot(source.run.manifest.startingSnapshotId ?? "");

@@ -209,3 +209,50 @@ body.spatial-mode { background:#0B0F12; color:#F2F5F7; font-family:Plex,sans-ser
  .spatial-shell .live-learning .adam-chain section { padding:4px 7px; line-height:1.35; }
  .spatial-shell .live-learning h3 { margin:6px 0; }
 }
+
+/* Selected-operation construction occupies its own scene region; never covers the map. */
+.world-pane.has-construction { display:flex; flex-direction:column; }
+.world-pane.has-construction>.spatial-world { flex:1; min-height:160px; height:35%; }
+.has-construction .selection-card { position:static; display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:5px 10px; max-width:none; flex:none; }
+.has-construction .selection-card>small,.has-construction .selection-card>span { display:none; }
+.scene-construction { flex:none; max-height:58%; overflow:auto; overscroll-behavior:contain; padding:12px 18px; border-top:1px solid #7a8791; background:#111820; font-size:18px; line-height:1.4; }
+.scene-construction header { display:flex; justify-content:space-between; gap:12px; color:#f0d395; }
+.scene-construction p { margin:6px 0; }
+.scene-construction [data-value] { font-family:PlexMono,monospace; font-size:.85em; }
+.construction-columns { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+.scene-construction .geometry { display:flex; align-items:center; }
+.scene-construction .geometry svg { width:46%; min-width:160px; }
+.construction-products,.construction-softmax,.construction-handoff { display:flex; gap:14px; }
+.construction-products { flex-wrap:wrap; }
+.construction-softmax>div,.construction-handoff>section { flex:1; padding:7px; border-left:1px solid #3b454d; }
+.construction-softmax { overflow:auto; }
+.construction-softmax>div { min-width:140px; }
+.scene-construction h3 { font-size:1em; margin:5px 0; }
+.construction-mixture { display:grid; grid-template-columns:200px 1fr; gap:5px 15px; }
+.construction-mixture>p { grid-column:1/-1; }
+.construction-mixture .mixture-geometry { width:200px; height:175px; }
+.construction-mixture table { width:100%; font-size:14px; }
+.construction-mixture td,.construction-mixture th { padding:3px; text-align:left; }
+.short-guide { flex:none; border-bottom:1px solid #3b454d; }
+.short-guide nav { display:flex; flex-wrap:wrap; gap:7px; }
+.short-guide p { font-size:16px; margin:6px 0; max-width:1400px; }
+.short-guide button,#scene-construction,.exhibit-entry button { min-height:44px; }
+.exhibit-entry { display:flex; align-items:center; justify-content:space-between; gap:25px; padding:16px 22px; background:#111820; font-size:20px; }
+.exhibit-entry h1 { font-size:26px; margin:5px 0; }
+.exhibit-entry p { margin:5px 0; }
+.spatial-attract .spatial-selection,.spatial-attract .learning-toolbar,.spatial-attract .explanation,.spatial-attract .selection-card { display:none; }
+.spatial-attract .spatial-header>button:not(#clear-session),.spatial-attract .spatial-header>label { visibility:hidden; }
+@media(max-width:1400px) { .scene-construction { font-size:16px; padding:8px 10px; }.scene-construction .geometry { font-size:13px; }.construction-products { font-size:14px; }.exhibit-entry {font-size:16px;padding:10px 14px}.exhibit-entry h1{font-size:21px}.short-guide p{font-size:16px} }
+@media(max-width:850px) { .construction-columns {grid-template-columns:1fr}.exhibit-entry{flex-direction:column}.construction-handoff{flex-direction:column}.scene-construction{max-height:65%} }
+.visitor-controls>.learning-toolbar,.visitor-controls>.explanation { display:none; }
+.world-pane.has-construction>.spatial-world { flex:0 0 32%; min-height:100px; height:32%; }
+.has-construction .selection-card { flex-direction:row; font-size:12px; }
+.has-construction .selection-card strong {font-size:14px}
+.has-construction .selection-card button {min-height:32px;padding:4px 8px}
+.scene-construction { flex:1; min-height:0; max-height:none; }
+.scene-construction>header { background:transparent; border:0; padding:0 0 6px; min-height:0; font:inherit; }
+.scene-construction .geometry svg { max-height:180px; }
+.visitor-controls .short-guide button {padding:5px 8px}
+.visitor-controls .short-guide p {margin:4px 0}
+body.spatial-mode #exhibit-warning { left:15%; right:15%; top:8px; font-size:16px; padding:8px 12px; }
+body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font-size:16px; }
