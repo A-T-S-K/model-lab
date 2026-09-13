@@ -39,12 +39,12 @@ test('S03 unused embedding stops before first optimizer proposal; subsequent act
 });
 for(const action of ['pause','explore','pin','next','continue','cancel','discard'] as const)test('S04 delayed permit superseded by '+action,async()=>{
  const h=await setup();await h.d.start('a',true);
- const client=(h.d as any).client,request=client.request;let release!:()=>void;let admitted=false;
- client.request=async(c:any)=>{const r=await request(c);if(c.command==='advanceTraining'&&!admitted){admitted=true;await new Promise<void>(resolve=>release=resolve);}return r;};
- h.d.runToContribution();await wait(()=>admitted);assert(h.d.pending);
+ const client=(h.d as any).client,request=client.request;let release!:()=>void;let admitted=false;let admittedReply:any;
+ client.request=async(c:any)=>{const r=await request(c);if(c.command==='advanceTraining'&&!admitted&&(action!=='pin'||r.progress?.start)){admittedReply=r;admitted=true;await new Promise<void>(resolve=>release=resolve);}return r;};
+ h.d.runToContribution();await wait(()=>admitted);assert(h.d.pending);const admittedCount=h.commands.filter(c=>c.command==='advanceTraining').length;
  if(action==='pin')h.d.pin=1;else if(action==='next')void h.d.next();else if(action==='cancel')await h.d.cancel();else h.d[action]();
  assert(!h.d.runningToGradient);release();await new Promise(r=>setTimeout(r,30));
- if(action==='continue'){await wait(()=>h.d.progress?.training?.phase==='ready');}else assert.equal(h.commands.filter(c=>c.command==='advanceTraining').length,1);assert.notEqual(h.d.phase,'running');assert.equal(h.max,1);await h.d.cancel();
+ if(action==='continue'){await wait(()=>h.d.progress?.training?.phase==='ready');}else assert.equal(h.commands.filter(c=>c.command==='advanceTraining').length,admittedCount);assert.notEqual(h.d.phase,'running');assert.equal(h.max,1);if(action==='pin'){assert.equal(h.d.progress!.training!.pin,1);assert.deepEqual(h.d.progress!.artifacts,admittedReply.progress.artifacts);assert.deepEqual(h.d.progress!.start,admittedReply.progress.start);assert.equal(h.d.preview!.run.manifest.runId,admittedReply.progress.start.manifest.runId);}await h.d.cancel();
 });
 test('S03 exhausting an observed pin stops before proposals without rewinding',async()=>{
  const h=await setup();await h.d.start('a',true);h.d.runToContribution();await wait(()=>h.d.phase==='paused');

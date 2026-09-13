@@ -85,8 +85,12 @@ export class ForwardDriver {
       // A pin can change while an admitted unit finishes. Refresh read-only evidence
       // before exposing that acknowledgement under the new parameter's label.
       while (response.status === 'forward' && response.progress.training && response.progress.training.pin !== this.pin && !this.cancelling) {
-        response = await this.client.request({ command: 'inspectTraining', executionId: id, pin: this.pin });
+        const focused = await this.client.request({ command: 'inspectTraining', executionId: id, pin: this.pin });
         if (epoch !== this.epoch) return;
+        if (focused.status !== 'forward' || focused.progress.executionId !== id || focused.progress.sequence !== permit) throw new Error('Unexpected pin acknowledgement');
+        // Inspection has no new artifact delta. Retain the admitted unit's delta
+        // and any new source header while updating only the pin-specific fields.
+        response = { ...response, progress: { ...response.progress, training: focused.progress.training } };
       }
       this.inFlight = false;
       if (response.status === 'result') {
