@@ -8,6 +8,9 @@ export class ForwardDriver {
   preview?: RunResult;
   phase: 'idle' | 'starting' | 'paused' | 'running' | 'pausing' | 'cancelling' = 'idle';
   follow = true;
+  pin = 0;
+  stopAtPin = false;
+  private accepting?: Promise<void>;
   private epoch = 0;
   private inFlight = false;
   private timer?: ReturnType<typeof setTimeout>;
@@ -21,11 +24,11 @@ export class ForwardDriver {
   private clearTimer() { if (this.timer !== undefined) clearTimeout(this.timer); this.timer = undefined; }
   /** Used before a worker reset: immediately invalidate all continuations. */
   discard() { this.epoch++; this.clearTimer(); this.phase = 'idle'; this.inFlight = false; this.progress = undefined; this.preview = undefined; this.artifacts = []; }
-  async start(document: string) {
+  async start(document: string, training = false) {
     if (this.active) return;
     this.discard(); const epoch = this.epoch; this.phase = 'starting'; this.follow = true; this.changed();
     try {
-      const response = await this.client.request({ command: 'startForward', document });
+      const response = await this.client.request({ command: training ? 'startTraining' : 'startForward', document });
       if (epoch !== this.epoch) return;
       if (response.status !== 'forward' || !response.progress.start) throw new Error('Missing paused start');
       this.accept(response.progress); if (!this.cancelling) this.phase = 'paused'; this.changed();
@@ -36,10 +39,19 @@ export class ForwardDriver {
     this.progress = frozen;
     this.artifacts.push(...frozen.artifacts);
     const start = frozen.start;
+    if (start) this.artifacts = [...frozen.artifacts];
     if (start) this.preview = { run: { formatVersion: 1, manifest: start.manifest, artifacts: [], capture: frozen.capture },
       tokenIds: start.tokenIds, targetIds: start.targetIds, trainingStep: start.trainingStep,
       snapshots: [start.snapshot], runs: [], logits: [], probabilities: [] };
     if (this.preview) this.preview = { ...this.preview, run: { ...this.preview.run, artifacts: this.artifacts, capture: frozen.capture } };
+  }
+  async inspectPin(pin: number) {
+    this.pin = pin;
+    const p = this.progress, epoch = this.epoch;
+    if (!p?.training || this.inFlight) return;
+    const response = await this.client.request({ command: 'inspectTraining', executionId: p.executionId, pin });
+    if (epoch !== this.epoch || this.progress?.sequence !== p.sequence || pin !== this.pin || response.status !== 'forward') return;
+    this.accept(response.progress); this.changed();
   }
   pause() {
     this.clearTimer();
@@ -47,14 +59,14 @@ export class ForwardDriver {
     this.changed();
   }
   explore() { if (!this.active) return; this.follow = false; this.pause(); }
-  continue() { if (this.phase !== 'paused') return; this.phase = 'running'; this.changed(); this.schedule(); }
-  private schedule() { this.clearTimer(); if (this.phase === 'running') this.timer = setTimeout(() => { this.timer = undefined; void this.next(); }, this.pace); }
+  continue() { if (this.phase !== 'paused' || this.progress?.training?.phase === 'ready') return; this.phase = 'running'; this.changed(); this.schedule(); }
+  private schedule() { this.clearTimer(); if (this.phase === 'running') this.timer = setTimeout(() => { this.timer = undefined; void this.next(); }, this.progress?.training ? 0 : this.pace); }
   async next() {
     if (this.inFlight || !this.progress || !['paused', 'running'].includes(this.phase)) return;
     const epoch = this.epoch, id = this.progress.executionId, permit = this.progress.sequence + 1;
     this.inFlight = true; this.changed();
     try {
-      const response: WorkerResponse = await this.client.request({ command: 'advanceForward', executionId: id, permit });
+      const response: WorkerResponse = await this.client.request(this.progress.training ? { command: 'advanceTraining', executionId: id, permit, budget: this.phase === 'running' ? 128 : 1, pin: this.pin, stop: this.stopAtPin } : { command: 'advanceForward', executionId: id, permit });
       if (epoch !== this.epoch) return;
       this.inFlight = false;
       if (response.status === 'result') {
@@ -62,6 +74,7 @@ export class ForwardDriver {
       }
       if (response.status !== 'forward' || response.progress.executionId !== id || response.progress.sequence !== permit) throw new Error('Unexpected forward acknowledgement');
       this.accept(response.progress);
+      if (this.progress?.training?.phase === 'ready' || this.progress?.training?.stopped) { this.phase = 'paused'; this.stopAtPin = false; }
       if (this.phase === 'pausing') this.phase = 'paused';
       this.changed(); this.schedule();
     } catch (error) {
@@ -71,7 +84,24 @@ export class ForwardDriver {
       this.discard(); this.failed(error);
     }
   }
+  acceptUpdate() {
+    if (this.accepting) return this.accepting;
+    this.accepting = this.acceptCandidate().finally(() => { this.accepting = undefined; });
+    return this.accepting;
+  }
+  private async acceptCandidate() {
+    const p = this.progress;
+    if (this.inFlight || this.phase !== 'paused' || p?.training?.phase !== 'ready' || !p.training.candidateId) return;
+    this.inFlight = true; this.phase = 'pausing'; this.changed(); const epoch = this.epoch;
+    try {
+      const response = await this.client.request({ command: 'acceptTraining', executionId: p.executionId, candidateId: p.training.candidateId });
+      if (epoch !== this.epoch) return;
+      if (response.status !== 'result') throw new Error('Missing accepted candidate');
+      this.discard(); await this.completed(response.result);
+    } catch (error) { if (epoch === this.epoch) { this.discard(); this.failed(error); } }
+  }
   async cancel() {
+    if (this.accepting) { await this.accepting; return; }
     if (!this.active) return;
     this.clearTimer();
     const id = this.progress?.executionId;

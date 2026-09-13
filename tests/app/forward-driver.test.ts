@@ -33,3 +33,19 @@ test('E07 reset invalidation ignores a late acknowledgement; failures release th
  const f=new ForwardDriver(failing,()=>{},async()=>{},()=>failed++);await f.start('a');await f.next();await new Promise(r=>setTimeout(r,10));
  assert.equal(failed,1);assert.equal(f.preview,undefined);assert.equal((await s.handle({...tag,runId:'normal',command:'predict',document:'a'})).status,'result');
 });
+
+test('T05/T06 controlled driver Ready barrier and delayed acceptance serialize cancel without duplicate work',async()=>{
+ const session=new ModelSession(),tag={sessionId:'controlled-driver',generationId:0};await session.handle({...tag,runId:'init',command:'initialize'});
+ let n=0,completed=0,release:(()=>void)|undefined;const commands:any[]=[];
+ const client={request:async(c:any)=>{commands.push(c);const r=await session.handle({...tag,runId:'r'+(++n),...c});if(c.command==='acceptTraining')await new Promise<void>(resolve=>{release=resolve;});return r;}};
+ const driver=new ForwardDriver(client,()=>{},async()=>{completed++;},e=>{throw e;},0);
+ await driver.start('',true);
+ // Drive bounded Continue work without a timer per test iteration.
+ while(driver.progress?.training?.phase!=='ready') {driver.phase='running';await driver.next();driver.pause();}
+ const count=commands.length;driver.continue();await new Promise(r=>setTimeout(r,10));assert.equal(commands.length,count);
+ const accepted=driver.acceptUpdate();await new Promise(r=>setTimeout(r,5));const cancelled=driver.cancel();
+ assert.equal(commands.filter(c=>c.command==='cancelForward').length,0);assert.equal(completed,0);
+ release!();await accepted;await cancelled;assert.equal(completed,1);assert.equal(driver.active,false);
+ assert.equal(commands.filter(c=>c.command==='train'||c.command==='predict').length,0);
+ assert.equal(commands.filter(c=>c.command==='acceptTraining').length,1);
+});

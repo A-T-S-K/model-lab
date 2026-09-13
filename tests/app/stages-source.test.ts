@@ -24,7 +24,7 @@ test('every displayed stage maps to a real bundled implementation symbol', () =>
     assert.equal(mapping.status, 'mapped', kind);
     if (mapping.status !== 'mapped') continue;
     const source = readFileSync(new URL(`../../${mapping.file}`, import.meta.url), 'utf8');
-    const marker = mapping.file === 'model/value.ts' ? `  ${mapping.symbol}(` : `export function${mapping.symbol === 'forwardSequence' ? '*' : ''} ${mapping.symbol}(`;
+    const marker = mapping.file === 'model/value.ts' ? `  ${mapping.symbol}(` : `export function${['forwardSequence','objectiveSequence','backwardSequence','adamProposals'].includes(mapping.symbol) ? '*' : ''} ${mapping.symbol}(`;
     assert.ok(source.includes(marker), `${kind}: ${mapping.file} ${mapping.symbol}`);
   }
   assert.deepEqual(sourceMapping('gradient'), sourceMapping('backward'));

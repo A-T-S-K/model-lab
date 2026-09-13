@@ -13,6 +13,7 @@ export type WorkerRequest = RequestTag & (
   { command: 'predict' | 'train'; document: string } |
   { command: 'startForward' | 'startTraining'; document: string } |
   { command: 'advanceTraining'; executionId: string; permit: number; budget: number; pin: number; stop: boolean } |
+  { command: 'inspectTraining'; executionId: string; pin: number } |
   { command: 'acceptTraining'; executionId: string; candidateId: string } |
   { command: 'advanceForward'; executionId: string; permit: number } |
   { command: 'cancelForward'; executionId: string } |

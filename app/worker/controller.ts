@@ -80,6 +80,10 @@ export class ModelSession {
         if (this.active?.id === request.executionId) this.active = undefined;
         return { ...tag, status: 'cancelled' };
       }
+      if (request.command === 'inspectTraining') {
+        if (!this.training || this.training.id !== request.executionId) throw new Error('Stale execution');
+        return { ...tag, status: 'forward', progress: this.training.focus(request.pin) };
+      }
       if (request.command === 'advanceTraining') {
         if (!this.training || this.training.id !== request.executionId) throw new Error('Stale execution');
         return { ...tag, status: 'forward', progress: await this.training.advance(request.permit, request.budget, request.pin, request.stop) };

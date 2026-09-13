@@ -1,3 +1,4 @@
+import { validateLearningExperiment } from '../../archive/experiment.js';
 import { forwardSequence, forwardBoundaries, objectiveSequence } from '../../model/microgpt.js';
 import { backwardSequence, zeroGrad } from '../../model/autograd.js';
 import { adamProposals, applyAdam, validateOptimizerState, type AdamUpdate, type ParameterUpdate } from '../../model/training.js';
@@ -14,6 +15,8 @@ export interface LiveContribution { child: number | undefined; operand: number; 
 export interface TrainingProgress {
   phase: TrainingPhase; count: number; processed: number; acceptedStep: number; candidateId?: string;
   pin: number; gradient: number; final: boolean; contributions: LiveContribution[]; proposal?: ParameterUpdate;
+  losses: { target: number; value?: number }[]; mean?: number;
+  old: { parameter: number; m: number; v: number }; optimizer: { beta1: number; beta2: number; epsilon: number; effectiveLearningRate: number };
   stopped: boolean; sourceRunId: string; baselinePasses: number;
 }
 /** One private working snapshot in the existing session transaction. No accepted writes. */
@@ -22,6 +25,7 @@ export class TrainingExecution {
   phase: TrainingPhase = 'baseline forward'; sequence = 0; count = 0; sent = 0;
   private forward; private boundaries; private objective?: ReturnType<typeof objectiveSequence>;
   private backward?: ReturnType<typeof backwardSequence>; private proposals?: ReturnType<typeof adamProposals>;
+  private losses: { target: number; value?: number }[] = [];
   private objectiveResult?: ReturnType<typeof objectiveSequence> extends Generator<unknown,infer R> ? R : never;
   private update?: AdamUpdate; private beforeRun?: RecordedRun; private trainingRun?: RecordedRun;
   private trainingContext?: CaptureContext; private candidate?: ArchivedSnapshot;
@@ -30,6 +34,7 @@ export class TrainingExecution {
   private gradients: number[] = []; private startPending = true;
   recorder!: TraceRecorder; context!: CaptureContext; result?: RunResult;
   constructor(readonly id: string, readonly tag: RequestTag, readonly starting: ArchivedSnapshot, readonly tokenIds: number[], readonly targetIds: number[]) {
+    this.losses = targetIds.map(target => ({ target }));
     this.working = restoreTraining(starting.state);
     validateOptimizerState(this.working.model, this.working.optimizer);
     this.capture(`${id}:before`, starting);
@@ -44,14 +49,24 @@ export class TrainingExecution {
   inspect(source: string, target: Parameters<CaptureContext['inspect']>[0]) {
     return (source === this.recorder.manifest.runId ? this.context : source === `${this.id}:training` ? this.trainingContext : undefined)?.inspect(target);
   }
+  focus(pin: number) {
+    if (!Number.isInteger(pin) || !parameterValues(this.working.model)[pin]) throw new Error('Invalid pin');
+    if (pin !== this.pin) { this.pin = pin; this.contributions = []; }
+    return this.progress();
+  }
   progress(processed = 0, stopped = false): ForwardProgress {
     const delta = this.recorder.delta(this.sent); this.sent += delta.artifacts.length;
     const snapshot = this.phase === 'candidate forward' || this.phase === 'ready' ? this.candidate! : this.starting;
     const start = this.startPending ? { manifest: this.recorder.manifest, snapshot, tokenIds: this.tokenIds, targetIds: this.targetIds, trainingStep: this.starting.state.optimizer.step } : undefined;
     this.startPending = false;
+    const oldOptimizer = this.starting.state.optimizer;
+    const oldParameters = this.starting.state.parameterOrder.flatMap(name => this.starting.state.parameters[name].flat());
     return immutableCopy({ executionId: this.id, sequence: this.sequence, total: this.boundaries.length, ...delta, start,
       ...(this.phase.endsWith('forward') ? { last: this.boundaries[this.count - 1], next: this.boundaries[this.count] } : {}),
       training: { phase: this.phase, count: this.count, processed, acceptedStep: this.starting.state.optimizer.step, candidateId: this.candidate?.id,
+        losses: this.losses, mean: this.objectiveResult?.mean.data,
+        old: { parameter: oldParameters[this.pin], m: oldOptimizer.m[this.pin], v: oldOptimizer.v[this.pin] },
+        optimizer: { beta1: oldOptimizer.beta1, beta2: oldOptimizer.beta2, epsilon: oldOptimizer.epsilon, effectiveLearningRate: oldOptimizer.learningRate * (1 - oldOptimizer.step / oldOptimizer.numSteps) },
         pin: this.pin, gradient: this.gradients[this.pin] ?? parameterValues(this.working.model)[this.pin].grad,
         final: this.gradients.length > 0, contributions: this.contributions, proposal: this.proposalValues[this.pin], stopped,
         sourceRunId: this.recorder.manifest.runId, baselinePasses: 1 } });
@@ -88,10 +103,13 @@ export class TrainingExecution {
           experiment: { id: `${this.id}:learning`, startingSnapshotId: this.starting.id, resultingSnapshotId: this.candidate!.id,
             beforeRunId: this.beforeRun!.manifest.runId, trainingRunId: this.trainingRun!.manifest.runId, afterRunId: this.id,
             backwardRunId: this.trainingRun!.manifest.runId, objective: { inputIds: this.tokenIds, targetIds: this.targetIds, meanLoss: learn.meanLoss }, update } };
+        validateLearningExperiment(this.result.experiment!, this.starting.state, this.candidate!.state, this.beforeRun!, this.trainingRun!, this.trainingRun!, afterRun);
         this.change('ready');
       }
     } else if (this.phase === 'loss') {
-      const next = this.objective!.next(); this.count++;
+      const next = this.objective!.next();
+      if (!next.done) { const loss = this.recorder.delta(0).artifacts.filter(a => a.kind === 'loss').at(-1); this.losses[this.count] = { target: this.targetIds[this.count], value: loss?.values?.[0] }; }
+      this.count++;
       if (next.done) { this.objectiveResult = next.value; this.change('backward seed'); }
     } else if (this.phase === 'backward seed') {
       const parameters = parameterValues(model);

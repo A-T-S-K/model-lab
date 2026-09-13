@@ -16,7 +16,7 @@ export async function prepareSource(): Promise<void> {
 }
 /** Curated symbol boundaries, not fragile line numbers. The entire function remains readable. */
 export function snippet(source: string, symbol: string, file: string): string | undefined {
-  const marker = file === 'model/value.ts' ? `  ${symbol}(` : `export function${symbol === 'forwardSequence' ? '*' : ''} ${symbol}(`;
+  const marker = file === 'model/value.ts' ? `  ${symbol}(` : `export function${['forwardSequence','objectiveSequence','backwardSequence','adamProposals'].includes(symbol) ? '*' : ''} ${symbol}(`;
   const start = source.indexOf(marker);
   if (start < 0) return undefined;
   const next = source.indexOf(file === 'model/value.ts' ? '\n  }' : '\n}', start);

@@ -30,7 +30,7 @@ export function validateOptimizerState(model: Model, state: OptimizerState): voi
       !(state.rngState === null || (Number.isInteger(state.rngState) && state.rngState >= 0 && state.rngState <= 0xffffffff))) throw new Error('Invalid continuation state');
 }
 
-/** Apply the pinned Adam update and retain the exact numbers used by the optimizer. */
+/** Calculate Adam in parameter order; each yield exposes one actual proposal without writes. */
 export function* adamProposals(model: Model, state: OptimizerState): Generator<ParameterUpdate, AdamUpdate> {
   validateOptimizerState(model, state);
   if (parameterValues(model).some(parameter => !Number.isFinite(parameter.data) || !Number.isFinite(parameter.grad))) throw new Error('Nonfinite parameter or gradient');

@@ -169,3 +169,7 @@ body.spatial-mode { background:#0B0F12; color:#F2F5F7; font-family:Plex,sans-ser
 .spatial-header{flex-wrap:wrap}
 
 .execution-frontier .field{stroke:#f0d395;stroke-width:2}
+
+.live-arithmetic-row{display:grid;grid-template-columns:100px 1fr 100px;gap:8px;align-items:center;font-family:"IBM Plex Mono",monospace}.live-signed-track{position:relative;height:12px;background:#272b30}.live-signed-track:after{content:"";position:absolute;left:50%;height:100%;border-left:1px solid #999}.live-signed-track i{position:absolute;height:100%}.execution nav{flex-wrap:wrap}.execution p{margin:4px 0}.live-arithmetic-row+ p{font-size:11px}
+
+.live-learning .adam-chain{gap:2px}.live-learning .adam-chain section{padding:7px 9px}.live-learning p{margin:9px 0}.live-learning .live-scope,.live-learning .live-scale{font-size:11px}.live-learning h3{margin:12px 0 8px}

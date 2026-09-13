@@ -99,3 +99,30 @@ for(const document of ['', 'abcb','abcabca'])test('T07 input coverage '+JSON.str
  const fast=await setup(),slow=await setup();const a=result(await fast.handle({...tag,runId:'fast',command:'train',document}));
  const progress=await until(slow,p(await slow.handle({...tag,runId:'slow',command:'startTraining',document})),'ready');const b=result(await accept(slow,progress));assert.deepEqual(a.learn,b.learn);assert.deepEqual(a.snapshots,b.snapshots);
 });
+
+test('T07 pin can change read-only to non-embedding and proposals stop in parameter order',async()=>{
+ const s=await setup();let progress=await until(s,p(await s.handle({...tag,runId:'nonembedding',command:'startTraining',document:'abca'})),'optimizer proposal');
+ const index=(s as any).training.working.model.parameterOrder.slice(0,(s as any).training.working.model.parameterOrder.indexOf('layer0.attn_wq')).reduce((n:number,name:string)=>n+(s as any).training.working.model.parameters[name].flat().length,0);
+ const seq=progress.sequence;
+ progress=p(await s.handle({...tag,runId:'focus',command:'inspectTraining',executionId:progress.executionId,pin:index}));
+ assert.equal(progress.sequence,seq);assert.equal(progress.training!.proposal,undefined);
+ do { progress=await advance(s,progress,128,true,index); } while (!progress.training!.stopped);assert(progress.training!.stopped);assert.equal(progress.training!.proposal!.name,'layer0.attn_wq');
+ assert.equal(progress.training!.proposal!.index,index);assert.equal((s as any).training.proposalValues.length,index+1);
+});
+test('T10 repeated bounded accept/cancel cycles and measured worker permits',async()=>{
+ const {mkdir,writeFile}=await import('node:fs/promises');const s=await setup();const durations:number[]=[],accepts:number[]=[],fast:number[]=[];
+ for(let cycle=0;cycle<12;cycle++) {
+  let progress=p(await s.handle({...tag,runId:'resource'+cycle,command:'startTraining',document:''}));
+  while(progress.training!.phase!==(cycle%2?'ready':'optimizer proposal')) {const start=performance.now();progress=await advance(s,progress);durations.push(performance.now()-start);assert(progress.training!.processed<=128);assert(progress.training!.contributions.length<=8);}
+  if(cycle%2){const start=performance.now();await accept(s,progress);accepts.push(performance.now()-start);}else await s.handle({...tag,runId:'cancel',command:'cancelForward',executionId:progress.executionId});
+  assert.equal((s as any).training,undefined);assert((s as any).contexts.size<=2);
+ }
+ for(let i=0;i<12;i++){const start=performance.now();await s.handle({...tag,runId:'fast'+i,command:'train',document:'abca'});if(i>1)fast.push(performance.now()-start);}
+ await mkdir('test-results/wave2b-review',{recursive:true});await writeFile('test-results/wave2b-review/worker-performance.json',JSON.stringify({method:'12 one-position cycles alternating proposal cancel / acceptance; per-permit wall time includes progress copying, excludes transport/UI. Then 2 warmups and 10 ordinary abca Learn requests on same session.',permits:durations.length,maxPermitMs:Math.max(...durations),meanPermitMs:durations.reduce((a,b)=>a+b,0)/durations.length,maxAcceptMs:Math.max(...accepts),fastLearnMs:fast},null,2));
+});
+test('T06 cancelled Ready rejects late acceptance and reset invalidates the generation',async()=>{
+ const s=await setup();let progress=await until(s,p(await s.handle({...tag,runId:'cancel-first',command:'startTraining',document:''})),'ready');
+ await s.handle({...tag,runId:'cancel',command:'cancelForward',executionId:progress.executionId});assert.equal((await accept(s,progress)).status,'error');assert.equal((s as any).optimizer.step,0);
+ progress=p(await s.handle({...tag,runId:'reset-active',command:'startTraining',document:''}));await s.handle({...tag,generationId:1,runId:'reset',command:'reset'});
+ assert.equal((await s.handle({...tag,runId:'old',command:'advanceTraining',executionId:progress.executionId,permit:1,budget:1,pin:0,stop:false})).status,'error');assert.equal((s as any).training,undefined);
+});

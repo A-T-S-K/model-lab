@@ -1,0 +1,11 @@
+# Wave 2B review
+
+Implementation and verification in progress in `/Users/joshuahansen/dev/model-lab`, existing `wave-1a-spatial`, origin `git@github.com:A-T-S-K/model-lab.git`. Starting clean HEAD `e9ccf3227fc503820babe1beb7707968877f22a2`, tree `bccf9a3158d67c574bf46e810321679ee174c60d`. No reset, remote synchronization, branch, worktree, clone, support edits or publication.
+
+The existing forward permit driver now also drives one worker-owned training transaction. It runs an explicitly identified baseline forward, training forward, ordered target losses/mean, backward seed, reverse-topological nodes, parameter-order Adam proposals, private candidate application, and a fresh captured candidate forward. Ready requires ordinary LearningExperiment validation and stops Continue. Accept publishes that prepared bundle through C's matching-receipt and archive path; Discard releases the transaction without accepted writes. Ordinary Learn drains the same objective/backward/Adam cores; controlled acceptance does not call Learn or Predict.
+
+Manual backward units apply all operand occurrences of one node, including repeated parents. Continue admits at most 128 nodes or proposals per worker task, never across a phase barrier. Forward operators remain atomic. Setup/finalization boundaries are reported separately by phase; phase counts include a final generator completion boundary. No scalar timers or promises. Pinned stops test the actual write/proposal inside the chunk. Recent live contributions retain eight occurrences; final gradients are captured once before private writes. Pin inspection and navigation do not grant permits; replies are revision-bound. The private candidate remains separate from accepted state and completed history.
+
+The local instrument shows signed contribution/accumulator marks on a declared fixed ±1 domain (clipped marks, exact numbers), actual multiplication/addition, old moments, proposed moments/corrections/delta/parameter, and the forward owner. Known forward shapes stay visible while pending. Partial, final, proposed and accepted states are distinct. Classic remains default.
+
+Verification logs and media are under ignored `test-results/wave2b-review/`. Final identities, acceptance results, capture review and limitations will be recorded after the final HTTP suites.

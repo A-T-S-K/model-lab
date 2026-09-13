@@ -144,11 +144,18 @@ let documentText = fixture.document;
 let result: RunResult | undefined;
 let player: TracePlayer | undefined;
 let beforeForward: RunResult | undefined;
+let beforeForwardLocation: ReturnType<SpatialPresenter['captureLocation']> | undefined;
+let beforeForwardExperiment = '';
+function restoreExecutionView() {
+  spatialExperimentId = beforeForwardExperiment;
+  if (beforeForwardLocation) spatialPresenter.restoreLocation(beforeForwardLocation);
+  beforeForwardLocation = undefined;
+}
 const forwardDriver = new ForwardDriver(client, forwardChanged, async incoming => {
-  beforeForward = undefined;
-  await execute("predict", 1, false, incoming);
+  beforeForward = undefined; beforeForwardLocation = undefined;
+  await execute(incoming.learn ? "train" : "predict", 1, false, incoming);
 }, failure => {
-  result = beforeForward; beforeForward = undefined;
+  result = beforeForward; beforeForward = undefined; restoreExecutionView();
   player = result && new TracePlayer(result.run);
   clearDisplayedInspection();
   status = "Execution failed · prior completed evidence preserved";
@@ -163,12 +170,15 @@ client.onFailure = failure => {
 function forwardChanged() {
   if (forwardDriver.preview) {
     result = forwardDriver.preview; player = new TracePlayer(result.run);
+    const training = forwardDriver.progress?.training;
+    if (training && forwardDriver.follow && ['loss','backward seed','backward','optimizer proposal','candidate application','ready'].includes(training.phase)) spatialPresenter.followLearning(training.phase === 'loss' ? 'objective' : training.phase.includes('backward') ? 'gradient' : 'adam');
     const boundary = forwardDriver.progress?.last;
     if (boundary && forwardDriver.follow) spatialPresenter.followBoundary(boundary);
     status = `${forwardDriver.phase === 'pausing' ? 'Pausing · admitted operator may finish' : forwardDriver.pending && forwardDriver.phase === 'paused' ? 'Executing one admitted operator' : forwardDriver.phase === 'running' ? 'Running · paced operator execution' : forwardDriver.phase === 'starting' ? 'Preparing input and checkpoint' : forwardDriver.phase === 'cancelling' ? 'Cancelling execution' : 'Paused · no future permits'} · ${forwardDriver.progress?.sequence}/${forwardDriver.progress?.total}`;
+    if (training) status = `Accepted step ${training.acceptedStep} · ${training.phase === 'ready' ? 'Candidate ready — not accepted' : training.phase} · ${training.count} units · candidate is provisional`;
     syncSpatialSelection();
   } else if (!forwardDriver.active) {
-    result = beforeForward; beforeForward = undefined; player = result && new TracePlayer(result.run);
+    result = beforeForward; beforeForward = undefined; restoreExecutionView(); player = result && new TracePlayer(result.run);
     status = "Execution cancelled · prior completed evidence preserved";
     clearDisplayedInspection();
   }
@@ -186,24 +196,39 @@ function executionExplore(event: Event) {
 }
 for (const type of ['pointerdown','wheel','keydown','change','click']) mount.addEventListener(type, executionExplore, { capture: true });
 function bindForwardControls() {
+    mount.querySelectorAll<HTMLButtonElement>('[data-live-child]').forEach(button => button.addEventListener('click', () => {
+      const source = forwardDriver.progress?.training?.sourceRunId;
+      if (source) void inspect(source, { kind: 'node', nodeId: Number(button.dataset.liveChild) }, 'Actual processed contribution');
+    }));
+    mount.querySelector('#step-learning')?.addEventListener('click', () => void startForward(true));
+    mount.querySelector('#execution-accept')?.addEventListener('click', () => void forwardDriver.acceptUpdate());
+    mount.querySelector('#execution-pin')?.addEventListener('click', () => { syncTrainingPin(); forwardDriver.stopAtPin = true; forwardDriver.continue(); });
     mount.querySelector('#step-prediction')?.addEventListener('click', () => void startForward());
-    mount.querySelector('#execution-next')?.addEventListener('click', () => void forwardDriver.next());
-    mount.querySelector('#execution-continue')?.addEventListener('click', () => forwardDriver.continue());
+    mount.querySelector('#execution-next')?.addEventListener('click', () => { syncTrainingPin(); void forwardDriver.next(); });
+    mount.querySelector('#execution-continue')?.addEventListener('click', () => { syncTrainingPin(); forwardDriver.continue(); });
     mount.querySelector('#execution-pause')?.addEventListener('click', () => forwardDriver.pause());
     mount.querySelector('#execution-cancel')?.addEventListener('click', () => void cancelForward());
     mount.querySelector('#execution-follow')?.addEventListener('change', event => { forwardDriver.follow = (event.target as HTMLInputElement).checked; });
 }
-async function startForward() {
+function syncTrainingPin() {
+  const pin = spatialPresenter.pin; let index = 0;
+  for (const name of fixture.parameterOrder) for (let row = 0; row < fixture.parameters[name as keyof typeof fixture.parameters].length; row++) for (let column = 0; column < fixture.parameters[name as keyof typeof fixture.parameters][row].length; column++) {
+    if (pin.name === name && pin.row === row && pin.column === column) forwardDriver.pin = index;
+    index++;
+  }
+}
+async function startForward(training = false) {
   if (busy || !ready || forwardDriver.active || evidenceBytes >= SESSION_BUDGET) return;
+  beforeForwardLocation = spatialPresenter.captureLocation(); beforeForwardExperiment = spatialExperimentId;
   spatialPresenter.invalidate(); spatialPresenter.learningStage = undefined; spatialExperimentId = '';
   clearDisplayedInspection(); operation++; beforeForward = result; result = undefined; player = undefined; error = ''; status = 'Preparing captured input and checkpoint…';
   spatialSelection.query = 0; spatialSelection.key = 0; spatialSelection.head = 0;
-  await forwardDriver.start(documentText);
+  syncTrainingPin(); await forwardDriver.start(documentText, training);
 }
 async function cancelForward() { await forwardDriver.cancel(); }
 function discardForward() {
   if (!forwardDriver.active) return;
-  forwardDriver.discard(); result = beforeForward; beforeForward = undefined;
+  forwardDriver.discard(); result = beforeForward; beforeForward = undefined; restoreExecutionView();
   player = result && new TracePlayer(result.run); clearDisplayedInspection();
 }
 
@@ -740,7 +765,7 @@ function selectGuidedComparison(): boolean {
 }
 
 // Stable callbacks do not retain a render frame (including its previously focused DOM).
-function spatialSelectionChanged(){if(forwardDriver.active)forwardDriver.follow=false;syncSpatialSelection();clearDisplayedInspection();}
+function spatialSelectionChanged(){if(forwardDriver.active){forwardDriver.follow=false;const previous=forwardDriver.pin;syncTrainingPin();if(previous!==forwardDriver.pin)void forwardDriver.inspectPin(forwardDriver.pin).catch(()=>{});}syncSpatialSelection();clearDisplayedInspection();}
 function selectExplanationPhase(phase:string){
   const m=spatialLearningModel();
   if(m.available){const id=phase==='after'?m.experiment.afterRunId:m.experiment.trainingRunId;if(result?.run.manifest.runId!==id)selectRun(id);}
@@ -2145,6 +2170,7 @@ async function inspect(
     render();
     return;
   }
+  const executionRevision = forwardDriver.progress?.sequence;
   const guideGeneration=spatialPresenter.playback.generation;
   const current = ++inspectionOperation;
   const cacheKey = `${sourceRunId}:${JSON.stringify(target)}`;
@@ -2165,7 +2191,7 @@ async function inspect(
         target,
       });
       if (
-        current !== inspectionOperation ||
+        current !== inspectionOperation || executionRevision !== forwardDriver.progress?.sequence ||
         (spatialActive && guideGeneration!==spatialPresenter.playback.generation) ||
         inspectionBinding !== binding ||
         !inspectionIsCurrent(binding, inspectionSelection(), operation)
@@ -2174,7 +2200,7 @@ async function inspect(
       if (response.status !== "inspection")
         throw new Error("Worker did not return inspection evidence");
       evidence = response.inspection;
-      if (evidence.availability === "not_captured" && sourceRunId !== forwardDriver.progress?.executionId) {
+      if (evidence.availability === "not_captured" && sourceRunId !== (forwardDriver.progress?.training?.sourceRunId ?? forwardDriver.progress?.executionId)) {
         binding.verification = "VERIFYING";
         binding.origin = "RECOMPUTED";
         render();
@@ -2190,7 +2216,7 @@ async function inspect(
         evidence = await inspector.inspect({ snapshot, run, target, backward });
       }
       if (
-        current !== inspectionOperation ||
+        current !== inspectionOperation || executionRevision !== forwardDriver.progress?.sequence ||
         (spatialActive && guideGeneration!==spatialPresenter.playback.generation) ||
         inspectionBinding !== binding ||
         !inspectionIsCurrent(binding, inspectionSelection(), operation)
@@ -2199,7 +2225,7 @@ async function inspect(
       if (evidence.sourceRunId !== sourceRunId)
         throw new Error("Inspection belongs to a different run");
       if (
-        sourceRunId !== forwardDriver.progress?.executionId && evidence.availability === "available" &&
+        sourceRunId !== (forwardDriver.progress?.training?.sourceRunId ?? forwardDriver.progress?.executionId) && evidence.availability === "available" &&
         (evidence.provenance !== "recomputed" ||
           evidence.verification?.verified)
       ) {
@@ -2210,7 +2236,7 @@ async function inspect(
       }
     }
     if (
-      current !== inspectionOperation ||
+      current !== inspectionOperation || executionRevision !== forwardDriver.progress?.sequence ||
         (spatialActive && guideGeneration!==spatialPresenter.playback.generation) ||
       inspectionBinding !== binding ||
       !inspectionIsCurrent(binding, inspectionSelection(), operation)
@@ -2236,7 +2262,7 @@ async function inspect(
       path ?? (evidence.graph?.roots.length ? [evidence.graph.roots[0]!] : []);
   } catch (failure) {
     if (
-      current !== inspectionOperation ||
+      current !== inspectionOperation || executionRevision !== forwardDriver.progress?.sequence ||
         (spatialActive && guideGeneration!==spatialPresenter.playback.generation) ||
       inspectionBinding !== binding ||
       !inspectionIsCurrent(binding, inspectionSelection(), operation)

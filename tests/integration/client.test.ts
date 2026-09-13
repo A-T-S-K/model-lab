@@ -33,3 +33,23 @@ test('reset cancels old work and ignores both stale replies and stale worker err
     await cancel; client.dispose();
   } finally { globalThis.Worker = OriginalWorker; }
 });
+
+test('T06 client recovers last matching receipt, not an unacknowledged candidate after worker death',async()=>{
+ const OriginalWorker=globalThis.Worker,workers:any[]=[];
+ class FakeWorker {onmessage:any;onerror:any;sent:any[]=[];constructor(){workers.push(this);}postMessage(m:any){this.sent.push(m);}terminate(){}}
+ globalThis.Worker=FakeWorker as any;
+ try {
+  const client=new ModelWorkerClient(),initial={id:'accepted-0',state:{}} as any;
+  const init=client.initialize();workers[0].onmessage({data:{...workers[0].sent[0],status:'ready',archivedSnapshot:initial,snapshot:{}}});await init;
+  const accept=client.request({command:'acceptTraining',executionId:'candidate',candidateId:'candidate-1'});const rejected=assert.rejects(accept,/worker died/);
+  // Neither wrong generation nor wrong request is a matching receipt.
+  const response={...workers[0].sent[1],status:'result',result:{snapshots:[initial,{id:'candidate-1'}]}};
+  workers[0].onmessage({data:{...response,generationId:99}});workers[0].onmessage({data:{...response,runId:'unknown'}});
+  workers[0].onerror({message:'worker died'});await rejected;
+  const recovery=client.cancel();assert.equal(workers[1].sent[0].command,'restore');assert.equal(workers[1].sent[0].snapshot.id,'accepted-0');
+  workers[1].onmessage({data:{...workers[1].sent[0],status:'ready',archivedSnapshot:initial,snapshot:{}}});await recovery;
+  const accepted=client.request({command:'acceptTraining',executionId:'new',candidateId:'candidate-1'});
+  workers[1].onmessage({data:{...workers[1].sent[1],status:'result',result:{snapshots:[initial,{id:'candidate-1'}]}}});await accepted;
+  const retained=client.cancel();assert.equal(workers[2].sent[0].snapshot.id,'candidate-1');workers[2].onmessage({data:{...workers[2].sent[0],status:'ready',snapshot:{}}});await retained;client.dispose();
+ }finally{globalThis.Worker=OriginalWorker;}
+});

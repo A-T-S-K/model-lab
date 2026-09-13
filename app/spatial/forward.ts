@@ -49,7 +49,7 @@ export function forwardReadModel(run: RecordedRun, snapshot: ArchivedSnapshot | 
     if(!execution) return 'not_captured';
     const plan=forwardBoundaries({config:{nLayer:Number(architecture.nLayer),nHead:heads}},input);
     const index=plan.findIndex(b=>b.kind===address.kind&&b.token===address.token&&(b.head===undefined||b.head===address.head));
-    return index>=0&&index<execution.sequence ? 'budget_exceeded' : 'pending';
+    return index>=0&&index<(execution.training ? execution.training.phase.endsWith('forward') ? execution.training.count : plan.length : execution.sequence) ? 'budget_exceeded' : 'pending';
   };
   const explain=(address:Address,element:number)=>{
     const definition=operations.find(o=>o.kind===address.kind), output=values(address), deps=upstream(address);
