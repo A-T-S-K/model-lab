@@ -157,3 +157,4 @@ body.spatial-mode { background:#0B0F12; color:#F2F5F7; font-family:Plex,sans-ser
 .overview .region-short { display:inline; }
 .overview .learning-world [data-learning-stage]>text:not(.learning-overview-title) { display:none; }
 .overview .learning-world .learning-overview-title { display:block; }
+.spatial-world .learning-value { font-size:26px; }
