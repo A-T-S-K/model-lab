@@ -167,3 +167,5 @@ body.spatial-mode { background:#0B0F12; color:#F2F5F7; font-family:Plex,sans-ser
 .component-guide path{fill:none;stroke:#f0d395;stroke-width:1.5}
 .component-guide text{fill:#f0d395;font-size:18px}
 .spatial-header{flex-wrap:wrap}
+
+.execution-frontier .field{stroke:#f0d395;stroke-width:2}

@@ -165,7 +165,7 @@ function forwardChanged() {
     result = forwardDriver.preview; player = new TracePlayer(result.run);
     const boundary = forwardDriver.progress?.last;
     if (boundary && forwardDriver.follow) spatialPresenter.followBoundary(boundary);
-    status = `${forwardDriver.phase === 'pausing' ? 'Pausing · admitted operator may finish' : forwardDriver.phase === 'running' ? 'Running · paced operator execution' : forwardDriver.phase === 'starting' ? 'Preparing input and checkpoint' : forwardDriver.phase === 'cancelling' ? 'Cancelling execution' : 'Paused · no future permits'} · ${forwardDriver.progress?.sequence}/${forwardDriver.progress?.total}`;
+    status = `${forwardDriver.phase === 'pausing' ? 'Pausing · admitted operator may finish' : forwardDriver.pending && forwardDriver.phase === 'paused' ? 'Executing one admitted operator' : forwardDriver.phase === 'running' ? 'Running · paced operator execution' : forwardDriver.phase === 'starting' ? 'Preparing input and checkpoint' : forwardDriver.phase === 'cancelling' ? 'Cancelling execution' : 'Paused · no future permits'} · ${forwardDriver.progress?.sequence}/${forwardDriver.progress?.total}`;
     syncSpatialSelection();
   } else if (!forwardDriver.active) {
     result = beforeForward; beforeForward = undefined; player = result && new TracePlayer(result.run);
@@ -185,10 +185,18 @@ function executionExplore(event: Event) {
   }
 }
 for (const type of ['pointerdown','wheel','keydown','change','click']) mount.addEventListener(type, executionExplore, { capture: true });
+function bindForwardControls() {
+    mount.querySelector('#step-prediction')?.addEventListener('click', () => void startForward());
+    mount.querySelector('#execution-next')?.addEventListener('click', () => void forwardDriver.next());
+    mount.querySelector('#execution-continue')?.addEventListener('click', () => forwardDriver.continue());
+    mount.querySelector('#execution-pause')?.addEventListener('click', () => forwardDriver.pause());
+    mount.querySelector('#execution-cancel')?.addEventListener('click', () => void cancelForward());
+    mount.querySelector('#execution-follow')?.addEventListener('change', event => { forwardDriver.follow = (event.target as HTMLInputElement).checked; });
+}
 async function startForward() {
   if (busy || !ready || forwardDriver.active || evidenceBytes >= SESSION_BUDGET) return;
   spatialPresenter.invalidate(); spatialPresenter.learningStage = undefined; spatialExperimentId = '';
-  clearDisplayedInspection(); operation++; beforeForward = result; error = '';
+  clearDisplayedInspection(); operation++; beforeForward = result; result = undefined; player = undefined; error = ''; status = 'Preparing captured input and checkpoint…';
   spatialSelection.query = 0; spatialSelection.key = 0; spatialSelection.head = 0;
   await forwardDriver.start(documentText);
 }
@@ -513,12 +521,7 @@ function render(): void {
     bind();
     spatialPresenter.bind(model, spatialSelectionChanged, render, selectExplanationPhase);
     bindSpatialLearning();
-    mount.querySelector('#step-prediction')?.addEventListener('click', () => void startForward());
-    mount.querySelector('#execution-next')?.addEventListener('click', () => void forwardDriver.next());
-    mount.querySelector('#execution-continue')?.addEventListener('click', () => forwardDriver.continue());
-    mount.querySelector('#execution-pause')?.addEventListener('click', () => forwardDriver.pause());
-    mount.querySelector('#execution-cancel')?.addEventListener('click', () => void cancelForward());
-    mount.querySelector('#execution-follow')?.addEventListener('change', event => { forwardDriver.follow = (event.target as HTMLInputElement).checked; });
+    bindForwardControls();
     mount.querySelectorAll<HTMLElement>("[data-scroll-region]").forEach(element => {
       const scroll = regionScroll.get(element.dataset.scrollRegion);
       if (scroll && priorSpatialSelection === mount.querySelector(".context-lens")?.getAttribute("data-selection")) { element.scrollTop = scroll.top; element.scrollLeft = scroll.left; }

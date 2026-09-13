@@ -82,3 +82,19 @@ test('E07 HTTP input/switch/clear cancellation, paused history recovery and hidd
   await expect(page.locator('#step-prediction')).toBeEnabled();await expect(page.locator('#execution-controls')).toHaveCount(0);
  }
 });
+
+test('E07 bounded execution DOM/listener sample and worker failure while paused',async({page})=>{
+ test.setTimeout(90000);await mkdir(directory,{recursive:true});
+ await page.addInitScript(()=>{const w=window as any;w.liveWorkers=[];const Native=Worker;w.Worker=class extends Native{constructor(url:any,options:any){super(url,options);w.liveWorkers.push(this);}};});
+ await page.goto('/?presentation=spatial');await expect(page.locator('#step-prediction')).toBeEnabled();await page.locator('#predict').click();await expect(page.locator('#step-prediction')).toBeEnabled();
+ await page.locator('#document').fill('');const cdp=await page.context().newCDPSession(page);
+ const sample=async()=>{await cdp.send('HeapProfiler.collectGarbage');return {dom:await cdp.send('Memory.getDOMCounters'),heap:await cdp.send('Runtime.getHeapUsage')};};
+ const batch=async()=>{for(let cycle=0;cycle<6;cycle++){await page.locator('#step-prediction').click();await expect(page.locator('#execution-controls')).toHaveAttribute('data-sequence','0');await next(page,6);if(cycle%3===0){await page.locator('#execution-continue').click();await expect(page.locator('#step-prediction')).toBeEnabled({timeout:15000});}else await page.locator('#execution-cancel').click();await expect(page.locator('#step-prediction')).toBeEnabled();}};
+ await batch();const warm=await sample(),start=Date.now();await batch();const middle=await sample();await batch();const end=await sample();
+ expect(end.dom.jsEventListeners).toBeLessThanOrEqual(middle.dom.jsEventListeners+10);expect(end.dom.nodes).toBeLessThanOrEqual(middle.dom.nodes+100);
+ await writeFile(`${directory}/execution-resources.json`,JSON.stringify({browser:page.context().browser()?.version(),procedure:'6 warmup then 2 x 6 cycles; each starts and advances 6, every third finishes, others cancel; GC at common completed-view endpoints. History intentionally retains completed predictions.',elapsed12CyclesMs:Date.now()-start,warm,middle,end},null,2));
+ await page.locator('#step-prediction').click();await expect(page.locator('#execution-controls')).toHaveAttribute('data-sequence','0');await next(page,1);
+ await page.evaluate(()=>{const worker=(window as any).liveWorkers[0];worker.terminate();worker.dispatchEvent(new ErrorEvent('error',{message:'test paused worker failure'}));});
+ await expect(page.getByTestId('status')).toContainText('Worker failed');await expect(page.locator('#execution-controls')).toHaveCount(0);
+ await page.locator('#clear-session').click();await expect(page.locator('#step-prediction')).toBeEnabled();
+});

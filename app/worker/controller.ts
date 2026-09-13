@@ -162,7 +162,7 @@ export class ModelSession {
       this.contexts.set(afterRun.manifest.runId, after.context);
       return response;
     } catch (error) {
-      if (request.command === 'advanceForward' && !/Stale execution|Duplicate or out-of-order permit/.test(String(error))) this.active = undefined;
+      if (request.command === 'advanceForward' && request.sessionId === this.sessionId && request.generationId === this.generationId && this.active?.id === request.executionId && !/Stale execution|Duplicate or out-of-order permit/.test(String(error))) this.active = undefined;
       if (rollback) {
         const restored = restoreTraining(rollback);
         this.model = restored.model; this.optimizer = restored.optimizer;

@@ -57,6 +57,8 @@ test('E01–E05 worker permits, read-only inspection, exact all-vector equivalen
       assert.equal((await s.handle(request)).status,'error');
       assert.equal((await s.handle({...request,permit:permit+2})).status,'error');
       assert.equal((await s.handle({...request,executionId:'stale',permit:permit+1})).status,'error');
+      assert.equal((await s.handle({...request,generationId:-1,permit:permit+1})).status,'error');
+      assert.equal((await s.handle({...request,sessionId:'other',permit:permit+1})).status,'error');
       if(p.last?.kind==='q') {
         assert(!all.some(a=>a.kind==='k'&&a.concept.token===p.last!.token));
         const art=all.at(-1)!;
@@ -85,4 +87,14 @@ test('E06–E07 cancel/reset/stale generations preserve training state and ordin
   assert.equal((await a.handle({...tag,runId:'stale',command:'advanceForward',executionId:'unfinished',permit:1})).status,'error');
   const after=result(await a.handle({...tag,generationId:1,runId:'fresh',command:'predict',document:'abca'}));
   assert.deepEqual(after.snapshots[0].state,snapshotTraining(model(),createOptimizerState(model(),fixture.optimizer)));
+});
+
+test('E07 bounded repeated worker start/advance/cancel/finish releases cursors and retains at most one prediction context',async()=>{
+ const s=await session();const internals=s as unknown as {active?:{context:unknown};contexts:Map<string,unknown>};
+ for(let cycle=0;cycle<30;cycle++) {
+  const id=`cycle${cycle}`;progress(await s.handle({...tag,runId:id,command:'startForward',document:''}));assert(internals.active);
+  for(let permit=1;permit<=(cycle%3===0?24:6);permit++)await s.handle({...tag,runId:`${id}-${permit}`,command:'advanceForward',executionId:id,permit});
+  if(cycle%3!==0)await s.handle({...tag,runId:`cancel${cycle}`,command:'cancelForward',executionId:id});
+  assert.equal(internals.active,undefined);assert(internals.contexts.size<=1);
+ }
 });
