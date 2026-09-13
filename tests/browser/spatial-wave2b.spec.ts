@@ -34,6 +34,7 @@ test('T09 real partial gradient → proposal → candidate → acceptance and se
  await continueUntil(page,'backward');
  await page.locator('#execution-pin').click();await expect(page.getByTestId('live-contribution')).toBeVisible({timeout:30000});await expect(page.locator('#execution-next')).toBeEnabled();
  const first=await page.getByTestId('live-gradient').getAttribute('data-value');
+ await expect(page.locator('[data-live-gradient-value]')).toHaveCount(3);await expect(page.locator('[data-live-gradient-value]').last()).toHaveAttribute('data-live-gradient-value',first!);
  await page.screenshot({path:`${directory}/partial-1920.png`});await page.waitForTimeout(2500);
  await page.locator('[data-live-child]').click();await expect(page.locator('#microscope')).toContainText('OBSERVED');await step(page);await expect(page.locator('#microscope')).not.toContainText('OBSERVED');await page.locator('#execution-follow').check();
  await page.locator('#execution-pin').click();await expect(page.locator('#execution-next')).toBeEnabled();
