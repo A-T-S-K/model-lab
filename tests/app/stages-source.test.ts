@@ -24,14 +24,14 @@ test('every displayed stage maps to a real bundled implementation symbol', () =>
     assert.equal(mapping.status, 'mapped', kind);
     if (mapping.status !== 'mapped') continue;
     const source = readFileSync(new URL(`../../${mapping.file}`, import.meta.url), 'utf8');
-    const marker = mapping.file === 'model/value.ts' ? `  ${mapping.symbol}(` : `export function ${mapping.symbol}(`;
+    const marker = mapping.file === 'model/value.ts' ? `  ${mapping.symbol}(` : `export function${mapping.symbol === 'forwardSequence' ? '*' : ''} ${mapping.symbol}(`;
     assert.ok(source.includes(marker), `${kind}: ${mapping.file} ${mapping.symbol}`);
   }
   assert.deepEqual(sourceMapping('gradient'), sourceMapping('backward'));
   const combined = sourceMapping('attentionOutput');
   assert.equal(combined.status, 'mapped');
   if (combined.status === 'mapped') {
-    assert.equal(combined.file, 'model/microgpt.ts'); assert.equal(combined.symbol, 'forward');
+    assert.equal(combined.file, 'model/microgpt.ts'); assert.equal(combined.symbol, 'forwardSequence');
     assert.match(readFileSync(new URL('../../model/microgpt.ts', import.meta.url), 'utf8'), /combinedHeads\.push\(\.\.\.headOutput\)/);
   }
 });

@@ -73,6 +73,13 @@ export class TraceRecorder {
     }));
   }
 
+  /** Immutable newly produced artifacts only; never finalize or retain partial frames. */
+  delta(from: number): { artifacts: readonly Artifact[]; capture: RecordedRun['capture'] } {
+    return { artifacts: this.artifacts.slice(from), capture: {
+      storedValues: this.storedValues, droppedArtifacts: this.droppedArtifacts, budgetExceeded: this.budgetExceeded,
+    } };
+  }
+
   finish(): RecordedRun {
     this.finished ??= immutableCopy({
       formatVersion: 1 as const, manifest: this.manifest, artifacts: this.artifacts,

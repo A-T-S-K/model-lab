@@ -1,4 +1,5 @@
-import type { RecordedRun } from '../../trace/types.js';
+import type { ForwardBoundary } from '../../model/microgpt.js';
+import type { Artifact, RecordedRun } from '../../trace/types.js';
 import type { TrainingSnapshot } from '../../model/state.js';
 import type { TrainStepResult } from '../../model/training.js';
 import type { ArchivedSnapshot, LearningExperiment } from '../../archive/session.js';
@@ -10,6 +11,9 @@ export type WorkerRequest = RequestTag & (
   { command: 'initialize' | 'reset' } |
   { command: 'restore'; snapshot: ArchivedSnapshot } |
   { command: 'predict' | 'train'; document: string } |
+  { command: 'startForward'; document: string } |
+  { command: 'advanceForward'; executionId: string; permit: number } |
+  { command: 'cancelForward'; executionId: string } |
   { command: 'inspect'; sourceRunId: string; target: InspectionTarget } |
   { command: 'detail'; layer: number; head: number; query: number; key: number } |
   { command: 'cancel' }
@@ -28,8 +32,16 @@ export interface RunResult {
   runs: RecordedRun[];
   experiment?: LearningExperiment;
 }
+/** Transient envelope: artifacts retain the ordinary vocabulary, never enter history until finish. */
+export interface ForwardProgress {
+  executionId: string; sequence: number; total: number;
+  last?: ForwardBoundary; next?: ForwardBoundary;
+  artifacts: readonly Artifact[]; capture: RecordedRun['capture'];
+  start?: { manifest: RecordedRun['manifest']; snapshot: ArchivedSnapshot; tokenIds: number[]; targetIds: number[]; trainingStep: number };
+}
 export type WorkerResponse = RequestTag & (
   { status: 'ready'; snapshot: TrainingSnapshot; archivedSnapshot: ArchivedSnapshot } |
+  { status: 'forward'; progress: ForwardProgress } |
   { status: 'result'; result: RunResult } |
   { status: 'detail'; detail: AttentionDetail } |
   { status: 'inspection'; inspection: InspectionResult } |

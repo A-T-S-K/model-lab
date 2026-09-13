@@ -1,4 +1,5 @@
 import "./style.css";
+import { ForwardDriver } from "./worker/forward-driver.js";
 import "./spatial/style.css";
 import { spatialReadModel, type SpatialSelection } from "./spatial/bindings.js";
 import { learningReadModel, resolveParameter, type LearningStage } from "./spatial/learning.js";
@@ -142,6 +143,62 @@ const mount = document.querySelector<HTMLDivElement>("#app")!;
 let documentText = fixture.document;
 let result: RunResult | undefined;
 let player: TracePlayer | undefined;
+let beforeForward: RunResult | undefined;
+const forwardDriver = new ForwardDriver(client, forwardChanged, async incoming => {
+  beforeForward = undefined;
+  await execute("predict", 1, false, incoming);
+}, failure => {
+  result = beforeForward; beforeForward = undefined;
+  player = result && new TracePlayer(result.run);
+  clearDisplayedInspection();
+  status = "Execution failed · prior completed evidence preserved";
+  error = String(failure); render();
+});
+client.onFailure = failure => {
+  if (!forwardDriver.active) return;
+  discardForward(); ready = false;
+  status = "Worker failed · partial prediction released · Reset model or Clear session to restart";
+  error = failure.message; render();
+};
+function forwardChanged() {
+  if (forwardDriver.preview) {
+    result = forwardDriver.preview; player = new TracePlayer(result.run);
+    const boundary = forwardDriver.progress?.last;
+    if (boundary && forwardDriver.follow) spatialPresenter.followBoundary(boundary);
+    status = `${forwardDriver.phase === 'pausing' ? 'Pausing · admitted operator may finish' : forwardDriver.phase === 'running' ? 'Running · paced operator execution' : forwardDriver.phase === 'starting' ? 'Preparing input and checkpoint' : forwardDriver.phase === 'cancelling' ? 'Cancelling execution' : 'Paused · no future permits'} · ${forwardDriver.progress?.sequence}/${forwardDriver.progress?.total}`;
+    syncSpatialSelection();
+  } else if (!forwardDriver.active) {
+    result = beforeForward; beforeForward = undefined; player = result && new TracePlayer(result.run);
+    status = "Execution cancelled · prior completed evidence preserved";
+    clearDisplayedInspection();
+  }
+  render();
+}
+function executionExplore(event: Event) {
+  if (!forwardDriver.active) return;
+  const target = event.target as Element;
+  if (!target.closest('.world-workspace,.spatial-selection,#spatial-home,#spatial-back,#spatial-focus,#spatial-lens') || target.closest('#execution-controls')) return;
+  forwardDriver.follow = false;
+  if (forwardDriver.phase === 'running') {
+    // Defer render until the current gesture/selection handler has used its target.
+    queueMicrotask(() => forwardDriver.pause());
+  }
+}
+for (const type of ['pointerdown','wheel','keydown','change','click']) mount.addEventListener(type, executionExplore, { capture: true });
+async function startForward() {
+  if (busy || !ready || forwardDriver.active || evidenceBytes >= SESSION_BUDGET) return;
+  spatialPresenter.invalidate(); spatialPresenter.learningStage = undefined; spatialExperimentId = '';
+  clearDisplayedInspection(); operation++; beforeForward = result; error = '';
+  spatialSelection.query = 0; spatialSelection.key = 0; spatialSelection.head = 0;
+  await forwardDriver.start(documentText);
+}
+async function cancelForward() { await forwardDriver.cancel(); }
+function discardForward() {
+  if (!forwardDriver.active) return;
+  forwardDriver.discard(); result = beforeForward; beforeForward = undefined;
+  player = result && new TracePlayer(result.run); clearDisplayedInspection();
+}
+
 let selectedToken = 0;
 let selectedKind = "embeddingNorm";
 let layer = 0;
@@ -447,15 +504,21 @@ function render(): void {
     const model = result && source && spatialReadModel(result.run, sourceSnapshot(source.sourceSnapshotId ?? ""), source, spatialSelection);
     const learning = spatialLearningModel();
     mount.innerHTML = spatialPresenter.render(model, {
-      document: documentText, busy, ready, status, error,
+      document: documentText, busy, ready, status, error, execution: forwardDriver.active ? forwardDriver : undefined,
       learning, experimentId: spatialExperimentId, liveStep: liveTrainingStep,
       experiments: [...archive.learningExperiments.values()].map(e => ({id:e.id,step:e.update.step+1})),
-      canLearn: !!result && result.run.manifest.runId === liveRunId && source?.capturedDocument === documentText && !busy && ready,
+      canLearn: !forwardDriver.active && !!result && result.run.manifest.runId === liveRunId && source?.capturedDocument === documentText && !busy && ready,
       scalar: microscopeView(inspection, inspectionPath, inspectionLabel, inspectionPending, inspectionWhole, inspectionRelationship(), inspectionBinding),
     });
     bind();
     spatialPresenter.bind(model, spatialSelectionChanged, render, selectExplanationPhase);
     bindSpatialLearning();
+    mount.querySelector('#step-prediction')?.addEventListener('click', () => void startForward());
+    mount.querySelector('#execution-next')?.addEventListener('click', () => void forwardDriver.next());
+    mount.querySelector('#execution-continue')?.addEventListener('click', () => forwardDriver.continue());
+    mount.querySelector('#execution-pause')?.addEventListener('click', () => forwardDriver.pause());
+    mount.querySelector('#execution-cancel')?.addEventListener('click', () => void cancelForward());
+    mount.querySelector('#execution-follow')?.addEventListener('change', event => { forwardDriver.follow = (event.target as HTMLInputElement).checked; });
     mount.querySelectorAll<HTMLElement>("[data-scroll-region]").forEach(element => {
       const scroll = regionScroll.get(element.dataset.scrollRegion);
       if (scroll && priorSpatialSelection === mount.querySelector(".context-lens")?.getAttribute("data-selection")) { element.scrollTop = scroll.top; element.scrollLeft = scroll.left; }
@@ -674,7 +737,7 @@ function selectGuidedComparison(): boolean {
 }
 
 // Stable callbacks do not retain a render frame (including its previously focused DOM).
-function spatialSelectionChanged(){syncSpatialSelection();clearDisplayedInspection();}
+function spatialSelectionChanged(){if(forwardDriver.active)forwardDriver.follow=false;syncSpatialSelection();clearDisplayedInspection();}
 function selectExplanationPhase(phase:string){
   const m=spatialLearningModel();
   if(m.available){const id=phase==='after'?m.experiment.afterRunId:m.experiment.trainingRunId;if(result?.run.manifest.runId!==id)selectRun(id);}
@@ -748,7 +811,8 @@ function syncSpatialSelection(): void {
 function bind(): void {
   if (spatialEnabled) {
     if (!spatialActive) mount.insertAdjacentHTML("beforeend", '<button id="presentation-toggle" class="classic-toggle">Spatial presentation</button>');
-    mount.querySelector("#presentation-toggle")?.addEventListener("click", () => {
+    mount.querySelector("#presentation-toggle")?.addEventListener("click", async () => {
+      if (forwardDriver.active) await cancelForward();
       spatialPresenter.invalidate();
       spatialActive = !spatialActive;
       if (spatialActive) {
@@ -1006,9 +1070,11 @@ function bind(): void {
     ?.addEventListener("click", () => void reset(true));
   document
     .querySelector<HTMLInputElement>("#document")
-    ?.addEventListener("input", (event) => {
+    ?.addEventListener("input", async (event) => {
+      const edited = (event.target as HTMLInputElement).value;
+      if (forwardDriver.active) await cancelForward();
       spatialPresenter.invalidate();
-      documentText = (event.target as HTMLInputElement).value;
+      documentText = edited;
       render();
     });
   document
@@ -1365,8 +1431,9 @@ async function execute(
   command: "predict" | "train",
   count = 1,
   guided = false,
+  completedForward?: RunResult,
 ): Promise<void> {
-  if (busy || !ready) return;
+  if (busy || !ready || forwardDriver.active) return;
   spatialPresenter.invalidate();
   if (evidenceBytes >= SESSION_BUDGET) {
     error =
@@ -1420,9 +1487,8 @@ async function execute(
       }
       pendingModelCommand = command;
       acceptedThisIteration = undefined;
-      const response = await client.request({
-        command,
-        document: executionDocument,
+      const response = completedForward ? { status: "result" as const, result: completedForward } : await client.request({
+        command, document: executionDocument,
       });
       if (currentOperation !== operation) {
         // Cancellation may restore a reply accepted by the client after its UI
@@ -1559,6 +1625,7 @@ async function execute(
 }
 
 async function reset(cancelled: boolean, clear = false): Promise<void> {
+  discardForward();
   spatialPresenter.invalidate();
   if (cancelled && !busy && inspectionPending) {
     ++inspectionOperation;
@@ -2104,7 +2171,7 @@ async function inspect(
       if (response.status !== "inspection")
         throw new Error("Worker did not return inspection evidence");
       evidence = response.inspection;
-      if (evidence.availability === "not_captured") {
+      if (evidence.availability === "not_captured" && sourceRunId !== forwardDriver.progress?.executionId) {
         binding.verification = "VERIFYING";
         binding.origin = "RECOMPUTED";
         render();
@@ -2129,7 +2196,7 @@ async function inspect(
       if (evidence.sourceRunId !== sourceRunId)
         throw new Error("Inspection belongs to a different run");
       if (
-        evidence.availability === "available" &&
+        sourceRunId !== forwardDriver.progress?.executionId && evidence.availability === "available" &&
         (evidence.provenance !== "recomputed" ||
           evidence.verification?.verified)
       ) {
@@ -2301,6 +2368,7 @@ window.addEventListener(
 );
 window.setInterval(checkExhibitIdle, 1000);
 document.addEventListener("visibilitychange", () => {
+  if (document.hidden && forwardDriver.active) forwardDriver.pause();
   if (!document.hidden) checkExhibitIdle();
 });
 window.addEventListener(

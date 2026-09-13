@@ -4,6 +4,8 @@ type Command = WorkerRequest extends infer R ? R extends WorkerRequest ? Omit<R,
 
 /** Termination cancels synchronous scalar work immediately; generations reject late replies. */
 export class ModelWorkerClient {
+  onFailure?: (error: Error) => void;
+  private failure?: Error;
   readonly sessionId = crypto.randomUUID();
   private generationId = 0;
   private sequence = 0;
@@ -28,10 +30,13 @@ export class ModelWorkerClient {
       if (worker !== this.worker) return;
       for (const pending of this.pending.values()) pending.reject(new Error(event.message));
       this.pending.clear();
+      this.failure = new Error(event.message);
+      this.onFailure?.(this.failure);
     };
     return worker;
   }
   request(command: Command): Promise<WorkerResponse> {
+    if (this.failure) return Promise.reject(this.failure);
     const runId = `${this.sessionId}:${this.generationId}:${++this.sequence}`;
     return new Promise((resolve, reject) => {
       this.pending.set(runId, { resolve, reject });
@@ -43,7 +48,7 @@ export class ModelWorkerClient {
     this.worker.terminate();
     for (const pending of this.pending.values()) pending.reject(new Error('Run cancelled by reset'));
     this.pending.clear(); this.generationId++;
-    this.worker = this.spawn();
+    this.failure = undefined; this.worker = this.spawn();
     return snapshot ? this.request({ command: 'restore', snapshot }) : this.initialize();
   }
   cancel(): Promise<WorkerResponse> { return this.reset(this.completedSnapshot); }

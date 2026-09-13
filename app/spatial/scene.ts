@@ -1,3 +1,4 @@
+import type { ForwardProgress } from '../worker/protocol.js';
 import type { ForwardModel, Address } from "./forward.js";
 import { operations, parameterOwners, headKinds } from "./forward.js";
 import { probabilityColor, probabilitySimplex, project3 } from "./geometry.js";
@@ -15,7 +16,7 @@ export function stationFor(kind:string,head=0):Station {return stations.find(s=>
 export function reticle(x:number,y:number,w:number,h:number) {return `<path class="external-reticle" d="M${x-10} ${y+20} v-30 h30 M${x+w-20} ${y-10} h30 v30 M${x-10} ${y+h-20} v30 h30 M${x+w-20} ${y+h+10} h30 v-30"/>`;}
 const compact:Record<string,string>={tokenEmbedding:"TE",positionEmbedding:"PE",embeddingSum:"+",embeddingNorm:"RN",preAttentionNorm:"RN",q:"Q",k:"K",v:"V",attentionLogits:"s",attentionProbabilities:"α",headOutput:"Σ",attentionOutput:"∥",attentionProjection:"WO",attentionResidual:"+",preMlpNorm:"RN",mlpUp:"32",mlpRelu:"ReLU",mlpDown:"8",mlpResidual:"+",logits:"z",probabilities:"P"};
 const title:Record<string,string>={tokenEmbedding:"Token",positionEmbedding:"Position",embeddingSum:"Add",embeddingNorm:"RMSNorm",preAttentionNorm:"Pre-attn",q:"Q",k:"K",v:"V",attentionLogits:"Scores",attentionProbabilities:"Softmax",headOutput:"Σ αV",attentionOutput:"Concat",attentionProjection:"WO",attentionResidual:"Residual",preMlpNorm:"Pre-MLP",mlpUp:"Expand · 32",mlpRelu:"ReLU · 32",mlpDown:"Contract · 8",mlpResidual:"Residual",logits:"Logits",probabilities:"Probability"};
-export function sceneSvg(f:ForwardModel,selected:Address,key:number,parameter:string|undefined,labels:string[],query=selected.token,comparison?:{before:ForwardModel;after:ForwardModel},learningMarkup?:string) {
+export function sceneSvg(f:ForwardModel,selected:Address,key:number,parameter:string|undefined,labels:string[],query=selected.token,comparison?:{before:ForwardModel;after:ForwardModel},learningMarkup?:string,execution?:ForwardProgress,element=0) {
   const head=selected.head??0;
   const valuesFor=(s:Station,source=f)=>{
     const values=source.values({kind:s.kind,token:s.kind==="k"||s.kind==="v"?key:query,...(headKinds.has(s.kind)?{head:s.head}: {})});
@@ -24,18 +25,19 @@ export function sceneSvg(f:ForwardModel,selected:Address,key:number,parameter:st
   const line=(a:Station,b:Station,cls="activation")=>`<path data-edge-from="${a.kind}" data-edge-to="${b.kind}" class="${cls}" d="M${a.x+a.width} ${a.y+a.height/2} C${a.x+a.width+45} ${a.y+a.height/2} ${b.x-45} ${b.y+b.height/2} ${b.x} ${b.y+b.height/2}"/>`;
   const field=(s:Station)=>{
     const values=valuesFor(s,comparison?.before??f),afterValues=comparison?valuesFor(s,comparison.after):undefined,prob=s.kind.includes("Probabilities")||s.kind==="probabilities";
+    const availability=f.executionState({kind:s.kind,token:['k','v'].includes(s.kind)?key:query,...(headKinds.has(s.kind)?{head:s.head}:{})},execution);
     const domain=prob?1:Math.max(0,...[...(values??[]),...(afterValues??[])].map(Math.abs));
     const baseline=s.y+(prob?s.height-15:s.height/2), height=prob?s.height-32:s.height/2-18;
     const selectedHere=!parameter&&s.kind===selected.kind&&(s.head===undefined||s.head===head);
     const simplex=!comparison&&s.kind==="probabilities"&&values?.length===4?probabilitySimplex(values):undefined;
-    return `<g class="world-object" role="button" tabindex="0" data-world-kind="${s.kind}" ${s.head===undefined?"":`data-world-head="${s.head}"`} aria-label="${esc(title[s.kind])}${s.head===undefined?"":` head ${s.head}`}" aria-pressed="${selectedHere}"><title>${esc(operations.find(o=>o.kind===s.kind)?.purpose??s.kind)} ${prob?"Probability domain 0…1.":`Signed domain −${domain}…${domain}; independent per vector. Zero is the baseline.`}</title><text class="station-title" x="${s.x}" y="${s.y-22}">${esc(title[s.kind])}</text><text class="overview-label" x="${s.x}" y="${s.y-22}">${compact[s.kind]}</text>
+    return `<g class="world-object" role="button" tabindex="0" data-computation="${values?'computed':availability}" data-world-kind="${s.kind}" ${s.head===undefined?"":`data-world-head="${s.head}"`} aria-label="${esc(title[s.kind])}${s.head===undefined?"":` head ${s.head}`}" aria-pressed="${selectedHere}"><title>${esc(operations.find(o=>o.kind===s.kind)?.purpose??s.kind)} ${!values?"Output not available; no numerical domain yet.":prob?"Probability domain 0…1.":`Signed domain −${domain}…${domain}; independent per vector. Zero is the baseline.`}</title><text class="station-title" x="${s.x}" y="${s.y-22}">${esc(title[s.kind])}</text><text class="overview-label" x="${s.x}" y="${s.y-22}">${compact[s.kind]}</text>
     <path class="depth" d="M${s.x} ${s.y} l10 -10 h${s.width} l-10 10 M${s.x+s.width} ${s.y} l10 -10 v${s.height} l-10 10"/>
     <rect class="field" x="${s.x}" y="${s.y}" width="${s.width}" height="${s.height}" rx="3"/>
     ${simplex?simplexGlyph(simplex.vertices,simplex.point,s.x+s.width/2,s.y+75,39):`<path class="zero-axis" d="M${s.x+8} ${baseline} h${s.width-16}"/>`}
-    ${!values?`<text class="unavailable" x="${s.x+5}" y="${s.y+65}">unavailable</text>`:[values,...(afterValues?[afterValues]:[])].flatMap((endpoint,side)=>endpoint.map((v,i)=>{
+    ${!values?`<text class="unavailable" x="${s.x+5}" y="${s.y+65}">${availability==='pending'?`<tspan x="${s.x+5}">Not yet</tspan><tspan x="${s.x+5}" dy="20">computed</tspan>`:availability.replaceAll('_',' ')}</text>`:[values,...(afterValues?[afterValues]:[])].flatMap((endpoint,side)=>endpoint.map((v,i)=>{
       if(prob&&(v<0||v>1||!Number.isFinite(v))) return `<text class="unavailable" x="${s.x}" y="${s.y+80}">P outside [0,1]</text>`;
       const magnitude=domain===0?0:Math.abs(v)/domain*height;
-      return `<rect data-world-value="${v}" data-endpoint="${comparison?(side?"after":"before"):"selected"}" data-domain="${domain}" x="${s.x+10+(i+(comparison?side*.42:0))*(s.width-20)/values.length}" y="${simplex?s.y+s.height-10-v*35:baseline-(v>=0?magnitude:0)}" width="${Math.max(1,(s.width-20)/values.length*(comparison ? 0.45 : 0.62))}" height="${simplex?v*35:magnitude}" fill="${comparison?side?"#62C7E8":"#A7B2BC":prob?probabilityColor(v):v<0?"#DC7C7C":"#58B98C"}"><title>[${i}] ${v}</title></rect>`;
+      return `<rect data-component="${i}" data-world-value="${v}" data-endpoint="${comparison?(side?"after":"before"):"selected"}" data-domain="${domain}" x="${s.x+10+(i+(comparison?side*.42:0))*(s.width-20)/values.length}" y="${simplex?s.y+s.height-10-v*35:baseline-(v>=0?magnitude:0)}" width="${Math.max(1,(s.width-20)/values.length*(comparison ? 0.45 : 0.62))}" height="${simplex?v*35:magnitude}" fill="${comparison?side?"#62C7E8":"#A7B2BC":prob?probabilityColor(v):v<0?"#DC7C7C":"#58B98C"}"><title>[${i}] ${v}</title></rect>`;
     })).join("")}
     <text class="station-meta" x="${s.x}" y="${s.y+s.height+28}">${prob?`h${s.head??"—"} · 0…1`:`p${s.kind==="k"||s.kind==="v"?key:query} · ${values?.length??"NA"}${s.head===undefined?"":` / h${s.head}`}`}</text>${["k","v"].includes(s.kind)&&key>query?`<text class="station-meta" x="${s.x}" y="${s.y+s.height+55}">future · no edge</text>`:""}${selectedHere?reticle(s.x,s.y,s.width,s.height):""}</g>`;
   };
@@ -56,6 +58,14 @@ export function sceneSvg(f:ForwardModel,selected:Address,key:number,parameter:st
       const x=bankX[name],matrix=(comparison?.before??f).matrix(name),afterMatrix=comparison?.after.matrix(name),s=stationFor(kind),rows=matrix?.length??0,cols=matrix?.[0]?.length??0,max=Math.max(0,...[...(matrix?.flat()??[]),...(afterMatrix?.flat()??[])].map(Math.abs));
       return `<path class="parameter-edge" d="M${x+65} 965 C${x+65} 905 ${s.x+50} 935 ${s.x+50} ${s.y+s.height}"/>${["q","k","v"].includes(kind)?`<path class="parameter-edge" d="M${x+65} 965 C${x+65} 905 ${stationFor(kind,1).x+50} 935 ${stationFor(kind,1).x+50} ${stationFor(kind,1).y+170}"/>`:""}<g role="button" tabindex="0" data-world-parameter="${name}" aria-label="Parameter ${name}" class="parameter-bank"><text x="${x}" y="942">${({wte:"wte",wpe:"wpe","layer0.attn_wq":"Wq","layer0.attn_wk":"Wk","layer0.attn_wv":"Wv","layer0.attn_wo":"WO","layer0.mlp_fc1":"W1","layer0.mlp_fc2":"W2",lm_head:"Wout"} as Record<string,string>)[name]}</text><rect x="${x}" y="965" width="140" height="105"/>${matrix?[matrix,...(afterMatrix?[afterMatrix]:[])].flatMap((endpoint,side)=>endpoint.flatMap((row,r)=>row.map((v,c)=>`<rect x="${x+(c+(comparison?side*.5:0))*140/cols}" y="${965+r*105/rows}" width="${140/cols/(comparison?2:1)}" height="${105/rows}" data-parameter-value="${v}" data-endpoint="${comparison?(side?"after":"before"):"selected"}" data-domain="${max}" fill="${comparison?(side?"#62C7E8":"#A7B2BC"):v<0?"#7A8791":"#A7B2BC"}" fill-opacity="${max===0?0:Math.abs(v)/max}" stroke="#3B454D" stroke-width=".6"><title>[${r},${c}] ${v}</title></rect>`))).join(""):""}<text class="station-meta" x="${x}" y="1100">${rows} × ${cols} · checkpoint</text>${parameter===name?reticle(x,965,140,105):""}</g>`;
     }).join("")}
+    ${!parameter&&['q','mlpRelu'].includes(selected.kind)&&f.values(selected)?(()=>{
+      const e=f.explain(selected,element),s=stationFor(selected.kind,selected.head);
+      const text=selected.kind==='mlpRelu'?`[${element}] ${e.before?.toPrecision(5)} → ReLU → ${e.observed?.toPrecision(5)}`:`[${element}] Σ input × Wq → ${e.observed?.toPrecision(5)}`;
+      const from=stationFor(selected.kind==='mlpRelu'?'mlpUp':'preAttentionNorm');
+      const count=selected.kind==='mlpRelu'?32:8;
+      const ax=from.x+10+(element+.3)*(from.width-20)/count,bx=s.x+10+(element+.3)*(s.width-20)/count;
+      return `<g class="component-guide" data-testid="component-guide" data-component="${element}"><path d="M${ax} ${from.y+from.height} V${from.y+from.height+55} H${bx} V${s.y+s.height}"/><text x="${from.x}" y="${s.y+s.height+85}">${esc(text)}</text></g>`;
+    })():''}
     ${learningMarkup??`<path class="training-placeholder" d="M4260 650 C4480 1280 100 1280 170 1080"/><text class="training-label" x="1220" y="1230">TRAINING / BACKWARD / ADAM RETURN · UNIMPLEMENTED IN B</text>`}
   </svg>`;
 }

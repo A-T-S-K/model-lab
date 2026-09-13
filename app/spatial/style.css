@@ -158,3 +158,12 @@ body.spatial-mode { background:#0B0F12; color:#F2F5F7; font-family:Plex,sans-ser
 .overview .learning-world [data-learning-stage]>text:not(.learning-overview-title) { display:none; }
 .overview .learning-world .learning-overview-title { display:block; }
 .spatial-world .learning-value { font-size:26px; }
+
+/* Execution replaces the explanation row; pending fields contain no quantitative marks. */
+.learning-toolbar[hidden]{display:none}
+.execution nav{flex-wrap:wrap;gap:6px}
+.execution [data-testid="execution-frontier"]{font-size:12px}
+.world-object[data-computation="pending"] .field{fill:#20272b;stroke:#697680;stroke-dasharray:4 3}
+.component-guide path{fill:none;stroke:#f0d395;stroke-width:1.5}
+.component-guide text{fill:#f0d395;font-size:18px}
+.spatial-header{flex-wrap:wrap}

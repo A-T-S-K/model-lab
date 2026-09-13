@@ -1,6 +1,6 @@
 import fixture from '../../fixtures/canonical.initial.json';
 import { loadModel, createOptimizerState, snapshotTraining, restoreTraining } from '../../model/state.js';
-import { predict, tokenize } from '../../model/microgpt.js';
+import { predict, tokenize, forwardSequence, forwardBoundaries } from '../../model/microgpt.js';
 import { trainStep } from '../../model/training.js';
 import { TraceRecorder } from '../../trace/recorder.js';
 import { TracePlayer } from '../../trace/player.js';
@@ -38,6 +38,12 @@ export class ModelSession {
   private contexts = new Map<string, CaptureContext>();
   private generationId = -1;
   private sessionId = '';
+  private active?: {
+    id: string; sequence: number; sent: number;
+    cursor: ReturnType<typeof forwardSequence>; boundaries: ReturnType<typeof forwardBoundaries>;
+    recorder: TraceRecorder; context: CaptureContext; snapshot: ArchivedSnapshot;
+    tokenIds: number[]; targetIds: number[];
+  };
   private queue: Promise<unknown> = Promise.resolve();
 
   handle(request: WorkerRequest, publishTrainingResult?: (response: WorkerResponse) => void): Promise<WorkerResponse> {
@@ -60,31 +66,67 @@ export class ModelSession {
           this.model = loadModel(fixture.config, fixture.parameters, fixture.parameterOrder);
           this.optimizer = createOptimizerState(this.model, fixture.optimizer);
         }
-        this.run = undefined; this.contexts.clear();
+        this.active = undefined; this.run = undefined; this.contexts.clear();
         this.sessionId = request.sessionId; this.generationId = request.generationId;
         const snapshot = snapshotTraining(this.model, this.optimizer);
         return { ...tag, status: 'ready', snapshot, archivedSnapshot: await archiveSnapshot(snapshot) };
       }
       if (request.sessionId !== this.sessionId || request.generationId !== this.generationId) throw new Error('Stale session or generation');
-      if (request.command === 'cancel') return { ...tag, status: 'cancelled' };
+      if (request.command === 'cancel') { this.active = undefined; return { ...tag, status: 'cancelled' }; }
+      if (request.command === 'cancelForward') {
+        if (this.active?.id === request.executionId) this.active = undefined;
+        return { ...tag, status: 'cancelled' };
+      }
+      if (request.command === 'advanceForward') {
+        const a = this.active;
+        if (!a || a.id !== request.executionId) throw new Error('Stale execution');
+        if (request.permit !== a.sequence + 1) throw new Error('Duplicate or out-of-order permit');
+        const step = a.cursor.next();
+        if (step.done || JSON.stringify(step.value) !== JSON.stringify(a.boundaries[a.sequence])) throw new Error('Forward boundary mismatch');
+        a.sequence++;
+        if (a.sequence === a.boundaries.length) {
+          // Final resume only assembles the return value; there are no remaining operators.
+          const final = a.cursor.next();
+          if (!final.done) throw new Error('Unexpected final operator');
+          const run = a.recorder.finish();
+          this.run = run; this.contexts.clear(); this.contexts.set(a.id, a.context); this.active = undefined;
+          return { ...tag, status: 'result', result: { run, tokenIds: a.tokenIds, targetIds: a.targetIds,
+            logits: final.value.logits.map(row => row.map(v => v.data)),
+            probabilities: final.value.probabilities.map(row => row.map(v => v.data)),
+            trainingStep: this.optimizer.step, snapshots: [a.snapshot], runs: [run] } };
+        }
+        const delta = a.recorder.delta(a.sent); a.sent += delta.artifacts.length;
+        return { ...tag, status: 'forward', progress: { executionId: a.id, sequence: a.sequence, total: a.boundaries.length,
+          last: a.boundaries[a.sequence-1], next: a.boundaries[a.sequence], ...delta } };
+      }
       if (request.command === 'detail') {
         if (!this.run) throw new Error('Predict first to capture evidence');
         return { ...tag, status: 'detail', detail: attentionDetail(this.run, request.layer, request.head, request.query, request.key) };
       }
       if (request.command === 'inspect') {
-        const context = this.contexts.get(request.sourceRunId);
+        const context = this.active?.id === request.sourceRunId ? this.active.context : this.contexts.get(request.sourceRunId);
         return { ...tag, status: 'inspection', inspection: context ? context.inspect(request.target) : {
           sourceRunId: request.sourceRunId, provenance: 'observed', availability: 'not_captured', graph: null,
           reason: 'The live execution has been released. Use the archived snapshot for verified historical inspection.',
         } };
       }
-      if (request.command !== 'predict' && request.command !== 'train') throw new Error('Unknown worker command');
+      if (this.active) throw new Error('Cancel or complete the active prediction before another model command');
+      if (request.command !== 'predict' && request.command !== 'train' && request.command !== 'startForward') throw new Error('Unknown worker command');
       const { tokenIds, targetIds } = tokenize(this.model, request.document);
       const starting = await archiveSnapshot(snapshotTraining(this.model, this.optimizer));
       const capture = (id: string, snapshot: ArchivedSnapshot) => {
         const recorder = new TraceRecorder(runManifest(id, tag, snapshot, tokenIds, targetIds));
         return { recorder, context: new CaptureContext(this.model, recorder) };
       };
+      if (request.command === 'startForward') {
+        const { recorder, context } = capture(request.runId, starting);
+        const boundaries = forwardBoundaries(this.model, tokenIds);
+        this.active = { id: request.runId, sequence: 0, sent: 0, cursor: forwardSequence(this.model, tokenIds, context),
+          boundaries, recorder, context, snapshot: starting, tokenIds, targetIds };
+        return { ...tag, status: 'forward', progress: { executionId: request.runId, sequence: 0, total: boundaries.length,
+          next: boundaries[0], ...recorder.delta(0), start: { manifest: recorder.manifest, snapshot: starting,
+            tokenIds, targetIds, trainingStep: this.optimizer.step } } };
+      }
       if (request.command === 'predict') {
         const { recorder, context } = capture(request.runId, starting);
         const prediction = predict(this.model, tokenIds, context);
@@ -120,6 +162,7 @@ export class ModelSession {
       this.contexts.set(afterRun.manifest.runId, after.context);
       return response;
     } catch (error) {
+      if (request.command === 'advanceForward' && !/Stale execution|Duplicate or out-of-order permit/.test(String(error))) this.active = undefined;
       if (rollback) {
         const restored = restoreTraining(rollback);
         this.model = restored.model; this.optimizer = restored.optimizer;
