@@ -167,7 +167,10 @@ client.onFailure = failure => {
   status = "Worker failed · partial prediction released · Reset model or Clear session to restart";
   error = failure.message; render();
 };
+let inspectedExecutionRevision: string | undefined;
 function forwardChanged() {
+  const revision = forwardDriver.progress && `${forwardDriver.progress.executionId}:${forwardDriver.progress.sequence}`;
+  if (revision !== inspectedExecutionRevision) { clearDisplayedInspection(); inspectedExecutionRevision = revision; }
   if (forwardDriver.preview) {
     result = forwardDriver.preview; player = new TracePlayer(result.run);
     const training = forwardDriver.progress?.training;
@@ -197,7 +200,7 @@ function executionExplore(event: Event) {
 for (const type of ['pointerdown','wheel','keydown','change','click']) mount.addEventListener(type, executionExplore, { capture: true });
 function bindForwardControls() {
     mount.querySelectorAll<HTMLButtonElement>('[data-live-child]').forEach(button => button.addEventListener('click', () => {
-      const source = forwardDriver.progress?.training?.sourceRunId;
+      const source = button.dataset.liveSource;
       if (source) void inspect(source, { kind: 'node', nodeId: Number(button.dataset.liveChild) }, 'Actual processed contribution');
     }));
     mount.querySelector('#step-learning')?.addEventListener('click', () => void startForward(true));
@@ -350,6 +353,7 @@ function inspectionSelection(): InspectionSelection {
   };
 }
 function inspectionRelationship() {
+  if (activeInspectionSource(inspectionBinding?.sourceRunId ?? '')) return 'LIVE' as const;
   const run =
     archive.runs.get(inspectionBinding?.sourceRunId ?? "") ?? result?.run;
   const captured = (
@@ -2140,6 +2144,10 @@ function cachedInspection(
     },
   });
 }
+function activeInspectionSource(source: string) {
+  const id = forwardDriver.progress?.executionId;
+  return !!id && (source === id || source === `${id}:training` || source === `${id}:before`);
+}
 async function inspect(
   sourceRunId: string,
   target: InspectionTarget,
@@ -2200,7 +2208,7 @@ async function inspect(
       if (response.status !== "inspection")
         throw new Error("Worker did not return inspection evidence");
       evidence = response.inspection;
-      if (evidence.availability === "not_captured" && sourceRunId !== (forwardDriver.progress?.training?.sourceRunId ?? forwardDriver.progress?.executionId)) {
+      if (evidence.availability === "not_captured" && !activeInspectionSource(sourceRunId)) {
         binding.verification = "VERIFYING";
         binding.origin = "RECOMPUTED";
         render();
@@ -2225,7 +2233,7 @@ async function inspect(
       if (evidence.sourceRunId !== sourceRunId)
         throw new Error("Inspection belongs to a different run");
       if (
-        sourceRunId !== (forwardDriver.progress?.training?.sourceRunId ?? forwardDriver.progress?.executionId) && evidence.availability === "available" &&
+        !activeInspectionSource(sourceRunId) && evidence.availability === "available" &&
         (evidence.provenance !== "recomputed" ||
           evidence.verification?.verified)
       ) {

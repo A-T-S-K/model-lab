@@ -49,3 +49,7 @@ test('T05/T06 controlled driver Ready barrier and delayed acceptance serialize c
  assert.equal(commands.filter(c=>c.command==='train'||c.command==='predict').length,0);
  assert.equal(commands.filter(c=>c.command==='acceptTraining').length,1);
 });
+test('T04 cancelling a pinned stop clears its intent before the next execution',()=>{
+ const d=new ForwardDriver({request:async()=>{throw Error('no command expected');}},()=>{},async()=>{},()=>{});
+ d.stopAtPin=true;d.discard();assert.equal(d.stopAtPin,false);assert.equal(d.active,false);
+});

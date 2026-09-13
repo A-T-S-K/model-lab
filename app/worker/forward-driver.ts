@@ -23,7 +23,7 @@ export class ForwardDriver {
   get pending() { return this.inFlight; }
   private clearTimer() { if (this.timer !== undefined) clearTimeout(this.timer); this.timer = undefined; }
   /** Used before a worker reset: immediately invalidate all continuations. */
-  discard() { this.epoch++; this.clearTimer(); this.phase = 'idle'; this.inFlight = false; this.progress = undefined; this.preview = undefined; this.artifacts = []; }
+  discard() { this.stopAtPin = false; this.epoch++; this.clearTimer(); this.phase = 'idle'; this.inFlight = false; this.progress = undefined; this.preview = undefined; this.artifacts = []; }
   async start(document: string, training = false) {
     if (this.active) return;
     this.discard(); const epoch = this.epoch; this.phase = 'starting'; this.follow = true; this.changed();

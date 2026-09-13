@@ -35,6 +35,7 @@ test('T09 real partial gradient → proposal → candidate → acceptance and se
  await page.locator('#execution-pin').click();await expect(page.getByTestId('live-contribution')).toBeVisible({timeout:30000});await expect(page.locator('#execution-next')).toBeEnabled();
  const first=await page.getByTestId('live-gradient').getAttribute('data-value');
  await page.screenshot({path:`${directory}/partial-1920.png`});await page.waitForTimeout(2500);
+ await page.locator('[data-live-child]').click();await expect(page.locator('#microscope')).toContainText('OBSERVED');await step(page);await expect(page.locator('#microscope')).not.toContainText('OBSERVED');await page.locator('#execution-follow').check();
  await page.locator('#execution-pin').click();await expect(page.locator('#execution-next')).toBeEnabled();
  await expect(page.getByTestId('live-gradient')).not.toHaveAttribute('data-value',first!);
  await page.setViewportSize({width:1280,height:720});await page.screenshot({path:`${directory}/partial-1280.png`});await page.waitForTimeout(2000);
@@ -48,6 +49,7 @@ test('T09 real partial gradient → proposal → candidate → acceptance and se
  await page.locator('#execution-continue').click();await phase(page,'ready');
  await expect(page.getByTestId('status')).toContainText('Candidate ready — not accepted');
  await page.screenshot({path:`${directory}/ready-1920.png`});
+ await page.locator('[data-live-child]').click();await expect(page.locator('#microscope')).toContainText('OBSERVED');
  let evidence=await page.evaluate(()=>(window as any).trainingAudit);
  expect(evidence.commands.filter((c:any)=>c.command==='train').length).toBe(0);
  expect(evidence.responses.filter((r:any)=>r.status==='result').length).toBe(1);

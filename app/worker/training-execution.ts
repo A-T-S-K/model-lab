@@ -17,7 +17,7 @@ export interface TrainingProgress {
   pin: number; gradient: number; final: boolean; contributions: LiveContribution[]; proposal?: ParameterUpdate;
   losses: { target: number; value?: number }[]; mean?: number;
   old: { parameter: number; m: number; v: number }; optimizer: { beta1: number; beta2: number; epsilon: number; effectiveLearningRate: number };
-  stopped: boolean; sourceRunId: string; baselinePasses: number;
+  stopped: boolean; gradientSourceRunId: string; sourceRunId: string; baselinePasses: number;
 }
 /** One private working snapshot in the existing session transaction. No accepted writes. */
 export class TrainingExecution {
@@ -69,7 +69,7 @@ export class TrainingExecution {
         optimizer: { beta1: oldOptimizer.beta1, beta2: oldOptimizer.beta2, epsilon: oldOptimizer.epsilon, effectiveLearningRate: oldOptimizer.learningRate * (1 - oldOptimizer.step / oldOptimizer.numSteps) },
         pin: this.pin, gradient: this.gradients[this.pin] ?? parameterValues(this.working.model)[this.pin].grad,
         final: this.gradients.length > 0, contributions: this.contributions, proposal: this.proposalValues[this.pin], stopped,
-        sourceRunId: this.recorder.manifest.runId, baselinePasses: 1 } });
+        gradientSourceRunId: `${this.id}:training`, sourceRunId: this.recorder.manifest.runId, baselinePasses: 1 } });
   }
   async advance(permit: number, budget: number, pin: number, stop: boolean) {
     if (permit !== this.sequence + 1 || this.phase === 'ready') throw new Error('Duplicate or out-of-order permit');
