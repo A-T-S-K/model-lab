@@ -92,8 +92,9 @@ body.spatial-mode { background:#0B0F12; color:#F2F5F7; font-family:Plex,sans-ser
 .waypoint-controls { display:flex; gap:8px; justify-content:center; align-items:center; flex:none; padding-top:10px; }
 .waypoint-controls>span:last-child { color:#8B969E; font-size:11px; }
 .spatial-empty { padding:70px 10%; }
-#presentation-toggle.classic-toggle { position:static; margin-left:auto; margin-right:125px; }
-@media(max-width:700px) { #presentation-toggle.classic-toggle { flex-basis:100%; margin:8px 0 0; } }
+#presentation-toggle.classic-toggle { position:absolute; top:32px; right:189px; margin:0; }
+@media(max-width:1400px) { #presentation-toggle.classic-toggle { top:16px; right:157px; } }
+@media(max-width:700px) { #presentation-toggle.classic-toggle { position:static; flex-basis:100%; margin:8px 0 0; } }
 @media(max-width:1400px) { .world-brand small,.spatial-badge,.scope-note { display:none; } .spatial-header { flex-wrap:wrap; padding:7px; } .world-brand strong { font-size:18px; } .spatial-shell { padding:8px; } .spatial-selection { gap:8px; font-size:12px; } .spatial-header button { padding:6px 8px; font-size:12px; } .waypoint-controls>span:last-child { display:none; } .context-lens { width:43vw; } .selection-card { max-width:300px; } }
 @media(max-width:850px) { body.spatial-mode { overflow:auto; } .spatial-shell { height:auto; min-height:100dvh; } .world-workspace { display:block; } .world-pane { height:50vh; } .context-lens { width:100%; height:65vh; margin-top:10px; } .waypoint-controls { flex-wrap:wrap; } .selection-card { max-width:260px; } }
 
