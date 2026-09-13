@@ -141,7 +141,7 @@ body.spatial-mode { background:#0B0F12; color:#F2F5F7; font-family:Plex,sans-ser
 .explanation button,.explanation select { padding:4px 8px; font-size:12px; }
 .explanation input { accent-color:#FFD166; }
 .teaching-step { border-left:2px solid #FFD166; padding:0 10px; font-size:14px; }
-.spatial-world .explanation-active .field,.spatial-world .explanation-active>rect { stroke:#FFD166; stroke-width:5; }
+.spatial-world .explanation-active .field,.learning-world .explanation-active>rect:first-of-type { stroke:#FFD166; stroke-width:5; }
 .spatial-world .explanation-input .field { stroke:#F2F5F7; stroke-width:4; }
 .spatial-world .explanation-link { stroke:#FFD166; stroke-width:5; fill:none; }
 .spatial-shell details>summary { cursor:pointer; padding:7px 0; color:#C2CAD0; }
