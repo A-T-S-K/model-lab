@@ -19,7 +19,7 @@ const files={};async function visit(dir,prefix=''){for(const e of await readdir(
 await visit(destination);
 const git=(...args)=>execFileSync('git',args,{cwd:root,encoding:'utf8'}).trim();
 const identity=await runtimeIdentity(root);
-const manifest={created:new Date().toISOString(),sourceCommit:git('rev-parse','HEAD'),sourceTree:git('rev-parse','HEAD^{tree}'),sourceStatus:git('status','--short'),runtime:identity.revision,runtimeInputs:identity.sources,node:process.version,npm:execFileSync('npm',['--version'],{encoding:'utf8'}).trim(),platform:process.platform,arch:process.arch,launcherSHA256:files['serve.mjs'],files};
+const manifest={created:new Date().toISOString(),sourceCommit:git('rev-parse','HEAD'),sourceTree:git('rev-parse','HEAD^{tree}'),sourceStatus:git('status','--short'),runtime:identity.revision,runtimeInputs:identity.sources,node:process.version,npm:execFileSync('npm',['--version'],{encoding:'utf8'}).trim(),platform:process.platform,arch:process.arch,launcherSHA256:files['serve.mjs'],preparerSHA256:await digest(resolve(root,'scripts/prepare-abq.mjs')),files};
 await writeFile(resolve(destination,'manifest.json'),JSON.stringify(manifest,null,2)+'\n');
 await writeFile(resolve(root,'test-results/abq-overnight/artifact-manifest.json'),JSON.stringify(manifest,null,2)+'\n');
 async function protect(dir){for(const e of await readdir(dir,{withFileTypes:true})){const p=resolve(dir,e.name);if(e.isDirectory()){await protect(p);await chmod(p,0o555);}else await chmod(p,0o444);}}

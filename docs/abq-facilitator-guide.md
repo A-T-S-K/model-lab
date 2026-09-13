@@ -10,7 +10,7 @@ Show the named top token and distribution. Probabilities are this model's normal
 
 Use **Q/K scores**. Both vector lengths and alignment affect the score. Read one signed product, the reduction and scale factor. **Softmax** uses every causal score in the shared denominator. **Value mixture** combines all matching value vectors; its fitted affine geometry belongs to this source only. **Residual** distinguishes channel concatenation, WO projection and addition of the saved input.
 
-Invite an earlier-key choice or MLP detour. Home/Back preserve the model. **Resume short route** explicitly restores the guide landmark using the current semantic selection. Exact tables and source remain under **Values / arithmetic / source**. Do not interpret high attention alone as a complete causal explanation.
+Invite an earlier-key choice or MLP detour. Home/Back preserve the model. **Resume short route** explicitly restores the guide landmark and its saved semantic selection. Exact tables and source remain under **Values / arithmetic / source**. Do not interpret high attention alone as a complete causal explanation.
 
 ## Deeper encounter · pacing target 3–5 minutes
 
