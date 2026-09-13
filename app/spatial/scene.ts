@@ -1,0 +1,65 @@
+import type { ForwardModel, Address } from "./forward.js";
+import { operations, parameterOwners, headKinds } from "./forward.js";
+import { probabilityColor, probabilitySimplex, project3 } from "./geometry.js";
+import { escapeHtml as esc } from "../views/evidence.js";
+export interface Station { kind:string; x:number;y:number;width:number;height:number;head?:number;label?:string }
+export const stations:Station[]=[
+ {kind:"tokenEmbedding",x:190,y:365,width:110,height:170},{kind:"positionEmbedding",x:190,y:650,width:110,height:170},
+ {kind:"embeddingSum",x:360,y:480,width:105,height:170},{kind:"embeddingNorm",x:515,y:480,width:110,height:170},
+ {kind:"preAttentionNorm",x:675,y:480,width:110,height:170},
+ ...[0,1].flatMap(head=>["q","k","v","attentionLogits","attentionProbabilities","headOutput"].map((kind,i)=>({kind,head,x:870+i*155,y:head?690:300,width:115,height:170}))),
+ ...["attentionOutput","attentionProjection","attentionResidual","preMlpNorm","mlpUp","mlpRelu","mlpDown","mlpResidual","logits","probabilities"].map((kind,i)=>({kind,x:1870+i*225,y:["mlpUp","mlpRelu"].includes(kind)?380:480,width:["mlpUp","mlpRelu"].includes(kind)?185:145,height:["mlpUp","mlpRelu"].includes(kind)?370:170})),
+];
+const bankX:Record<string,number>={wte:150,wpe:315,"layer0.attn_wq":850,"layer0.attn_wk":1040,"layer0.attn_wv":1230,"layer0.attn_wo":2070,"layer0.mlp_fc1":2740,"layer0.mlp_fc2":3210,lm_head:3860};
+export function stationFor(kind:string,head=0):Station {return stations.find(s=>s.kind===kind&&(s.head===undefined||s.head===head))??{kind,x:bankX[kind]??0,y:965,width:150,height:120};}
+export function reticle(x:number,y:number,w:number,h:number) {return `<path class="external-reticle" d="M${x-10} ${y+20} v-30 h30 M${x+w-20} ${y-10} h30 v30 M${x-10} ${y+h-20} v30 h30 M${x+w-20} ${y+h+10} h30 v-30"/>`;}
+const compact:Record<string,string>={tokenEmbedding:"TE",positionEmbedding:"PE",embeddingSum:"+",embeddingNorm:"RN",preAttentionNorm:"RN",q:"Q",k:"K",v:"V",attentionLogits:"s",attentionProbabilities:"α",headOutput:"Σ",attentionOutput:"∥",attentionProjection:"WO",attentionResidual:"+",preMlpNorm:"RN",mlpUp:"32",mlpRelu:"ReLU",mlpDown:"8",mlpResidual:"+",logits:"z",probabilities:"P"};
+const title:Record<string,string>={tokenEmbedding:"Token",positionEmbedding:"Position",embeddingSum:"Add",embeddingNorm:"RMSNorm",preAttentionNorm:"Pre-attn",q:"Q",k:"K",v:"V",attentionLogits:"Scores",attentionProbabilities:"Softmax",headOutput:"Σ αV",attentionOutput:"Concat",attentionProjection:"WO",attentionResidual:"Residual",preMlpNorm:"Pre-MLP",mlpUp:"Expand · 32",mlpRelu:"ReLU · 32",mlpDown:"Contract · 8",mlpResidual:"Residual",logits:"Logits",probabilities:"Probability"};
+export function sceneSvg(f:ForwardModel,selected:Address,key:number,parameter:string|undefined,labels:string[],query=selected.token,comparison?:{before:ForwardModel;after:ForwardModel},learningMarkup?:string) {
+  const head=selected.head??0;
+  const valuesFor=(s:Station,source=f)=>{
+    const values=source.values({kind:s.kind,token:s.kind==="k"||s.kind==="v"?key:query,...(headKinds.has(s.kind)?{head:s.head}: {})});
+    return ["q","k","v"].includes(s.kind)?values?.slice((s.head??0)*f.width,((s.head??0)+1)*f.width):values;
+  };
+  const line=(a:Station,b:Station,cls="activation")=>`<path class="${cls}" d="M${a.x+a.width} ${a.y+a.height/2} C${a.x+a.width+45} ${a.y+a.height/2} ${b.x-45} ${b.y+b.height/2} ${b.x} ${b.y+b.height/2}"/>`;
+  const field=(s:Station)=>{
+    const values=valuesFor(s,comparison?.before??f),afterValues=comparison?valuesFor(s,comparison.after):undefined,prob=s.kind.includes("Probabilities")||s.kind==="probabilities";
+    const domain=prob?1:Math.max(0,...[...(values??[]),...(afterValues??[])].map(Math.abs));
+    const baseline=s.y+(prob?s.height-15:s.height/2), height=prob?s.height-32:s.height/2-18;
+    const selectedHere=!parameter&&s.kind===selected.kind&&(s.head===undefined||s.head===head);
+    const simplex=!comparison&&s.kind==="probabilities"&&values?.length===4?probabilitySimplex(values):undefined;
+    return `<g class="world-object" role="button" tabindex="0" data-world-kind="${s.kind}" ${s.head===undefined?"":`data-world-head="${s.head}"`} aria-label="${esc(title[s.kind])}${s.head===undefined?"":` head ${s.head}`}" aria-pressed="${selectedHere}"><title>${esc(operations.find(o=>o.kind===s.kind)?.purpose??s.kind)} ${prob?"Probability domain 0…1.":`Signed domain −${domain}…${domain}; independent per vector. Zero is the baseline.`}</title><text class="station-title" x="${s.x}" y="${s.y-22}">${esc(title[s.kind])}</text><text class="overview-label" x="${s.x}" y="${s.y-22}">${compact[s.kind]}</text>
+    <path class="depth" d="M${s.x} ${s.y} l10 -10 h${s.width} l-10 10 M${s.x+s.width} ${s.y} l10 -10 v${s.height} l-10 10"/>
+    <rect class="field" x="${s.x}" y="${s.y}" width="${s.width}" height="${s.height}" rx="3"/>
+    ${simplex?simplexGlyph(simplex.vertices,simplex.point,s.x+s.width/2,s.y+75,39):`<path class="zero-axis" d="M${s.x+8} ${baseline} h${s.width-16}"/>`}
+    ${!values?`<text class="unavailable" x="${s.x+5}" y="${s.y+65}">unavailable</text>`:[values,...(afterValues?[afterValues]:[])].flatMap((endpoint,side)=>endpoint.map((v,i)=>{
+      if(prob&&(v<0||v>1||!Number.isFinite(v))) return `<text class="unavailable" x="${s.x}" y="${s.y+80}">P outside [0,1]</text>`;
+      const magnitude=domain===0?0:Math.abs(v)/domain*height;
+      return `<rect data-world-value="${v}" data-endpoint="${comparison?(side?"after":"before"):"selected"}" data-domain="${domain}" x="${s.x+10+(i+(comparison?side*.42:0))*(s.width-20)/values.length}" y="${simplex?s.y+s.height-10-v*35:baseline-(v>=0?magnitude:0)}" width="${Math.max(1,(s.width-20)/values.length*(comparison ? 0.45 : 0.62))}" height="${simplex?v*35:magnitude}" fill="${comparison?side?"#62C7E8":"#A7B2BC":prob?probabilityColor(v):v<0?"#DC7C7C":"#58B98C"}"><title>[${i}] ${v}</title></rect>`;
+    })).join("")}
+    <text class="station-meta" x="${s.x}" y="${s.y+s.height+28}">${prob?`h${s.head??"—"} · 0…1`:`p${s.kind==="k"||s.kind==="v"?key:query} · ${values?.length??"NA"}${s.head===undefined?"":` / h${s.head}`}`}</text>${["k","v"].includes(s.kind)&&key>query?`<text class="station-meta" x="${s.x}" y="${s.y+s.height+55}">future · no edge</text>`:""}${selectedHere?reticle(s.x,s.y,s.width,s.height):""}</g>`;
+  };
+  return `<svg id="spatial-world" class="spatial-world" viewBox="0 0 4500 1300" tabindex="0" role="group" aria-label="Complete connected forward computation; drag to pan, wheel to zoom"><defs><marker id="forward-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7" fill="#62C7E8"/></marker></defs>
+    <rect class="region" x="830" y="205" width="985" height="710" rx="8"/><text class="region-title" x="840" y="170">ATTENTION · TWO HEADS</text>
+    <text class="region-title" x="20" y="260">INPUT · ${f.input.length} POSITIONS</text><text class="region-title" x="1865" y="260">HEADS → WO → RESIDUAL</text><text class="region-title" x="2710" y="260">MLP · 8 → 32 → 8</text><text class="region-title" x="3870" y="260">OUTPUT</text>
+    <g class="tokens">${labels.map((label,i)=>`<g role="button" tabindex="0" data-world-token="${i}" aria-label="Position ${esc(label)}"><rect x="20" y="${345+i*56}" width="120" height="44"/><text class="token-label" x="28" y="${376+i*56}">${esc(label)}</text><text class="overview-token-label" x="28" y="${376+i*56}">${esc(label.replace(" · START","·S").replace(" · ","·"))}</text>${query===i?reticle(20,345+i*56,120,44):""}</g>`).join("")}</g>
+    <path class="activation" d="M140 405 H188 M140 705 H188"/>
+    ${line(stations[0],stations[2])}${line(stations[1],stations[2])}${line(stations[2],stations[3])}${line(stations[3],stations[4])}
+    ${[0,1].map(h=>{
+      const get=(kind:string)=>stationFor(kind,h),q=get("q"),k=get("k"),v=get("v"),scores=get("attentionLogits"),weights=get("attentionProbabilities"),mix=get("headOutput");
+      return line(stations[4],q)+`<path class="activation" d="M${q.x+q.width} ${q.y+85} C${q.x+q.width+25} ${q.y+85} ${q.x+q.width+10} ${q.y-65} ${q.x+q.width+40} ${q.y-65} H${scores.x+55} V${scores.y}"/>`+(key<=query?`<path data-selected-key-edge="${key}" class="activation" d="M${k.x+k.width} ${k.y+85} H${k.x+k.width+15} V${k.y+k.height+35} H${scores.x+35} V${scores.y+scores.height}"/>`:"")+line(scores,weights)+line(weights,mix)+(key<=query?`<path data-selected-value-edge="${key}" class="activation" d="M${v.x+v.width/2} ${v.y+v.height} V${v.y+v.height+70} H${mix.x+55} V${mix.y+mix.height}"/>`:"")+line(mix,stationFor("attentionOutput"));
+    }).join("")}
+    ${stations.slice(17,-1).map((s,i)=>line(s,stations[18+i])).join("")}
+    <path class="residual-edge" d="M570 480 C570 15 2390 15 2390 480 M2370 480 C2370 105 3520 105 3520 480"/>
+    ${stations.map(field).join("")}
+    ${Object.entries(parameterOwners).map(([name,kind])=>{
+      const x=bankX[name],matrix=(comparison?.before??f).matrix(name),afterMatrix=comparison?.after.matrix(name),s=stationFor(kind),rows=matrix?.length??0,cols=matrix?.[0]?.length??0,max=Math.max(0,...[...(matrix?.flat()??[]),...(afterMatrix?.flat()??[])].map(Math.abs));
+      return `<path class="parameter-edge" d="M${x+65} 965 C${x+65} 905 ${s.x+50} 935 ${s.x+50} ${s.y+s.height}"/>${["q","k","v"].includes(kind)?`<path class="parameter-edge" d="M${x+65} 965 C${x+65} 905 ${stationFor(kind,1).x+50} 935 ${stationFor(kind,1).x+50} ${stationFor(kind,1).y+170}"/>`:""}<g role="button" tabindex="0" data-world-parameter="${name}" aria-label="Parameter ${name}" class="parameter-bank"><text x="${x}" y="942">${({wte:"wte",wpe:"wpe","layer0.attn_wq":"Wq","layer0.attn_wk":"Wk","layer0.attn_wv":"Wv","layer0.attn_wo":"WO","layer0.mlp_fc1":"W1","layer0.mlp_fc2":"W2",lm_head:"Wout"} as Record<string,string>)[name]}</text><rect x="${x}" y="965" width="140" height="105"/>${matrix?[matrix,...(afterMatrix?[afterMatrix]:[])].flatMap((endpoint,side)=>endpoint.flatMap((row,r)=>row.map((v,c)=>`<rect x="${x+(c+(comparison?side*.5:0))*140/cols}" y="${965+r*105/rows}" width="${140/cols/(comparison?2:1)}" height="${105/rows}" data-parameter-value="${v}" data-endpoint="${comparison?(side?"after":"before"):"selected"}" data-domain="${max}" fill="${comparison?(side?"#62C7E8":"#A7B2BC"):v<0?"#7A8791":"#A7B2BC"}" fill-opacity="${max===0?0:Math.abs(v)/max}" stroke="#3B454D" stroke-width=".6"><title>[${r},${c}] ${v}</title></rect>`))).join(""):""}<text class="station-meta" x="${x}" y="1100">${rows} × ${cols} · checkpoint</text>${parameter===name?reticle(x,965,140,105):""}</g>`;
+    }).join("")}
+    ${learningMarkup??`<path class="training-placeholder" d="M4260 650 C4480 1280 100 1280 170 1080"/><text class="training-label" x="1220" y="1230">TRAINING / BACKWARD / ADAM RETURN · UNIMPLEMENTED IN B</text>`}
+  </svg>`;
+}
+export function simplexGlyph(vertices:readonly (readonly number[])[],point:readonly number[],ox:number,oy:number,scale:number) {
+  const ps=vertices.map(project3),p=project3(point),xy=(v:readonly number[])=>`${ox+v[0]*scale},${oy+v[1]*scale}`;
+  return `<g class="simplex">${ps.flatMap((a,i)=>ps.slice(i+1).map(b=>`<path d="M${xy(a)} L${xy(b)}"/>`)).join("")}${ps.map((v,i)=>`<circle cx="${ox+v[0]*scale}" cy="${oy+v[1]*scale}" r="3"/><text x="${ox+v[0]*scale+5}" y="${oy+v[1]*scale-4}">${i}</text>`).join("")}<circle data-testid="simplex-point" data-coordinates="${point.join(",")}" cx="${ox+p[0]*scale}" cy="${oy+p[1]*scale}" r="5" class="barycenter"/></g>`;
+}

@@ -3,6 +3,7 @@ import type { GuidedLearning } from "../views/guided.js";
 import { sourceBinding, type SourceBinding } from "./source-binding.js";
 export interface GuidedBatch {
   baselineRunId: string;
+  baselineSnapshotId?: string;
   publicPosition: number;
   target: number;
   capturedDocument: string;
@@ -34,6 +35,7 @@ export function startGuidedBatch(
   const position = Math.max(0, result.tokenIds.length - 2);
   return {
     baselineRunId: result.run.manifest.runId,
+    baselineSnapshotId: result.run.manifest.startingSnapshotId,
     publicPosition: position,
     target: result.targetIds[position]!,
     capturedDocument: result.tokenIds
@@ -91,6 +93,14 @@ export function guidedReadModel(
           a.concept.token === position &&
           a.availability === "available",
       )?.values ?? undefined);
+  if (source && teaching) {
+    source.sourceRunId = batch.baselineRunId;
+    source.sourceSnapshotId = batch.baselineSnapshotId;
+    source.sourceStep = batch.startingStep;
+    source.capturedDocument = batch.capturedDocument;
+    source.relationship = batch.capturedDocument !== editor ? "STALE" : batch.baselineRunId === liveRunId ? "LIVE" : "HISTORICAL";
+    source.phase = "TEACHING · BASELINE";
+  }
   if (source && !values)
     source.availability = pendingCommand ? "PENDING" : "NOT CAPTURED";
   const earlierComparison =

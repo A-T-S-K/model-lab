@@ -1,4 +1,8 @@
 import "./style.css";
+import "./spatial/style.css";
+import { spatialReadModel, type SpatialSelection } from "./spatial/bindings.js";
+import { learningReadModel, resolveParameter, type LearningStage } from "./spatial/learning.js";
+import { SpatialPresenter } from "./spatial/presenter.js";
 import { exhibitTiming, exhibitState } from "./presentation/exhibit-state.js";
 import plexSansLicense from "@ibm/plex-sans/fonts/complete/woff2/license.txt?url";
 import plexMonoLicense from "@ibm/plex-mono/fonts/complete/woff2/license.txt?url";
@@ -73,6 +77,11 @@ import {
   vectorView,
 } from "./views/evidence.js";
 
+const spatialEnabled = new URLSearchParams(location.search).get("presentation") === "spatial";
+let spatialActive = spatialEnabled;
+const spatialSelection: SpatialSelection = { query: 4, key: 0, head: 0, feature: 0 };
+const spatialPresenter = new SpatialPresenter(spatialSelection);
+let spatialExperimentId = "";
 const config = fixture.config;
 const client = new ModelWorkerClient();
 const inspector = new InspectorWorkerClient();
@@ -356,6 +365,7 @@ function render(): void {
     contributingParameterSelected = false;
     clearDisplayedInspection();
   }
+  const priorSpatialSelection = mount.querySelector(".context-lens")?.getAttribute("data-selection");
   const regionScroll = new Map(
     Array.from(mount.querySelectorAll<HTMLElement>("[data-scroll-region]")).map(
       (el) => [
@@ -430,7 +440,35 @@ function render(): void {
   const stage = [...forwardStages, ...trainingStages].find(
     ([kind]) => kind === selectedKind,
   )!;
-  document.body.classList.add("instrument-mode");
+  document.body.classList.toggle("spatial-mode", spatialActive);
+  document.body.classList.toggle("instrument-mode", !spatialActive);
+  if (spatialActive) {
+    const source = result && sourceBinding(result.run, config.vocabulary, result.trainingStep, liveRunId, documentText, "SPATIAL ATTENTION");
+    const model = result && source && spatialReadModel(result.run, sourceSnapshot(source.sourceSnapshotId ?? ""), source, spatialSelection);
+    const learning = spatialLearningModel();
+    mount.innerHTML = spatialPresenter.render(model, {
+      document: documentText, busy, ready, status, error,
+      learning, experimentId: spatialExperimentId, liveStep: liveTrainingStep,
+      experiments: [...archive.learningExperiments.values()].map(e => ({id:e.id,step:e.update.step+1})),
+      canLearn: !!result && result.run.manifest.runId === liveRunId && source?.capturedDocument === documentText && !busy && ready,
+      scalar: microscopeView(inspection, inspectionPath, inspectionLabel, inspectionPending, inspectionWhole, inspectionRelationship(), inspectionBinding),
+    });
+    bind();
+    spatialPresenter.bind(model, () => { syncSpatialSelection(); clearDisplayedInspection(); }, render);
+    bindSpatialLearning();
+    mount.querySelectorAll<HTMLElement>("[data-scroll-region]").forEach(element => {
+      const scroll = regionScroll.get(element.dataset.scrollRegion);
+      if (scroll && priorSpatialSelection === mount.querySelector(".context-lens")?.getAttribute("data-selection")) { element.scrollTop = scroll.top; element.scrollLeft = scroll.left; }
+    });
+    mount.querySelectorAll<HTMLDetailsElement>("details").forEach(details => {
+      if (openDetails.has(details.querySelector("summary")?.textContent ?? "")) details.open = true;
+    });
+    if (focusId) document.getElementById(focusId)?.focus({ preventScroll: true });
+    else restoreSemanticFocus();
+    const restored = focusId && document.getElementById(focusId);
+    if (selection && restored instanceof HTMLInputElement) restored.setSelectionRange(selection[0], selection[1]);
+    return;
+  }
   if (mode === "guided") {
     mount.innerHTML = `<header class="instrument-header"><strong>MODEL LAB</strong><span>ONE SMALL MODEL. REAL COMPUTATION.</span><button id="clear-session">Public Reset</button></header><main class="instrument-page" data-mode="guided" aria-busy="${busy}">${guidedView(attract ? attractReplay?.result : result, guidedLearning, config.vocabulary, documentText, liveRunId, busy, ready, guidedMapIndex, attract, guidedBatch, pendingModelCommand)}</main>
       <details class="session-controls" ${sessionControlsOpen ? "open" : ""}><summary>Session controls</summary><div class="controls"><label>Input<input id="document" data-testid="document-input" value="${escapeHtml(documentText)}" maxlength="7" ${busy ? "disabled" : ""}></label><button id="predict" ${busy || !ready || attract ? "disabled" : ""}>Predict</button><button id="reset">Reset model</button>${guidedLearning && guidedLearning.afterRunId === result?.run.manifest.runId && guidedLearning.document === documentText ? `<button id="teach" ${busy || !ready || result?.run.manifest.runId !== liveRunId ? "disabled" : ""}>Teach · 10 real updates</button>` : ""}<button id="cancel" ${!busy && !inspectionPending ? "disabled" : ""}>Cancel operation</button><button data-mode="guided" aria-pressed="true">Guided</button><button data-mode="explore" ${attract ? "disabled" : ""}>Explore</button><button data-mode="microscope" ${attract ? "disabled" : ""}>Microscope</button></div><div data-testid="run-binding">${runBindingView()}</div><p>LIVE MODEL STEP <b data-testid="training-step">${liveTrainingStep}</b> · SOURCE STEP <b data-testid="source-step">${result?.trainingStep ?? attractReplay?.result.trainingStep ?? "unavailable"}</b></p><p data-testid="status" role="status">${escapeHtml(status)}</p></details>${error ? `<p class="error" role="alert">${escapeHtml(error)}</p>` : ""}`;
@@ -635,7 +673,87 @@ function selectGuidedComparison(): boolean {
   return false;
 }
 
+function spatialLearningModel() {
+  const experiment = archive.learningExperiments.get(spatialExperimentId) ??
+    (result?.experiment?.id === spatialExperimentId ? result.experiment : undefined);
+  const run = (id?: string) => archive.runs.get(id ?? "") ?? result?.runs.find(r => r.manifest.runId === id);
+  const start = sourceSnapshot(experiment?.startingSnapshotId ?? "");
+  const parameter = resolveParameter(start, spatialPresenter.pin);
+  const evidence = experiment && parameter ? cachedInspection(experiment.trainingRunId, {kind:"gradient",parameterIndex:parameter.index}) : undefined;
+  return learningReadModel(experiment,start,sourceSnapshot(experiment?.resultingSnapshotId ?? ""),run(experiment?.beforeRunId),run(experiment?.trainingRunId),run(experiment?.afterRunId),spatialPresenter.pin,evidence,spatialPresenter.expanded?Number.MAX_SAFE_INTEGER:3,inspectionPending);
+}
+async function inspectSpatialGradient(child?: number) {
+  const m = spatialLearningModel(); if (!m.available || busy) return;
+  const epoch = operation, experiment = spatialExperimentId, parameter = m.parameter.index;
+  if (result?.run.manifest.runId !== m.experiment.trainingRunId) selectRun(m.experiment.trainingRunId);
+  selectedParameter = parameter;
+  await inspect(m.experiment.trainingRunId,{kind:"gradient",parameterIndex:parameter},`${m.pin.name}[${m.pin.row},${m.pin.column}] · objective gradient`);
+  if (child !== undefined && operation === epoch && spatialExperimentId === experiment && selectedParameter === parameter && result?.run.manifest.runId === m.experiment.trainingRunId)
+    await inspect(m.experiment.trainingRunId,{kind:"node",nodeId:child},"Captured contribution child",[child]);
+}
+function bindSpatialLearning() {
+  const on = (id:string, action:()=>void) => mount.querySelector(id)?.addEventListener("click",action);
+  on("#spatial-learn",()=>{if(result?.run.manifest.runId===liveRunId&&!busy&&ready&&sourceBinding(result.run,config.vocabulary,result.trainingStep,liveRunId,documentText,"LEARN").capturedDocument===documentText)void execute("train");});
+  mount.querySelector("#spatial-experiment")?.addEventListener("change",event=>{
+    spatialExperimentId=(event.target as HTMLSelectElement).value;
+    const m=spatialLearningModel();clearDisplayedInspection();
+    if(m.available)selectRun(m.experiment.afterRunId);else render();
+  });
+  mount.querySelectorAll<HTMLElement>("[data-learning-phase]").forEach(button=>button.addEventListener("click",()=>{
+    const m=spatialLearningModel();if(!m.available||busy)return;
+    selectRun(button.dataset.learningPhase==="before"?m.experiment.beforeRunId:button.dataset.learningPhase==="training"?m.experiment.trainingRunId:m.experiment.afterRunId);
+  }));
+  on("#spatial-current",()=>{
+    if(busy||!liveRunId)return;
+    spatialExperimentId=[...archive.learningExperiments.values()].find(e=>e.afterRunId===liveRunId)?.id??"";
+    selectRun(liveRunId);
+  });
+  mount.querySelectorAll<HTMLElement>("[data-learning-stage]").forEach(button=>{
+    const action=()=>{spatialPresenter.focusLearning(button.dataset.learningStage as LearningStage);render();};
+    button.addEventListener("click",action);
+    if(button instanceof SVGElement)button.addEventListener("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();action();}});
+  });
+  mount.querySelectorAll("#learning-owner").forEach(button=>button.addEventListener("click",()=>{spatialPresenter.showOwner();syncSpatialSelection();clearDisplayedInspection();render();}));
+  on("#learning-inspect-gradient",()=>void inspectSpatialGradient());
+  on("#learning-expand",()=>{spatialPresenter.expanded=!spatialPresenter.expanded;render();});
+  mount.querySelectorAll<HTMLElement>("[data-learning-edge]").forEach(button=>button.addEventListener("click",()=>void inspectSpatialGradient(Number(button.dataset.learningEdge))));
+  const lossScalar=(position?:number)=>{
+    const m=spatialLearningModel();if(!m.available||busy)return;
+    const artifact=m.training.artifacts.find(a=>a.kind===(position===undefined?"meanLoss":"loss")&&(position===undefined||a.concept.token===position));
+    if(!artifact)return;
+    if(result?.run.manifest.runId!==m.experiment.trainingRunId)selectRun(m.experiment.trainingRunId);
+    void inspect(m.experiment.trainingRunId,{kind:"artifact",artifactId:artifact.id,index:0},position===undefined?"All-position mean objective":`Target loss at position ${position}`);
+  };
+  on("#learning-mean-scalar",()=>lossScalar());
+  mount.querySelectorAll<HTMLElement>("[data-learning-loss]").forEach(button=>button.addEventListener("click",()=>lossScalar(Number(button.dataset.learningLoss))));
+}
+
+function syncSpatialSelection(): void {
+  selectedToken = spatialPresenter.address().token;
+  head = spatialSelection.head;
+  key = spatialSelection.key;
+  selectedProductFeature = spatialSelection.feature;
+  selectedKind = spatialPresenter.kind;
+  const parameter = resolveParameter(sourceSnapshot(result?.run.manifest.startingSnapshotId ?? ""), spatialPresenter.pin);
+  if (parameter) selectedParameter = parameter.index;
+}
 function bind(): void {
+  if (spatialEnabled) {
+    if (!spatialActive) mount.insertAdjacentHTML("beforeend", '<button id="presentation-toggle" class="classic-toggle">Spatial presentation</button>');
+    mount.querySelector("#presentation-toggle")?.addEventListener("click", () => {
+      spatialActive = !spatialActive;
+      if (spatialActive) {
+        attract = false;
+        spatialExperimentId = result?.experiment?.id ?? "";
+        if (!result?.experiment) spatialPresenter.learningStage = undefined;
+        syncSpatialSelection();
+      }
+      else { spatialPresenter.camera.detach(); mode = "explore"; }
+      attentionLens = false;
+      clearDisplayedInspection();
+      render();
+    });
+  }
   mount
     .querySelectorAll<HTMLElement>(".attention-heads > section")
     .forEach((section) =>
@@ -984,7 +1102,7 @@ function bind(): void {
               artifactId: button.dataset.artifact!,
               index: Number(button.dataset.element),
             },
-            `${selectedKind} · position ${selectedToken} · element ${button.dataset.element}`,
+            `${spatialActive ? result.run.artifacts.find(a => a.id === button.dataset.artifact)?.kind ?? selectedKind : selectedKind} · position ${selectedToken} · element ${button.dataset.element}`,
           );
       }),
     );
@@ -1280,6 +1398,8 @@ async function execute(
         : "Computing loss, backward, and one Adam update…"
       : "Recording a live prediction…";
   render();
+  let acceptedThisIteration: RunResult | undefined;
+  let retentionFailed = false;
   try {
     let retainedLoss = Infinity;
     for (let step = 0; step < count; step++) {
@@ -1288,6 +1408,7 @@ async function execute(
         break;
       }
       pendingModelCommand = command;
+      acceptedThisIteration = undefined;
       const response = await client.request({
         command,
         document: executionDocument,
@@ -1307,6 +1428,7 @@ async function execute(
       pendingModelCommand = undefined;
       const incoming = response.result;
       lastAcceptedResult = incoming;
+      acceptedThisIteration = incoming;
       if (guided && incoming.learn) {
         if (guidedBatch) {
           guidedBatch.completedCount++;
@@ -1334,6 +1456,11 @@ async function execute(
       // that identity atomically with its count before asynchronous archive admission.
       clearDisplayedInspection();
       result = incoming;
+      if (spatialActive) {
+        spatialExperimentId = incoming.experiment?.id ?? "";
+        if (incoming.experiment) spatialPresenter.openLearning("objective");
+        else spatialPresenter.learningStage = undefined;
+      }
       player = new TracePlayer(result.run);
       liveRunId = result.run.manifest.runId;
       liveTrainingStep = result.trainingStep;
@@ -1342,6 +1469,7 @@ async function execute(
         : result.tokenIds.length - 1;
       if (attentionOpen) attentionScopeQuery = selectedToken;
       key = Math.min(key, selectedToken);
+      if (spatialActive) syncSpatialSelection();
       if (result.learn && !followedParameter)
         selectedParameter = result.learn.update.parameters.reduce(
           (best, update, index, all) =>
@@ -1380,16 +1508,16 @@ async function execute(
   } catch (failure) {
     if (currentOperation !== operation) return;
     error = failure instanceof Error ? failure.message : String(failure);
-    status = "Run failed";
+    retentionFailed = !!acceptedThisIteration;
+    status = retentionFailed ? "Accepted update · local evidence retention failed" : "Run failed";
   } finally {
     // A bounded lesson may end early at the optimizer limit or evidence budget.
     // Preserve its last completed comparison just as cancellation/reset preserves it.
     if (
       currentOperation === operation &&
-      guidedLearning &&
-      guided &&
-      result?.run.manifest.runId === guidedLearning.afterRunId &&
-      !archive.runs.has(result.run.manifest.runId)
+      result && result.run.manifest.runId === liveRunId &&
+      (!archive.runs.has(result.run.manifest.runId) ||
+       (result.experiment && !archive.learningExperiments.has(result.experiment.id)))
     ) {
       try {
         const destination = archive;
@@ -1410,6 +1538,7 @@ async function execute(
     }
     if (currentOperation === operation) {
       pendingModelCommand = undefined;
+      if (retentionFailed && result?.experiment && archive.learningExperiments.has(result.experiment.id)) status = "Accepted update · evidence retained after retry";
       if (guidedBatch?.status === "RUNNING") guidedBatch.status = "STOPPED";
       busy = false;
       render();
@@ -1439,6 +1568,7 @@ async function reset(cancelled: boolean, clear = false): Promise<void> {
   error = "";
   const acceptedAtCancellation = cancelled ? lastAcceptedResult : undefined;
   if (clear) {
+    spatialExperimentId = ""; spatialPresenter.learningStage = undefined;
     lastActivity = Date.now();
     clearExhibitBanner();
     sessionControlsOpen = false;
@@ -1663,7 +1793,7 @@ async function prepareAttract(currentOperation: number): Promise<void> {
   if (response.status !== "result")
     throw new Error("Attract bootstrap did not return a recorded Predict");
   attractReplay = bindAttractReplay(response.result);
-  attract = true;
+  attract = !spatialActive;
   liveRunId = "";
   result = undefined;
   player = undefined;
@@ -1851,12 +1981,12 @@ function selectRun(id: string): void {
       : {}),
   };
   player = new TracePlayer(run);
-  selectedToken = Math.min(selectedToken, tokenIds.length - 1);
-  key = Math.min(key, selectedToken);
+  if (spatialActive) syncSpatialSelection();
+  else { selectedToken = Math.min(selectedToken, tokenIds.length - 1); key = Math.min(key, selectedToken); }
   detail = undefined;
   status = `Viewing recorded ${runLabel(run)}`;
   render();
-  void loadDetail();
+  if (!spatialActive) void loadDetail();
 }
 /** Full observed capture can answer new detail requests after the live worker moves on. */
 function cachedInspection(

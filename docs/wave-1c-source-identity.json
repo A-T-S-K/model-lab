@@ -1,0 +1,88 @@
+{
+  "branch": "wave-1a-spatial",
+  "head": "5217cd11157368807a9159f87fbc87e175bc850b",
+  "uncommitted": true,
+  "incomingRuntime": "sha256:370384135376da45a1a61d287e7cdb88e3acce9d00c9d37bbb4ef3424e2fbee0",
+  "finalRuntime": "sha256:8f45ff3228e8a18872659fab550c9c453c612d141f35faa6cb80afae6f452bcc",
+  "transitions": [
+    {
+      "id": "169476b7-e926-4ff5-8761-359bc8dfd9e3:0:4:learning",
+      "beforeRunId": "169476b7-e926-4ff5-8761-359bc8dfd9e3:0:4:before",
+      "trainingRunId": "169476b7-e926-4ff5-8761-359bc8dfd9e3:0:4:training",
+      "afterRunId": "169476b7-e926-4ff5-8761-359bc8dfd9e3:0:4",
+      "startingSnapshotId": "sha256:d1a46ae0fe2830a2bbcdc118913c5d974ef82e6acc2ef1004b5f8d0dae5b3ca1",
+      "resultingSnapshotId": "sha256:0a43d3e90da2adb442be0d8fbdc18984c11414f72d43e7bc4ccb3d5ae1565712"
+    },
+    {
+      "id": "169476b7-e926-4ff5-8761-359bc8dfd9e3:0:6:learning",
+      "beforeRunId": "169476b7-e926-4ff5-8761-359bc8dfd9e3:0:6:before",
+      "trainingRunId": "169476b7-e926-4ff5-8761-359bc8dfd9e3:0:6:training",
+      "afterRunId": "169476b7-e926-4ff5-8761-359bc8dfd9e3:0:6",
+      "startingSnapshotId": "sha256:0a43d3e90da2adb442be0d8fbdc18984c11414f72d43e7bc4ccb3d5ae1565712",
+      "resultingSnapshotId": "sha256:d8b0756a9529257c8f88cd25fec71d0e4cf613067e0ac5a7455f7183e999b5bf"
+    }
+  ],
+  "freshPrediction": {
+    "runId": "169476b7-e926-4ff5-8761-359bc8dfd9e3:0:8",
+    "sessionId": "169476b7-e926-4ff5-8761-359bc8dfd9e3",
+    "generationId": 0,
+    "model": {
+      "id": "microgpt",
+      "version": "14fb038816c7aae0bb9342c2dbf1a51dd134a5ff",
+      "architecture": {
+        "nLayer": 1,
+        "nEmbd": 8,
+        "nHead": 2,
+        "blockSize": 8,
+        "vocabulary": [
+          "a",
+          "b",
+          "c"
+        ],
+        "bosTokenId": 3
+      },
+      "capabilities": [
+        "predict",
+        "learn",
+        "attentionDetail",
+        "scalar",
+        "backward"
+      ]
+    },
+    "startingCheckpointId": "sha256:d8b0756a9529257c8f88cd25fec71d0e4cf613067e0ac5a7455f7183e999b5bf",
+    "startingSnapshotId": "sha256:d8b0756a9529257c8f88cd25fec71d0e4cf613067e0ac5a7455f7183e999b5bf",
+    "input": [
+      3,
+      0,
+      1,
+      2,
+      1
+    ],
+    "targets": [
+      0,
+      1,
+      2,
+      1,
+      3
+    ],
+    "numeric": {
+      "dtype": "float64",
+      "policy": "ECMAScript binary64; ordered scalar reductions"
+    },
+    "capture": {
+      "level": "semantic",
+      "maxArtifacts": 1024,
+      "maxValues": 16384
+    },
+    "runtimeVersion": "model-lab-0.2.1",
+    "runtimeRevision": "sha256:8f45ff3228e8a18872659fab550c9c453c612d141f35faa6cb80afae6f452bcc"
+  },
+  "recording": {
+    "firstExperiment": "8cf090ef-e10e-487c-9d43-c71ff2044222:0:4:learning",
+    "lastSelectedExperiment": "8cf090ef-e10e-487c-9d43-c71ff2044222:0:4:learning",
+    "liveStep": "2",
+    "source": "Experiment 8cf090ef-e10e-487c-9d43-c71ff2044222:0:4:learningTraining 8cf090ef-e10e-487c-9d43-c71ff2044222:0:4:trainingStarting snapshot sha256:d1a46ae0fe2830a2bbcdc118913c5d974ef82e6acc2ef1004b5f8d0dae5b3ca1Resulting snapshot sha256:0a43d3e90da2adb442be0d8fbdc18984c11414f72d43e7bc4ccb3d5ae1565712",
+    "buildRuntime": "sha256:8f45ff3228e8a18872659fab550c9c453c612d141f35faa6cb80afae6f452bcc",
+    "durationSeconds": 73
+  }
+}

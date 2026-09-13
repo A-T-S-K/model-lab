@@ -1,0 +1,20 @@
+version: 1
+scope: Wave 1B only, retaining A
+branch: wave-1a-spatial
+head: 5217cd11157368807a9159f87fbc87e175bc850b
+uncommitted: true
+evidence_directory: /Users/joshuahansen/dev/model-lab-support/wave-1b-evidence
+incoming_runtime: sha256:ad383558673ddcd942cce5d2b869f6cdfe2c27312098601b026c7f75e67e4291
+checks:
+  - {id: A01-A06, status: PASS, evidence: spatial-wave1a.spec.ts}
+  - {id: B01, status: PASS, evidence: all 21 forward kinds and 9 parameter owners; artifact/component comparisons}
+  - {id: B02, status: PASS, evidence: first query and eight positions; all contributors; future edges absent}
+  - {id: B03, status: PASS, evidence: shorter input clears scalar and explicitly invalidates query}
+  - {id: B04, status: PASS, evidence: all 32 ReLU outputs and observed scalar/local derivative}
+  - {id: B05, status: PASS, evidence: directed choices with earlier-position K/V and full softmax row}
+  - {id: B06, status: PASS, evidence: drag/wheel/buttons/keyboard; interrupt; Home/Back; reduced motion; guide resume}
+  - {id: B07, status: PASS, evidence: affine ranks 0-4; full contributor sums; declared higher-rank projection}
+  - {id: B08, status: PASS, evidence: actual probability barycenter and source-matching component values}
+  - {id: B09, status: PASS, evidence: zero/signed/unavailable/domain checks; sequential probability ramp; external selection}
+subsequent_batches: NOT_RUN
+human_hardware_acceptance: NOT_RUN

@@ -1,0 +1,27 @@
+version: 1
+scope: Wave 1A only
+status: PASSED_FOR_REVIEW
+branch: wave-1a-spatial
+head: 5217cd11157368807a9159f87fbc87e175bc850b
+uncommitted: true
+evidence_directory: /Users/joshuahansen/dev/model-lab-support/wave-1a-evidence
+checks:
+  - id: A01
+    status: PASS
+    evidence: spatial-wave1a.spec.ts; observed abca artifacts and run identity
+  - id: A02
+    status: PASS
+    evidence: spatial-wave1a.spec.ts; abcb changes Q, score and source identities
+  - id: A03
+    status: PASS
+    evidence: both heads; query 4/3/2; key 0/2/4; feature 0/2; future absence
+  - id: A04
+    status: PASS
+    evidence: spatial.test.ts zero/collinear/full-vector norms and dot; browser SVG shaft checks
+  - id: A05
+    status: PASS
+    evidence: all 8 checkpoint row contributors; observed Q scalar and actual Wq operand
+  - id: A06
+    status: PASS
+    evidence: one initialize and Predict session; no commands on presentation switching
+subsequent_batches: NOT_RUN

@@ -40,14 +40,15 @@ export class ModelSession {
   private sessionId = '';
   private queue: Promise<unknown> = Promise.resolve();
 
-  handle(request: WorkerRequest): Promise<WorkerResponse> {
-    const response = this.queue.then(() => this.execute(request));
+  handle(request: WorkerRequest, publishTrainingResult?: (response: WorkerResponse) => void): Promise<WorkerResponse> {
+    const response = this.queue.then(() => this.execute(request, publishTrainingResult));
     this.queue = response.catch(() => undefined);
     return response;
   }
 
-  private async execute(request: WorkerRequest): Promise<WorkerResponse> {
+  private async execute(request: WorkerRequest, publishTrainingResult?: (response: WorkerResponse) => void): Promise<WorkerResponse> {
     const tag = { sessionId: request.sessionId, runId: request.runId, generationId: request.generationId };
+    let rollback: ReturnType<typeof snapshotTraining> | undefined;
     try {
       if (request.command === 'initialize' || request.command === 'reset' || request.command === 'restore') {
         if (request.generationId < this.generationId || (this.sessionId && request.sessionId !== this.sessionId)) throw new Error('Stale session or generation');
@@ -91,6 +92,7 @@ export class ModelSession {
         return { ...tag, status: 'result', result: { ...prediction, run: this.run, tokenIds, targetIds,
           trainingStep: this.optimizer.step, snapshots: [starting], runs: [this.run] } };
       }
+      rollback = starting.state;
       // All three executions have their own immutable manifests and semantic evidence.
       const before = capture(`${request.runId}:before`, starting);
       predict(this.model, tokenIds, before.context);
@@ -108,13 +110,20 @@ export class ModelSession {
         afterRunId: afterRun.manifest.runId, backwardRunId: trainingRun.manifest.runId,
         objective: { inputIds: tokenIds, targetIds, meanLoss: learn.meanLoss }, update: learn.update,
       };
+      const response: WorkerResponse = { ...tag, status: 'result', result: { ...prediction, run: afterRun, tokenIds, targetIds,
+        trainingStep: this.optimizer.step, learn, experiment, snapshots: [starting, resulting],
+        runs: [beforeRun, trainingRun, afterRun] } };
+      // Production publication is synchronous structured-clone acceptance, inside rollback protection.
+      publishTrainingResult?.(response);
       this.run = afterRun; this.contexts.clear();
       this.contexts.set(trainingRun.manifest.runId, training.context);
       this.contexts.set(afterRun.manifest.runId, after.context);
-      return { ...tag, status: 'result', result: { ...prediction, run: afterRun, tokenIds, targetIds,
-        trainingStep: this.optimizer.step, learn, experiment, snapshots: [starting, resulting],
-        runs: [beforeRun, trainingRun, afterRun] } };
+      return response;
     } catch (error) {
+      if (rollback) {
+        const restored = restoreTraining(rollback);
+        this.model = restored.model; this.optimizer = restored.optimizer;
+      }
       return { ...tag, status: 'error', error: error instanceof Error ? error.message : String(error) };
     }
   }

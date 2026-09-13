@@ -1,0 +1,22 @@
+version: 1
+scope: Wave 1C only
+status: PASS_FOR_REVIEW
+branch: wave-1a-spatial
+head: 5217cd11157368807a9159f87fbc87e175bc850b
+uncommitted: true
+retained_A01_A06: PASS
+retained_B01_B09: PASS
+checks:
+  - {id: C01, status: PASS}
+  - {id: C02, status: PASS}
+  - {id: C03, status: PASS}
+  - {id: C04, status: PASS}
+  - {id: C05, status: PASS}
+  - {id: C06, status: PASS}
+  - {id: C07, status: PASS}
+  - {id: C08, status: PASS}
+  - {id: C09, status: PASS}
+  - {id: C10, status: PASS}
+evidence: /Users/joshuahansen/dev/model-lab-support/wave-1c-evidence
+D: NOT_RUN
+human_hardware_acceptance: NOT_RUN

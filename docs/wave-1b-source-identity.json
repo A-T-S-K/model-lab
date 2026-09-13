@@ -1,0 +1,15 @@
+{
+  "branch": "wave-1a-spatial",
+  "head": "5217cd11157368807a9159f87fbc87e175bc850b",
+  "uncommitted": true,
+  "incomingRuntime": "sha256:ad383558673ddcd942cce5d2b869f6cdfe2c27312098601b026c7f75e67e4291",
+  "finalRuntime": "sha256:370384135376da45a1a61d287e7cdb88e3acce9d00c9d37bbb4ef3424e2fbee0",
+  "browserStartingRun": "37735826-6cfe-4c9d-8c9a-dc427672e791:0:3",
+  "browserFinalRun": "37735826-6cfe-4c9d-8c9a-dc427672e791:0:8",
+  "snapshot": "sha256:d1a46ae0fe2830a2bbcdc118913c5d974ef82e6acc2ef1004b5f8d0dae5b3ca1",
+  "recording": {
+    "startingRun": "a67d4fe5-a6e6-43e5-94b6-e4243ee45100:0:3",
+    "finalRun": "a67d4fe5-a6e6-43e5-94b6-e4243ee45100:0:5",
+    "runtime": "sha256:370384135376da45a1a61d287e7cdb88e3acce9d00c9d37bbb4ef3424e2fbee0"
+  }
+}

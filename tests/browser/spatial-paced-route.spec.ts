@@ -1,0 +1,21 @@
+import {test,expect} from '@playwright/test';
+import {mkdir,writeFile} from 'node:fs/promises';
+test.use({video:{mode:'on',size:{width:1920,height:1080}},viewport:{width:1920,height:1080}});
+test('Wave 1B paced review route · actual controls and completed evidence',async({page})=>{
+  test.setTimeout(120000);
+  const directory=process.env.SPATIAL_EVIDENCE_DIR??'/tmp/model-lab-wave1b-browser';
+  await mkdir(directory,{recursive:true});
+  const pause=()=>page.waitForTimeout(4500);
+  const select=async(kind:string)=>{await page.locator('#spatial-operation').selectOption(kind);await pause();};
+  await page.goto('/?presentation=spatial');await expect(page.locator('#predict')).toBeEnabled();
+  await page.locator('#document').fill('abca');await page.locator('#predict').click();await expect(page.getByTestId('status')).toContainText('Live prediction complete');await page.locator('#spatial-query').selectOption('3');await pause();
+  await select('preAttentionNorm');await select('q');await select('attentionLogits');
+  await page.locator('.geometry').scrollIntoViewIfNeeded();await pause();
+  const starting=await page.getByTestId('spatial-run').textContent();
+  await select('attentionProbabilities');await page.getByTestId('softmax-terms').scrollIntoViewIfNeeded();await pause();
+  await page.getByTestId('downstream-choices').getByRole('button',{name:/Weighted values/}).click();await page.getByTestId('mixture-rank').scrollIntoViewIfNeeded();await pause();
+  await select('attentionResidual');await select('mlpRelu');await page.locator('[data-forward-element="3"]').click();await page.getByRole('button',{name:'Inspect selected scalar',exact:true}).click();await expect(page.getByTestId('scalar-operation')).toBeVisible();await pause();
+  await page.locator('#spatial-home').click();await pause();await page.locator('#spatial-back').click();await page.locator('#waypoint-resume').click();await pause();
+  await page.locator('#document').fill('abcb');await page.locator('#predict').click();await expect(page.getByTestId('status')).toContainText('Live prediction complete');await page.locator('#spatial-query').selectOption('4');await select('probabilities');await page.locator('.output-simplex').scrollIntoViewIfNeeded();await pause();
+  await writeFile(`${directory}/recording-identities.json`,JSON.stringify({startingRun:starting,finalRun:await page.getByTestId('spatial-run').textContent(),runtime:await page.getByTestId('spatial-runtime').textContent()},null,2));
+});
