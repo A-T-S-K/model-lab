@@ -8,7 +8,7 @@ import { sceneSvg, stationFor } from "./scene.js";
 import { forwardInspector, addressLabel } from "./inspector.js";
 import { escapeHtml as esc } from "../views/evidence.js";
 export const waypoints=["tokenEmbedding","positionEmbedding","embeddingSum","embeddingNorm","preAttentionNorm","q","k","v","attentionLogits","attentionProbabilities","headOutput","attentionOutput","attentionProjection","attentionResidual","preMlpNorm","mlpUp","mlpRelu","mlpDown","mlpResidual","logits","probabilities"];
-interface Location {selection:SpatialSelection;kind:string;element:number;parameter?:string;row:number;column:number;lens:boolean;box:CameraBox}
+interface Location {selection:SpatialSelection;kind:string;element:number;parameter?:string;row:number;column:number;lens:boolean;learningStage?:LearningStage;box:CameraBox}
 export interface PresentationState {document:string;busy:boolean;ready:boolean;status:string;error:string;scalar:string; learning?:LearningModel; experiments?:{id:string;step:number}[]; experimentId?:string; liveStep?:number; canLearn?:boolean}
 export class SpatialPresenter {
   private redraw=()=>{};
@@ -25,7 +25,7 @@ export class SpatialPresenter {
     const root=document.querySelector('.spatial-shell'),button=root?.querySelector('#explanation-play');if(button)button.textContent='Play';
     root?.querySelectorAll('.explanation-active,.explanation-input,.explanation-link').forEach(el=>el.classList.remove('explanation-active','explanation-input','explanation-link'));
   }
-  invalidate(){this.playback.invalidate();this.camera.stop();this.pendingBox=undefined;}
+  invalidate(){this.playback.invalidate();this.guided=false;this.detour=false;this.step=0;this.camera.stop();this.pendingBox=undefined;}
   private guide(){
     if(!this.boundSelection)return;
     Object.assign(this.selection,this.boundSelection);
@@ -59,7 +59,7 @@ export class SpatialPresenter {
   pin:ParameterPin={name:"wte",row:0,column:0};
   expanded=false;
   openLearning(stage:LearningStage){this.learningStage=stage;this.lens=true;}
-  focusLearning(stage:LearningStage){this.remember();this.openLearning(stage);const node=learningStations.find(s=>s.stage===stage)??learningStations[2];this.pendingBox={x:node.x-430,y:840,width:1400,height:890};}
+  focusLearning(stage:LearningStage){this.interrupt();this.remember();this.openLearning(stage);const node=learningStations.find(s=>s.stage===stage)??learningStations[2];this.pendingBox={x:node.x-430,y:840,width:1400,height:890};}
   showOwner(){this.go({kind:this.pin.name,token:this.selection.query});}
 
   kind="attentionLogits";
@@ -74,12 +74,12 @@ export class SpatialPresenter {
     matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change',()=>{this.camera.stop();});
   }
   address():Address{return {kind:this.kind,token:["k","v"].includes(this.kind)?this.selection.key:this.selection.query,...(headKinds.has(this.kind)?{head:this.selection.head}:{})};}
-  private remember(){this.history.push({selection:{...this.selection},kind:this.kind,element:this.element,parameter:this.parameter,row:this.row,column:this.column,lens:this.lens,box:{...this.camera.box}});if(this.history.length>40)this.history.shift();}
+  private remember(){this.history.push({selection:{...this.selection},kind:this.kind,element:this.element,parameter:this.parameter,row:this.row,column:this.column,lens:this.lens,learningStage:this.learningStage,box:{...this.camera.box}});if(this.history.length>40)this.history.shift();}
   private frame(){const s=stationFor(this.parameter??this.kind,this.selection.head);this.pendingBox={x:s.x-440,y:s.y-260,width:1040,height:740};}
   private go(address:Address, guided=false){
-    if(!guided)this.interrupt();
+    if(!guided){this.interrupt();this.remember();}
     this.learningStage=undefined;
-    if(!guided)this.remember();this.parameter=parameterOwners[address.kind]?address.kind:undefined;
+    this.parameter=parameterOwners[address.kind]?address.kind:undefined;
     if(!this.parameter)this.kind=address.kind;else this.pin={name:this.parameter,row:this.row,column:this.column};
     if(["k","v"].includes(address.kind))this.selection.key=address.token;else this.selection.query=address.token;
     if(address.head!==undefined)this.selection.head=address.head;
@@ -108,15 +108,16 @@ export class SpatialPresenter {
     const root=document.querySelector<HTMLElement>(".spatial-shell")!;
     this.emphasize();
     if(this.playback.source&&!this.playback.exploring&&m){
-      const active=this.learningStage?root.querySelector(`[data-learning-stage="${this.learningStage}"]`):root.querySelector(`[data-world-kind="${this.kind}"]`);
+      const headSelector=['q','k','v'].includes(this.kind)||headKinds.has(this.kind)?`[data-world-head="${this.selection.head}"]`:'';
+      const active=this.learningStage?root.querySelector(`svg [data-learning-stage="${this.learningStage==='compare'?'checkpoint':this.learningStage}"]`):root.querySelector(`[data-world-kind="${this.kind}"]${headSelector}`);
       active?.classList.add('explanation-active');
-      for(const d of m.forward.upstream(this.address()))root.querySelectorAll(`[data-world-kind="${d.address.kind}"],[data-world-parameter="${d.address.kind}"]`).forEach(el=>el.classList.add('explanation-input'));
-      root.querySelectorAll(`[data-edge-from="${this.kind}"],[data-edge-to="${this.kind}"]`).forEach(el=>el.classList.add('explanation-link'));
+      if(!this.learningStage)for(const d of m.forward.upstream(this.address()))root.querySelectorAll(`[data-world-kind="${d.address.kind}"],[data-world-parameter="${d.address.kind}"]`).forEach(el=>el.classList.add('explanation-input'));
+      if(!this.learningStage)root.querySelectorAll(`[data-edge-from="${this.kind}"],[data-edge-to="${this.kind}"]`).forEach(el=>el.classList.add('explanation-link'));
     }
     const on=(id:string,fn:()=>void)=>root.querySelector(id)?.addEventListener("click",fn);
     const change=()=>{this.interrupt(true);if(this.parameter&&!this.learningStage)this.pin={name:this.parameter,row:this.row,column:this.column};changed();render();};
     const home=()=>{this.interrupt();this.remember();this.lens=false;this.pendingBox={...HOME};render();};
-    const back=()=>{this.interrupt();const prior=this.history.pop();if(!prior)return;Object.assign(this.selection,prior.selection);this.kind=prior.kind;this.element=prior.element;this.parameter=prior.parameter;this.row=prior.row;this.column=prior.column;this.lens=prior.lens;this.pendingBox=prior.box;change();};
+    const back=()=>{this.interrupt();const prior=this.history.pop();if(!prior)return;Object.assign(this.selection,prior.selection);this.kind=prior.kind;this.element=prior.element;this.parameter=prior.parameter;this.row=prior.row;this.column=prior.column;this.lens=prior.lens;this.learningStage=prior.learningStage;this.pendingBox=prior.box;change();};
     for(const id of ["#spatial-home","#lens-home"])on(id,home);
     for(const id of ["#spatial-back","#lens-back"])on(id,back);
     on("#spatial-focus",()=>{this.remember();this.lens=true;this.frame();render();});

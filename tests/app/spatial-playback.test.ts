@@ -10,4 +10,5 @@ test('one clock cancels stale ticks, preserves cursor on exploration, and bounds
  p.play();t.mock.timers.tick(10);assert.equal(p.phase,1);assert.equal(p.cursor,2);t.mock.timers.tick(10);assert.equal(p.phase,2);t.mock.timers.tick(10);assert.equal(p.playing,false);assert.equal(p.pendingTimers,0);assert.equal(phases,2);
  p.bind('experiment-a','learning',5);p.step(3);p.pause(true);p.resume();assert.equal(p.cursor,3);assert.equal(p.source,'experiment-a');
  p.invalidate();p.play();assert.equal(p.pendingTimers,0);assert.equal(p.source,'');
+ const invalidated=new ExplanationPlayback(()=>{},()=>invalidated.invalidate(),10);invalidated.bind('lost-source','forward',3);invalidated.play();assert.equal(invalidated.playing,false);assert.equal(invalidated.pendingTimers,0);
 });

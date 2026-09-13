@@ -9,7 +9,7 @@ export class ExplanationPlayback {
   invalidate(){this.pause();this.source='';this.length=0;}
   step(cursor:number){this.pause();this.phase=2;this.cursor=Math.max(0,Math.min(this.length-1,cursor));if(this.source)this.apply();this.changed();}
   resume(){this.step(this.cursor);}
-  play(){if(!this.source)return;this.pause();this.phase=0;this.apply();this.playing=true;this.changed();this.schedule();}
-  private schedule(){const generation=this.generation;this.timer=setTimeout(()=>{this.timer=undefined;if(!this.playing||generation!==this.generation)return;if(this.phase<2){this.phase++;this.transient();this.schedule();return;}if(this.cursor+1>=this.length){this.pause();this.changed();return;}this.cursor++;this.phase=0;this.apply();this.changed();this.schedule();},this.delay);}
+  play(){if(!this.source)return;this.pause();this.phase=0;this.playing=true;this.apply();this.changed();this.schedule();}
+  private schedule(){if(!this.playing||!this.source)return;const generation=this.generation;this.timer=setTimeout(()=>{this.timer=undefined;if(!this.playing||generation!==this.generation)return;if(this.phase<2){this.phase++;this.transient();this.schedule();return;}if(this.cursor+1>=this.length){this.pause();this.changed();return;}this.cursor++;this.phase=0;this.apply();this.changed();this.schedule();},this.delay);}
   get pendingTimers(){return Number(this.timer!==undefined);}
 }
