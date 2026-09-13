@@ -125,7 +125,8 @@ let compactFanIn = false;
 let offerParameterUpdate = false;
 let liveTrainingStep = 0;
 let liveRunId = "";
-let kioskEnabled = new URLSearchParams(location.search).get("kiosk") === "1";
+let exhibitEntry = new URLSearchParams(location.search).get("kiosk") === "1";
+let kioskEnabled = exhibitEntry;
 let exhibitConfiguration = exhibitTiming(new URLSearchParams(location.search));
 let lastActivity = Date.now();
 let visitorPointerDown = false;
@@ -555,14 +556,14 @@ function render(): void {
   document.body.classList.toggle("spatial-mode", spatialActive);
   document.body.classList.toggle("instrument-mode", !spatialActive);
   if (spatialActive) {
-    const displayed = attract && kioskEnabled ? attractReplay?.result : result;
+    const displayed = attract && exhibitEntry ? attractReplay?.result : result;
     const source = displayed && sourceBinding(displayed.run, config.vocabulary, sourceSnapshot(displayed.run.manifest.startingSnapshotId??"")?.state.optimizer.step??displayed.trainingStep, liveRunId, documentText, "SPATIAL ATTENTION");
     const model = displayed && source && spatialReadModel(displayed.run, sourceSnapshot(source.sourceSnapshotId ?? "") ?? displayed.snapshots.find(s=>s.id===source.sourceSnapshotId), source, spatialSelection);
     const learning = spatialLearningModel();
     const ablation=[...archive.interventionExperiments.values()].find(e=>e.baselineRun.manifest.runId===result?.run.manifest.runId||e.interventionRun.manifest.runId===result?.run.manifest.runId);
     const ablationPair=ablation?{before:forwardReadModel(ablation.baselineRun,sourceSnapshot(ablation.startingSnapshotId)),after:forwardReadModel(ablation.interventionRun,sourceSnapshot(ablation.startingSnapshotId))}:undefined;
     mount.innerHTML = spatialPresenter.render(model, {
-      attract: attract && kioskEnabled, exhibit: kioskEnabled,
+      attract: attract && exhibitEntry, exhibit: exhibitEntry, idleResetEnabled:kioskEnabled, idleResetSeconds:exhibitConfiguration.resetAfterMs/1000,
       retention:{bytes:evidenceBytes,runs:archive.runs.size,snapshots:archive.snapshots.size,experiments:archive.learningExperiments.size},
       ablationPending: activeAblation!==undefined,
       inspectedArm:forwardDriver.progress?.training?.readyOutputs?(result?.run.manifest.runId===forwardDriver.progress.training.readyOutputs.before.manifest.runId?'Current · accepted checkpoint':'Candidate · provisional checkpoint'):ablation?(result?.run.manifest.runId===ablation.baselineRun.manifest.runId?'Baseline':'Head output zeroed'):undefined,
@@ -582,7 +583,7 @@ function render(): void {
     spatialPresenter.bind(model, spatialSelectionChanged, render, selectExplanationPhase);
     bindSpatialLearning();
     bindForwardControls();
-    mount.querySelector("#exhibit-opt-out")?.addEventListener("click",()=>{ kioskEnabled=false; saveExhibitConfiguration(); clearExhibitBanner(); render(); });
+    mount.querySelector("#exhibit-opt-out")?.addEventListener("click",()=>{ kioskEnabled=!kioskEnabled; lastActivity=Date.now(); saveExhibitConfiguration(); clearExhibitBanner(); render(); });
     mount.querySelectorAll<HTMLElement>("[data-scroll-region]").forEach(element => {
       const scroll = regionScroll.get(element.dataset.scrollRegion);
       if (scroll && priorSpatialSelection === mount.querySelector(".context-lens")?.getAttribute("data-selection")) { element.scrollTop = scroll.top; element.scrollLeft = scroll.left; }
@@ -1330,6 +1331,7 @@ function bind(): void {
     ?.addEventListener("click", () => void execute("train", trainingCount));
   document.querySelector("#kiosk-mode")?.addEventListener("change", (event) => {
     kioskEnabled = (event.target as HTMLInputElement).checked;
+    if (kioskEnabled) exhibitEntry = true;
     lastActivity = Date.now();
     saveExhibitConfiguration();
     checkExhibitIdle();
@@ -1947,7 +1949,7 @@ async function prepareAttract(currentOperation: number): Promise<void> {
   if (response.status !== "result")
     throw new Error("Attract bootstrap did not return a recorded Predict");
   attractReplay = bindAttractReplay(response.result);
-  attract = !spatialActive || kioskEnabled;
+  attract = !spatialActive || exhibitEntry;
   liveRunId = "";
   result = undefined;
   player = undefined;
