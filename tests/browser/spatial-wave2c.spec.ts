@@ -28,7 +28,7 @@ test('U01/U03/U06/U07 decision → selected head intervention → downstream →
  test.setTimeout(180000);await mkdir(directory,{recursive:true});
  const context=await browser.newContext({viewport:{width:1920,height:1080},recordVideo:{dir:directory,size:{width:1920,height:1080}},reducedMotion:'reduce'});
  const page=await context.newPage();await audit(page);const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
- const pause=()=>page.waitForTimeout(process.env.WAVE2C_RECORD?'7000':50);
+ const pause=()=>page.waitForTimeout(process.env.WAVE2C_RECORD?2500:50);
  const capture=async(name:string)=>{await page.screenshot({path:`${directory}/${name}-1920.png`});await page.setViewportSize({width:1280,height:720});await page.screenshot({path:`${directory}/${name}-1280.png`});await page.setViewportSize({width:1920,height:1080});};
  await page.goto(baseURL+'/?presentation=spatial');await expect(page.locator('#step-learning')).toBeEnabled();
  await page.locator('#step-learning').click();await continueUntil(page,'backward');await page.locator('#execution-pin').click();
@@ -59,4 +59,27 @@ test('U01/U03/U06/U07 decision → selected head intervention → downstream →
  expect(evidence.commands.filter((c:any)=>c.command==='acceptTraining')).toHaveLength(1);expect(evidence.commands.filter((c:any)=>c.command==='train')).toHaveLength(0);
  await writeFile(`${directory}/http-audit.json`,JSON.stringify(evidence,null,2));
  const video=page.video()!;await context.close();await video.saveAs(`${directory}/wave-2c-route.webm`);
+});
+
+test('U06/U07 cancelled, failed and replaced experiments preserve the full accepted snapshot and clear stale inspection',async({page})=>{
+ test.setTimeout(90000);await audit(page);
+ await page.addInitScript(()=>{const w=window as any;const send=Worker.prototype.postMessage;Worker.prototype.postMessage=function(m:any,...rest:any[]){
+  if(m.command==='ablate'&&w.ablationFault==='hold')return;
+  if(m.command==='ablate'&&w.ablationFault==='fail'){setTimeout(()=>this.dispatchEvent(new MessageEvent('message',{data:{...m,status:'error',error:'injected disposable comparison failure'}})),50);return;}
+  return Reflect.apply(send,this,[m,...rest]);
+ };});
+ await page.goto('/?presentation=spatial');await expect(page.locator('#predict')).toBeEnabled();await page.locator('#predict').click();await expect(page.locator('#spatial-learn')).toBeEnabled();await page.locator('#spatial-learn').click();await expect(page.getByTestId('spatial-live-step')).toHaveText('1');
+ const accepted=await page.evaluate(()=>(window as any).trainingAudit.responses.filter((r:any)=>r.status==='result'&&r.result.learn).at(-1).result.snapshots.at(-1));
+ for(const fault of ['hold','fail']){
+  await page.locator('#spatial-operation').selectOption('headOutput');await page.evaluate(fault=>(window as any).ablationFault=fault,fault);await page.locator('#spatial-ablate').click();
+  if(fault==='hold'){await expect(page.locator('#cancel-ablation')).toBeVisible();await page.locator('#cancel-ablation').click();await expect(page.getByTestId('status')).toContainText('cancelled');}
+  else await expect(page.getByTestId('status')).toContainText('Ablation failed');
+  await expect(page.getByTestId('spatial-live-step')).toHaveText('1');await expect(page.getByTestId('spatial-intervention')).toHaveCount(0);
+ }
+ await page.evaluate(()=>(window as any).ablationFault='');
+ await page.locator('#spatial-ablate').click();await expect(page.getByTestId('spatial-intervention')).toBeVisible();
+ await page.locator('#spatial-operation').selectOption('logits');await page.getByRole('button',{name:'Inspect selected scalar',exact:true}).click();await expect(page.locator('#microscope')).toContainText('RECOMPUTED');
+ await page.locator('#spatial-operation').selectOption('headOutput');await page.locator('#spatial-head').selectOption('0');await page.locator('#spatial-ablate').click();await expect(page.getByTestId('spatial-intervention')).toContainText('head 0');await expect(page.locator('#microscope')).not.toContainText('RECOMPUTED');
+ await page.locator('#spatial-current').click();await page.locator('#document').fill('bc');await page.locator('#predict').click();await expect(page.getByTestId('status')).toContainText('Live prediction complete');await expect(page.getByTestId('spatial-intervention')).toHaveCount(0);await expect(page.getByTestId('paired-components')).toHaveCount(0);
+ const after=await page.evaluate(()=>(window as any).trainingAudit.responses.filter((r:any)=>r.status==='result').at(-1).result.snapshots[0]);expect(after).toEqual(accepted);
 });

@@ -14,7 +14,7 @@ export type TrainingPhase = 'baseline forward' | 'training forward' | 'loss' | '
 export interface LiveContribution { child: number | undefined; operand: number; childAdjoint: number; localDerivative: number; contribution: number; before: number; after: number; ordinal: number }
 export interface TrainingProgress {
   readyOutputs?: { before: RecordedRun; after: RecordedRun; starting: ArchivedSnapshot };
-  phase: TrainingPhase; count: number; processed: number; acceptedStep: number; candidateId?: string;
+  phase: TrainingPhase; count: number; processed: number; acceptedStep: number; startingSnapshotId: string; candidateId?: string;
   pin: number; gradient: number; final: boolean; contributions: LiveContribution[]; proposal?: ParameterUpdate;
   losses: { target: number; value?: number }[]; mean?: number;
   old: { parameter: number; m: number; v: number }; optimizer: { beta1: number; beta2: number; epsilon: number; effectiveLearningRate: number };
@@ -64,7 +64,7 @@ export class TrainingExecution {
     const oldParameters = this.starting.state.parameterOrder.flatMap(name => this.starting.state.parameters[name].flat());
     return immutableCopy({ executionId: this.id, sequence: this.sequence, total: this.boundaries.length, ...delta, start,
       ...(this.phase.endsWith('forward') ? { last: this.boundaries[this.count - 1], next: this.boundaries[this.count] } : {}),
-      training: { phase: this.phase, count: this.count, processed, acceptedStep: this.starting.state.optimizer.step, candidateId: this.candidate?.id,
+      training: { phase: this.phase, count: this.count, processed, acceptedStep: this.starting.state.optimizer.step, startingSnapshotId: this.starting.id, candidateId: this.candidate?.id,
         ...(this.phase === 'ready' && this.result ? { readyOutputs: { before: this.beforeRun!, after: this.result.run, starting: this.starting } } : {}),
         losses: this.losses, mean: this.objectiveResult?.mean.data,
         old: { parameter: oldParameters[this.pin], m: oldOptimizer.m[this.pin], v: oldOptimizer.v[this.pin] },

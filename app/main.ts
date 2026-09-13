@@ -146,6 +146,7 @@ let result: RunResult | undefined;
 let player: TracePlayer | undefined;
 let beforeForward: RunResult | undefined;
 let readyComparison = true;
+let activeAblation: number | undefined;
 let beforeForwardLocation: ReturnType<SpatialPresenter['captureLocation']> | undefined;
 let beforeForwardExperiment = '';
 function restoreExecutionView() {
@@ -180,7 +181,7 @@ function forwardChanged() {
     const boundary = forwardDriver.progress?.last;
     if (boundary && forwardDriver.follow) spatialPresenter.followBoundary(boundary);
     status = `${forwardDriver.phase === 'pausing' ? 'Pausing · admitted operator may finish' : forwardDriver.pending && forwardDriver.phase === 'paused' ? 'Executing one admitted operator' : forwardDriver.phase === 'running' ? 'Running · paced operator execution' : forwardDriver.phase === 'starting' ? 'Preparing input and checkpoint' : forwardDriver.phase === 'cancelling' ? 'Cancelling execution' : 'Paused · no future permits'} · ${forwardDriver.progress?.sequence}/${forwardDriver.progress?.total}`;
-    if (training) status = `Accepted step ${training.acceptedStep} · ${training.phase === 'ready' ? 'Candidate ready — not accepted' : training.phase} · ${training.count} units · candidate is provisional`;
+    if (training) status = `Accepted step ${training.acceptedStep} · ${training.phase === 'ready' ? 'Candidate ready — not accepted' : training.phase} · candidate is provisional`;
     syncSpatialSelection();
   } else if (!forwardDriver.active) {
     result = beforeForward; beforeForward = undefined; restoreExecutionView(); player = result && new TracePlayer(result.run);
@@ -208,7 +209,7 @@ function bindForwardControls() {
       if(prepared && forwardDriver.preview){
         readyComparison=arm==='pair';
         const run=arm==='before'?prepared.before:prepared.after;
-        result={...forwardDriver.preview,run,snapshots:[prepared.starting,...forwardDriver.preview.snapshots]};
+        result={...forwardDriver.preview,run,trainingStep:arm==='before'?prepared.starting.state.optimizer.step:prepared.starting.state.optimizer.step+1,snapshots:[prepared.starting,...forwardDriver.preview.snapshots]}; player=new TracePlayer(run);
         forwardDriver.follow=false; render();
       } else if(!forwardDriver.active && !busy){
         const e=[...archive.interventionExperiments.values()].find(e=>e.baselineRun.manifest.runId===result?.run.manifest.runId||e.interventionRun.manifest.runId===result?.run.manifest.runId);
@@ -553,12 +554,14 @@ function render(): void {
   document.body.classList.toggle("spatial-mode", spatialActive);
   document.body.classList.toggle("instrument-mode", !spatialActive);
   if (spatialActive) {
-    const source = result && sourceBinding(result.run, config.vocabulary, result.trainingStep, liveRunId, documentText, "SPATIAL ATTENTION");
+    const source = result && sourceBinding(result.run, config.vocabulary, sourceSnapshot(result.run.manifest.startingSnapshotId??"")?.state.optimizer.step??result.trainingStep, liveRunId, documentText, "SPATIAL ATTENTION");
     const model = result && source && spatialReadModel(result.run, sourceSnapshot(source.sourceSnapshotId ?? ""), source, spatialSelection);
     const learning = spatialLearningModel();
     const ablation=[...archive.interventionExperiments.values()].find(e=>e.baselineRun.manifest.runId===result?.run.manifest.runId||e.interventionRun.manifest.runId===result?.run.manifest.runId);
     const ablationPair=ablation?{before:forwardReadModel(ablation.baselineRun,sourceSnapshot(ablation.startingSnapshotId)),after:forwardReadModel(ablation.interventionRun,sourceSnapshot(ablation.startingSnapshotId))}:undefined;
     mount.innerHTML = spatialPresenter.render(model, {
+      ablationPending: activeAblation!==undefined,
+      inspectedArm:forwardDriver.progress?.training?.readyOutputs?(result?.run.manifest.runId===forwardDriver.progress.training.readyOutputs.before.manifest.runId?'Current · accepted checkpoint':'Candidate · provisional checkpoint'):undefined,
       document: documentText, busy, ready, status, error, execution: forwardDriver.active ? forwardDriver : undefined,
       outputPair:ablation?{before:ablation.baselineRun,after:ablation.interventionRun}:undefined,
       comparisonLabels:ablation?['Baseline','Head output zeroed']:undefined,
@@ -817,6 +820,7 @@ async function inspectSpatialGradient(child?: number) {
     await inspect(m.experiment.trainingRunId,{kind:"node",nodeId:child},"Captured contribution child",[child]);
 }
 function bindSpatialLearning() {
+  mount.querySelector('#cancel-ablation')?.addEventListener('click',()=>{if(activeAblation===undefined)return;++operation;activeAblation=undefined;busy=false;clearDisplayedInspection();status='Head comparison cancelled · accepted model unchanged';render();});
   mount.querySelector('#spatial-ablate')?.addEventListener('click',()=>{syncSpatialSelection();void ablateHead();});
   const on = (id:string, action:()=>void) => mount.querySelector(id)?.addEventListener("click",action);
   on("#spatial-learn",()=>{if(result?.run.manifest.runId===liveRunId&&!busy&&ready&&sourceBinding(result.run,config.vocabulary,result.trainingStep,liveRunId,documentText,"LEARN").capturedDocument===documentText)void execute("train");});
@@ -1683,6 +1687,7 @@ async function execute(
 }
 
 async function reset(cancelled: boolean, clear = false): Promise<void> {
+  activeAblation=undefined;
   discardForward();
   spatialPresenter.invalidate();
   if (cancelled && !busy && inspectionPending) {
@@ -2456,6 +2461,7 @@ async function ablateHead(): Promise<void> {
   if (forwardDriver.active) { error='Finish/cancel execution or accept/discard the candidate before testing a head.';render();return; }
   if (busy || !result || evidenceBytes >= SESSION_BUDGET) return;
   const source = result;
+  if(source.run.manifest.runtimeRevision!==RUNTIME_REVISION){error='Selected source runtime differs; choose a compatible completed run.';render();return;}
   const snapshot = sourceSnapshot(source.run.manifest.startingSnapshotId ?? "");
   if (!snapshot) {
     error = "The selected starting snapshot is unavailable.";
@@ -2463,7 +2469,7 @@ async function ablateHead(): Promise<void> {
     return;
   }
   clearDisplayedInspection();
-  const currentOperation = ++operation;
+  const currentOperation = ++operation; activeAblation=currentOperation;
   busy = true;
   error = "";
   status = "Running matched baseline and head ablation…";
@@ -2484,6 +2490,7 @@ async function ablateHead(): Promise<void> {
     evidenceBytes += new TextEncoder().encode(
       JSON.stringify(experiment),
     ).byteLength;
+    activeAblation=undefined;
     comparisonRunId = experiment.baselineRun.manifest.runId;
     busy = false;
     selectRun(experiment.interventionRun.manifest.runId);
@@ -2497,7 +2504,7 @@ async function ablateHead(): Promise<void> {
     status = "Ablation failed";
   } finally {
     if (currentOperation === operation) {
-      busy = false;
+      activeAblation=undefined; busy = false;
       render();
     }
   }

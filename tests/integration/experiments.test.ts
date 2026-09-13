@@ -81,3 +81,16 @@ test('U04/U05 both heads and short/maximum contexts preserve upstream and copy a
   }
  }
 });
+
+test('U05 a head already zero is a valid no-change experiment; U06 historical scalar remains intervention-bound',async()=>{
+ const {inspectHistorical}=await import('../../app/worker/inspector.js');
+ const initialSnapshot=await initial();const state=structuredClone(initialSnapshot.state);
+ state.parameters['layer0.attn_wv']=state.parameters['layer0.attn_wv'].map(row=>row.map(()=>0));
+ const snapshot=await archiveSnapshot(state),saved=JSON.stringify(snapshot);
+ const e=await runHeadAblation(snapshot,[3,0],[0,3],{layer:0,head:1});
+ for(const a of e.baselineRun.artifacts){const b=e.interventionRun.artifacts.find(b=>JSON.stringify(b.concept)===JSON.stringify(a.concept));assert.deepEqual(b?.values,a.values);}
+ const artifact=e.interventionRun.artifacts.find(a=>a.kind==='headOutput'&&a.concept.head===1)!;
+ const evidence=await inspectHistorical({command:'inspect',sessionId:'inspect-arm',generationId:0,runId:'inspect',snapshot,run:e.interventionRun,target:{kind:'artifact',artifactId:artifact.id,index:0},backward:false});
+ assert.equal(evidence.availability,'available');assert.equal(evidence.sourceRunId,e.interventionRun.manifest.runId);assert.equal(evidence.verification?.verified,true);
+ assert.equal(JSON.stringify(snapshot),saved);
+});
