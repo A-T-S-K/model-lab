@@ -21,7 +21,7 @@ export class SpatialPresenter {
   private phase?:(phase:string)=>void;
   private model?:SpatialReadModel;
   private routeChoice:'forward'|'learning'='forward';
-  interrupt(){this.playback.pause(true);this.camera.stop();this.pendingBox=undefined;this.detour=this.guided;
+  interrupt(preserveFrame=false){this.playback.pause(true);this.camera.stop();if(!preserveFrame)this.pendingBox=undefined;this.detour=this.guided;
     const root=document.querySelector('.spatial-shell'),button=root?.querySelector('#explanation-play');if(button)button.textContent='Play';
     root?.querySelectorAll('.explanation-active,.explanation-input,.explanation-link').forEach(el=>el.classList.remove('explanation-active','explanation-input','explanation-link'));
   }
@@ -114,7 +114,7 @@ export class SpatialPresenter {
       root.querySelectorAll(`[data-edge-from="${this.kind}"],[data-edge-to="${this.kind}"]`).forEach(el=>el.classList.add('explanation-link'));
     }
     const on=(id:string,fn:()=>void)=>root.querySelector(id)?.addEventListener("click",fn);
-    const change=()=>{this.interrupt();if(this.parameter&&!this.learningStage)this.pin={name:this.parameter,row:this.row,column:this.column};changed();render();};
+    const change=()=>{this.interrupt(true);if(this.parameter&&!this.learningStage)this.pin={name:this.parameter,row:this.row,column:this.column};changed();render();};
     const home=()=>{this.interrupt();this.remember();this.lens=false;this.pendingBox={...HOME};render();};
     const back=()=>{this.interrupt();const prior=this.history.pop();if(!prior)return;Object.assign(this.selection,prior.selection);this.kind=prior.kind;this.element=prior.element;this.parameter=prior.parameter;this.row=prior.row;this.column=prior.column;this.lens=prior.lens;this.pendingBox=prior.box;change();};
     for(const id of ["#spatial-home","#lens-home"])on(id,home);

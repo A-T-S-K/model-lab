@@ -152,3 +152,8 @@ body.spatial-mode { background:#0B0F12; color:#F2F5F7; font-family:Plex,sans-ser
 [data-explanation-phase="0"] .teaching-step p:nth-child(1),[data-explanation-phase="1"] .teaching-step p:nth-child(2),[data-explanation-phase="2"] .teaching-step p:nth-child(3) { border-right:2px solid #FFD166; }
 [data-explanation-phase="0"] .spatial-world .explanation-link { stroke:#C2CAD0; }
 [data-explanation-phase="2"] .spatial-world .explanation-active .field { stroke:#F2F5F7; }
+.region-short,.learning-overview-title { display:none; }
+.overview .region-full { display:none; }
+.overview .region-short { display:inline; }
+.overview .learning-world [data-learning-stage]>text:not(.learning-overview-title) { display:none; }
+.overview .learning-world .learning-overview-title { display:block; }
