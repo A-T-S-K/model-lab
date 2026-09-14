@@ -1,7 +1,7 @@
-import { test,expect } from '@playwright/test';
-import { readFile,writeFile } from 'node:fs/promises';
-const dir='test-results/m0-m1-first-slice';
-test('two real producers share admission, inspection, sources and saved evidence',async({page})=>{
+import { test,expect } from '../support/browser-evidence.js';
+import { writeFile } from 'node:fs/promises';
+import { readReplayPair } from '../support/slice-output.js';
+test('two real producers share admission, inspection, sources and saved evidence',async({page,evidenceDir:dir})=>{
   test.skip(process.env.SLICE_PHASE==='offline');
   const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
   await page.addInitScript(()=>{
@@ -16,8 +16,8 @@ test('two real producers share admission, inspection, sources and saved evidence
   await expect(page.locator('#shared-inspector')).toContainText('float64');await page.screenshot({path:`${dir}/canonical-shared-1920.png`});
   await page.locator('#shared-save').click();await writeFile(`${dir}/canonical-saved.json`,await page.evaluate(()=>localStorage.getItem('model-lab-evidence-v1')!));
   const commands=await page.evaluate(()=>(window as any).sliceAudit.commands.length);
-  await page.locator('#shared-model').selectOption('pythia-native-v1');await page.locator('#native-prompt').fill('The cat sat');
-  const responsePromise=page.waitForResponse(r=>r.url()==='http://127.0.0.1:4319/execute'&&r.request().method()==='POST');
+  await page.locator('#shared-model').selectOption('pythia-native-v1');await page.locator('#native-endpoint').fill(process.env.SLICE_NATIVE_ENDPOINT!);await page.locator('#native-prompt').fill('The cat sat');
+  const responsePromise=page.waitForResponse(r=>r.url()===process.env.SLICE_NATIVE_ENDPOINT!&&r.request().method()==='POST');
   await page.locator('#shared-execute').click();const response=await responsePromise;expect(response.status()).toBe(200);const native=await response.json();
   await expect(page.getByTestId('shared-status')).toContainText('receipt validated');
   expect(await page.evaluate(()=>(window as any).sliceAudit.commands.length)).toBe(commands);
@@ -41,9 +41,9 @@ test('two real producers share admission, inspection, sources and saved evidence
   expect(errors).toEqual([]);await writeFile(`${dir}/browser-live-evidence.json`,JSON.stringify({baseline:baseline.run.manifest,after:after.run.manifest,nativeRequest:response.request().postDataJSON(),nativeRuntime:native.record.runtime,nativeRun:native.record.id,errors,canonicalStateUnchanged:true},null,2));
 });
 
-test('saved native evidence replays after shutdown and canonical operation requires no Python endpoint',async({page})=>{
-  test.skip(process.env.SLICE_PHASE!=='offline');const saved=await readFile(`${dir}/browser-saved-native.json`,'utf8');const native=JSON.parse(await readFile(`${dir}/browser-native-response.json`,'utf8'));
-  let nativeRequests=0;page.on('request',r=>{if(r.url().includes(':4319'))nativeRequests++;});
+test('saved native evidence replays after shutdown and canonical operation requires no Python endpoint',async({page,evidenceDir:dir})=>{
+  test.skip(process.env.SLICE_PHASE!=='offline');const {saved,native}=await readReplayPair(process.cwd(),process.env.SLICE_SAVED_INPUT!,process.env.SLICE_RESPONSE_INPUT!,process.env.MODEL_LAB_SLICE_OUTPUT!);
+  let nativeRequests=0;page.on('request',r=>{if(r.url()===process.env.SLICE_NATIVE_ENDPOINT)nativeRequests++;});
   await page.addInitScript(saved=>localStorage.setItem('model-lab-evidence-v1',saved),saved);
   await page.setViewportSize({width:1920,height:1080});await page.goto('/?presentation=spatial');
   await page.locator('#open-shared-inspector').click();await page.locator('#shared-load').click();await expect(page.getByTestId('shared-provenance')).toContainText('SAVED REPLAY');
@@ -55,16 +55,16 @@ test('saved native evidence replays after shutdown and canonical operation requi
   expect(nativeRequests).toBe(0);await writeFile(`${dir}/browser-offline-evidence.json`,JSON.stringify({nativeRequests,sharedSavedValuesExact:true,uncapturedRefusal:true,canonicalPredictWithoutBridge:true},null,2));
 });
 
-test('a real native reply delayed past a model switch cannot enter retained evidence',async({page})=>{
+test('a real native reply delayed past a model switch cannot enter retained evidence',async({page,evidenceDir:dir})=>{
   test.skip(process.env.SLICE_PHASE==='offline');
   let release!:()=>void,received!:()=>void;
   const hold=new Promise<void>(resolve=>release=resolve),ready=new Promise<void>(resolve=>received=resolve);
-  await page.route('http://127.0.0.1:4319/execute',async route=>{
+  await page.route(process.env.SLICE_NATIVE_ENDPOINT!,async route=>{
     const response=await route.fetch();received();await hold;
     try{await route.fulfill({response});}catch{/* The actual client abort closes the route. */}
   });
   await page.goto('/?presentation=spatial');await page.locator('#open-shared-inspector').click();
-  await page.locator('#shared-model').selectOption('pythia-native-v1');await page.locator('#shared-execute').click();await ready;
+  await page.locator('#shared-model').selectOption('pythia-native-v1');await page.locator('#native-endpoint').fill(process.env.SLICE_NATIVE_ENDPOINT!);await page.locator('#shared-execute').click();await ready;
   await page.locator('#shared-model').selectOption('microgpt-legacy-v1');release();
   await expect(page.getByTestId('shared-status')).toContainText('Producer changed');
   await expect(page.locator('#shared-run option').filter({hasText:'pythia-native-v1'})).toHaveCount(0);

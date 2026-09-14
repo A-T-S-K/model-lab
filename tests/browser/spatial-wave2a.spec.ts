@@ -1,6 +1,5 @@
-import {test,expect,type Page} from '@playwright/test';
+import {test,expect,type Page} from '../support/browser-evidence.js';
 import {mkdir,writeFile} from 'node:fs/promises';
-const directory=process.env.WAVE2_EVIDENCE_DIR??'test-results/wave2a-review';
 async function audit(page:Page) {
  await page.addInitScript(()=>{
   const w=window as any;w.eAudit={commands:[],responses:[],outstanding:0,maxOutstanding:0};
@@ -16,7 +15,7 @@ async function audit(page:Page) {
 async function next(page:Page,n:number) {
  for(let i=0;i<n;i++){const prior=Number(await page.locator('#execution-controls').getAttribute('data-sequence'));await page.getByRole('button',{name:'Next operator',exact:true}).click();await expect(page.locator('#execution-controls')).toHaveAttribute('data-sequence',String(prior+1));}
 }
-test('E01–E08 real HTTP paused frontier, produced scalar, ReLU marks, explore/resume and completed explanation',async({page})=>{
+test('E01–E08 real HTTP paused frontier, produced scalar, ReLU marks, explore/resume and completed explanation',async({page,evidenceDir:directory})=>{
  test.setTimeout(90000);await mkdir(directory,{recursive:true});await audit(page);const errors:string[]=[];
  page.on('pageerror',e=>errors.push(e.message));page.on('requestfailed',r=>errors.push(r.url()));
  await page.setViewportSize({width:1920,height:1080});await page.goto('/?presentation=spatial');await expect(page.locator('#step-prediction')).toBeEnabled();
@@ -68,7 +67,7 @@ test('E01–E08 real HTTP paused frontier, produced scalar, ReLU marks, explore/
  expect(errors).toEqual([]);await writeFile(`${directory}/http-audit.json`,JSON.stringify(evidence,null,2));
 });
 
-test('E07 HTTP input/switch/clear cancellation, paused history recovery and hidden tab',async({page})=>{
+test('E07 HTTP input/switch/clear cancellation, paused history recovery and hidden tab',async({page,evidenceDir:directory})=>{
  test.setTimeout(45000);await audit(page);await page.goto('/?presentation=spatial');await expect(page.locator('#step-prediction')).toBeEnabled();
  for(const action of ['cancel','input','switch','hidden','clear']) {
   await page.locator('#step-prediction').click();await expect(page.locator('#execution-controls')).toHaveAttribute('data-sequence','0');await next(page,3);
@@ -87,7 +86,7 @@ test('E07 HTTP input/switch/clear cancellation, paused history recovery and hidd
  }
 });
 
-test('E07 bounded execution DOM/listener sample and worker failure while paused',async({page})=>{
+test('E07 bounded execution DOM/listener sample and worker failure while paused',async({page,evidenceDir:directory})=>{
  test.setTimeout(90000);await mkdir(directory,{recursive:true});
  await page.addInitScript(()=>{const w=window as any;w.liveWorkers=[];const Native=Worker;w.Worker=class extends Native{constructor(url:any,options:any){super(url,options);w.liveWorkers.push(this);}};});
  await page.goto('/?presentation=spatial');await expect(page.locator('#step-prediction')).toBeEnabled();await page.locator('#predict').click();await expect(page.locator('#step-prediction')).toBeEnabled();

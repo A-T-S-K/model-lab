@@ -1,10 +1,11 @@
 """Bounded transport checks against the explicitly launched task-owned loopback bridge."""
 import json
+import os
 import urllib.request
 import urllib.error
 from adapter import PROFILE
-URL='http://127.0.0.1:4319/execute'
-ORIGIN='http://127.0.0.1:4318'
+URL=os.environ['SLICE_NATIVE_ENDPOINT']
+ORIGIN=os.environ['SLICE_ORIGIN']
 BASE={'version':1,'integration':'pythia-native-v1','profile':PROFILE,'requestId':'transport-1','sessionId':'transport-test','epoch':2,'action':'predict','input':'The cat sat'}
 
 def send(body,origin=ORIGIN,host=None):

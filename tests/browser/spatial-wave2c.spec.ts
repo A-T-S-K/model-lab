@@ -1,6 +1,5 @@
-import {test,expect,type Page} from '@playwright/test';
+import {test,expect,type Page} from '../support/browser-evidence.js';
 import {mkdir,writeFile} from 'node:fs/promises';
-const directory=process.env.WAVE2C_EVIDENCE_DIR??'test-results/wave2c-review';
 async function audit(page:Page) {
  await page.addInitScript(()=>{
   const w=window as any;w.trainingAudit={commands:[],responses:[],outstanding:0,max:0,durations:[]};
@@ -24,7 +23,7 @@ async function continueUntil(page:Page,target:string){
  await page.locator('#execution-continue').click();await phase(page,target);await expect(page.locator('#execution-next')).toBeEnabled();
 }
 
-test('U01/U03/U06/U07 decision → selected head intervention → downstream → current',async({browser,baseURL})=>{
+test('U01/U03/U06/U07 decision → selected head intervention → downstream → current',async({browser,baseURL,evidenceDir:directory})=>{
  test.setTimeout(180000);await mkdir(directory,{recursive:true});
  const context=await browser.newContext({viewport:{width:1920,height:1080},recordVideo:{dir:directory,size:{width:1920,height:1080}},reducedMotion:'reduce'});
  const page=await context.newPage();await audit(page);const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
@@ -61,7 +60,7 @@ test('U01/U03/U06/U07 decision → selected head intervention → downstream →
  const video=page.video()!;await context.close();await video.saveAs(`${directory}/wave-2c-route.webm`);
 });
 
-test('U06/U07 cancelled, failed and replaced experiments preserve the full accepted snapshot and clear stale inspection',async({page})=>{
+test('U06/U07 cancelled, failed and replaced experiments preserve the full accepted snapshot and clear stale inspection',async({page,evidenceDir:directory})=>{
  test.setTimeout(90000);await audit(page);
  await page.addInitScript(()=>{const w=window as any;const send=Worker.prototype.postMessage;Worker.prototype.postMessage=function(m:any,...rest:any[]){
   if(m.command==='ablate'&&w.ablationFault==='hold')return;

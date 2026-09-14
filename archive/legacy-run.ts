@@ -8,7 +8,9 @@ export async function validateLegacyRun(run: RecordedRun, snapshot: ArchivedSnap
     canonicalBytes(copy); // Reject undefined, nonfinite, or non-data evidence at the boundary.
     const m = copy.manifest;
     if (!snapshot) throw new Error('Run references a missing starting snapshot');
-    if (await snapshotId(snapshot.state) !== m.startingSnapshotId) throw new Error('Run snapshot content hash mismatch');
+    const contentId = await snapshotId(snapshot.state);
+    if (snapshot.id !== contentId) throw new Error('Snapshot ID does not match its content hash');
+    if (contentId !== m.startingSnapshotId) throw new Error('Run snapshot content hash mismatch');
     if (m.startingCheckpointId !== snapshot.id) throw new Error('Run checkpoint reference does not identify archived state');
     if (copy.formatVersion !== 1 || ![m.runId, m.sessionId, m.model.id, m.model.version, m.runtimeVersion, m.runtimeRevision, m.numeric.policy].every(value =>
       typeof value === 'string' && value.length > 0) || !Number.isSafeInteger(m.generationId) || m.generationId < 0 ||

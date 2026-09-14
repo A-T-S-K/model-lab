@@ -1,8 +1,8 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "../support/browser-evidence.js";
 import { mkdir, writeFile } from "node:fs/promises";
 import type { RunResult } from "../../app/worker/protocol.js";
 
-test("Wave 1A · real HTTP build, Predict controls, both heads, geometry, row/scalar sources and one owner", async ({ page }) => {
+test("Wave 1A · real HTTP build, Predict controls, both heads, geometry, row/scalar sources and one owner", async ({ page, evidenceDir }) => {
   const errors: string[] = [], remote: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   page.on("console", message => { if (message.type() === "error") errors.push(message.text()); });
@@ -25,7 +25,6 @@ test("Wave 1A · real HTTP build, Predict controls, both heads, geometry, row/sc
       return Reflect.apply(send, this, [message, ...rest]);
     };
   });
-  const evidenceDir = process.env.SPATIAL_EVIDENCE_DIR ?? "/tmp/model-lab-wave1-browser";
   await mkdir(evidenceDir, {recursive: true});
   await page.setViewportSize({width: 1920, height: 1080});
   await page.goto("/?presentation=spatial");

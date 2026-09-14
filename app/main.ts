@@ -1,3 +1,4 @@
+import type { CanonicalReceipt } from './worker/executors.js';
 import { SharedInspector } from './views/shared-inspector.js';
 import './views/shared-inspector.css';
 import { forwardReadModel } from './spatial/forward.js';
@@ -880,7 +881,7 @@ function syncSpatialSelection(): void {
   if (parameter) selectedParameter = parameter.index;
 }
 function bind(): void {
-  sharedInspector.sync(archive.evidence, result?.run.manifest.runId, !busy && !forwardDriver.active, async () => { await execute('predict'); });
+  sharedInspector.sync(archive.evidence, result?.run.manifest.runId, !busy && !forwardDriver.active, async () => execute('predict'));
   if (!attract) {
     if (!spatialActive) {
       const entry = '<button id="presentation-toggle" class="classic-toggle">Spatial presentation · controlled learning</button>';
@@ -1510,19 +1511,19 @@ async function execute(
   count = 1,
   guided = false,
   completedForward?: RunResult,
-): Promise<void> {
-  if (busy || !ready || forwardDriver.active) return;
+): Promise<CanonicalReceipt> {
+  if (busy || !ready || forwardDriver.active) return {status:'refused',reason:'Canonical execution unavailable while another operation is active'};
   spatialPresenter.invalidate();
   if (evidenceBytes >= SESSION_BUDGET) {
     error =
       "Session evidence limit reached (64 MiB). Clear session before starting more work.";
     render();
-    return;
+    return {status:'refused',reason:error};
   }
   if (!/^[abc]{0,7}$/.test(documentText)) {
     error = "Use up to seven characters from a, b, and c.";
     render();
-    return;
+    return {status:'refused',reason:error};
   }
   if (
     guided &&
@@ -1534,7 +1535,7 @@ async function execute(
         .join("") !== documentText ||
       documentText.length < 2)
   )
-    return;
+    return {status:'refused',reason:'Guided request no longer matches the live input'};
   const executionDocument = documentText;
   if (!guided) guidedBatch = undefined;
   pendingModelCommand = command;
@@ -1556,11 +1557,14 @@ async function execute(
   render();
   let acceptedThisIteration: RunResult | undefined;
   let retentionFailed = false;
+  let completedRunId: string | undefined;
+  let failureReason: string | undefined;
   try {
     let retainedLoss = Infinity;
     for (let step = 0; step < count; step++) {
       if (evidenceBytes >= SESSION_BUDGET) {
         status = "Session evidence limit reached · completed history preserved";
+        failureReason = status;
         break;
       }
       pendingModelCommand = command;
@@ -1576,7 +1580,7 @@ async function execute(
           response.status === "result"
         )
           cancellationResult = response.result;
-        return;
+        return {status:'refused',reason:'Canonical execution was superseded'};
       }
       if (response.status !== "result")
         throw new Error("Worker did not return model evidence");
@@ -1651,18 +1655,20 @@ async function execute(
         for (const run of incoming.runs) await destination.addRun(run);
         if (incoming.experiment)
           await destination.addLearningExperiment(incoming.experiment);
-        if (currentOperation !== operation) return;
+        if (currentOperation !== operation) return {status:'refused',reason:'Canonical execution was superseded'};
         evidenceBytes += new TextEncoder().encode(
           JSON.stringify(incoming),
         ).byteLength;
         if (incoming.learn) retainedLoss = incoming.learn.meanLoss;
+        completedRunId = incoming.run.manifest.runId;
       }
-      if (currentOperation !== operation) return;
+      if (currentOperation !== operation) return {status:'refused',reason:'Canonical execution was superseded'};
       render();
     }
   } catch (failure) {
-    if (currentOperation !== operation) return;
+    if (currentOperation !== operation) return {status:'refused',reason:'Canonical execution was superseded'};
     error = failure instanceof Error ? failure.message : String(failure);
+    failureReason = error;
     retentionFailed = !!acceptedThisIteration;
     status = retentionFailed ? "Accepted update · local evidence retention failed" : "Run failed";
   } finally {
@@ -1700,6 +1706,9 @@ async function execute(
       void loadDetail();
     }
   }
+  if (failureReason) return {status:'failed',reason:failureReason};
+  if (completedRunId && currentOperation === operation) return {status:'completed',runId:completedRunId};
+  return {status:'refused',reason:'Canonical execution produced no new retained receipt'};
 }
 
 async function reset(cancelled: boolean, clear = false): Promise<void> {

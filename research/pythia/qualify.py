@@ -3,20 +3,30 @@ import os
 os.environ['HF_HUB_OFFLINE']='1';os.environ['HF_HUB_DISABLE_TELEMETRY']='1'
 import json,time,resource
 from pathlib import Path
-import torch
-from transformers import AutoTokenizer,AutoModelForCausalLM
-from adapter import NativePythia,PROFILE,ROOT
-OUT=ROOT.parents[1]/'test-results/m0-m1-first-slice'
+from output import allocate_output
 # Predeclared same-process CPU F32 policy; hooks must be observational.
 ATOL=1e-6; RTOL=1e-6
 
 def error(a,b):
+    import torch
     a=torch.as_tensor(a,dtype=torch.float64);b=torch.as_tensor(b,dtype=torch.float64)
     d=(a-b).abs(); rel=d/torch.maximum(a.abs(),torch.tensor(1e-12))
     assert torch.all(d<=ATOL+RTOL*a.abs()), 'Observation changed native results'
     return {'maxAbsolute':d.max().item(),'maxRelativeWith1e-12Floor':rel.max().item(),'values':a.numel()}
 
 def main():
+    OUT,write=allocate_output(Path(__file__).resolve().parents[2],os.environ.get('NATIVE_EVIDENCE_DIR'))
+    print('Native evidence: '+str(OUT),flush=True)
+    try:
+        qualify(write)
+    except Exception as error:
+        write('failure.json',json.dumps({'status':'failed','error':str(error)})+'\n')
+        raise
+
+def qualify(write):
+    import torch
+    from transformers import AutoTokenizer,AutoModelForCausalLM
+    from adapter import NativePythia,PROFILE,ROOT
     torch.set_num_threads(1);t=time.monotonic()
     reference=AutoModelForCausalLM.from_pretrained(ROOT/'cache',local_files_only=True,trust_remote_code=False,use_safetensors=True,dtype=torch.float32,attn_implementation='eager').eval()
     tokenizer=AutoTokenizer.from_pretrained(ROOT/'cache',local_files_only=True,trust_remote_code=False)
@@ -43,6 +53,7 @@ def main():
             'reference':'Fresh direct Hugging Face model, same pinned files; plain pass has no hooks. Selected internal reference values use minimal read-only native hooks, separately from Model Lab adapter.',
             'comparisons':comparisons,'seconds':time.monotonic()-t,'maxRSSBytes':resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
             'torch':torch.__version__,'storage':native.storage,'effectiveParameterDtypes':sorted({str(p.dtype) for p in native.model.parameters()}),'source':native.source_digest}
-    OUT.mkdir(parents=True,exist_ok=True);(OUT/'native-observation.json').write_text(json.dumps(report,indent=2)+'\n');(OUT/'native-recording.json').write_text(json.dumps(envelope,separators=(',',':')))
+    write('native-observation.json',json.dumps(report,indent=2)+'\n');write('native-recording.json',json.dumps(envelope,separators=(',',':')))
+    write('completion.json',json.dumps({'status':'passed'})+'\n')
     print(json.dumps(report,indent=2))
 if __name__=='__main__':main()

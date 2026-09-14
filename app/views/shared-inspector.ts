@@ -1,5 +1,5 @@
 import { EvidencePlayer, serializeEvidence, parseEvidence, MAX_RECORD_BYTES, check, type EvidenceStore, type EvidencePoint } from '../../trace/evidence.js';
-import { ExecutorRegistry } from '../worker/executors.js';
+import { ExecutorRegistry, type CanonicalReceipt } from '../worker/executors.js';
 import { RUNTIME_REVISION } from '../../runtime/revision.js';
 import nativeSource from '../../research/pythia/source.json';
 import { sourceFiles } from '../source/catalog.js';
@@ -22,12 +22,12 @@ export class SharedInspector {
       }
     });
     this.#root.id='shared-inspector';document.body.append(this.#root);}
-  sync(store:EvidenceStore,liveId:string|undefined,canSwitch:boolean,onCanonical:()=>Promise<void>){
-    if(this.#store!==store){this.#operation++;this.#executors.cancel();this.#store=store;this.#player=undefined;}
-    if(!this.#open&&liveId&&store.list().some(r=>r.id===liveId)&&this.#executors.get(this.#selected).inputLocation==='world')this.#player=new EvidencePlayer(store,liveId);
+  sync(store:EvidenceStore,liveId:string|undefined,canSwitch:boolean,onCanonical:()=>Promise<CanonicalReceipt>){
+    if(this.#store!==store){this.#operation++;this.#executors.cancel();this.#store=store;this.#player=undefined;this.#offset=0;this.#replay=false;}
+    if(!this.#open&&liveId&&store.list().some(r=>r.id===liveId)&&this.#executors.get(this.#selected).inputLocation==='world'&&this.#player?.runId!==liveId)this.select(liveId,false);
     this.#canSwitch=canSwitch;this.#canonical=onCanonical;this.render();
   }
-  #canSwitch=true;#canonical:()=>Promise<void>=async()=>{};
+  #canSwitch=true;#canonical:()=>Promise<CanonicalReceipt>=async()=>({status:'refused',reason:'Canonical executor unavailable'});
   private select(id:string,replay=false){check(this.#store,'Store unavailable');this.#player=new EvidencePlayer(this.#store,id);this.#offset=0;this.#replay=replay;this.#selected=this.#player.run.integration;}
   private distribution(p:EvidencePoint):string{
     if(p.axes.length!==1||p.axes[0].role!=='output_index'||!this.#store||!this.#player)return '';
@@ -71,7 +71,7 @@ export class SharedInspector {
     on('#close-shared',()=>{this.#open=false;this.render();});
     this.#root.querySelector<HTMLSelectElement>('#shared-model')!.onchange=e=>{
       if(!this.#canSwitch){this.#message='Resolve the active canonical operation before changing producers.';this.render();return;}
-      this.#operation++;this.#executors.cancel();this.#busy=false;this.#selected=(e.target as HTMLSelectElement).value;this.#player=undefined;this.#offset=0;
+      this.#operation++;this.#executors.cancel();this.#busy=false;this.#selected=(e.target as HTMLSelectElement).value;this.#player=undefined;this.#offset=0;this.#replay=false;
       this.#message='Producer changed. Evidence selection cleared explicitly; canonical state and its world selection are retained.';this.render();};
     for(const [id,set] of [['#native-prompt',(v:string)=>this.#input=v],['#native-endpoint',(v:string)=>this.#endpoint=v]] as const){const el=this.#root.querySelector<HTMLInputElement>(id);if(el)el.oninput=()=>set(el.value);}
     this.#root.querySelector<HTMLSelectElement>('#shared-run')!.onchange=e=>{const id=(e.target as HTMLSelectElement).value;if(id){this.#operation++;this.#executors.cancel();this.#busy=false;this.select(id);this.#message='Selected immutable evidence; no executor invoked.';this.render();}};
@@ -93,12 +93,12 @@ export class SharedInspector {
   }
   private async execute(){
     const operation=++this.#operation;
-    this.#busy=true;this.#message='Executing selected native producer…';this.render();
+    this.#busy=true;this.#message='Executing selected producer…';this.render();
     try{
       const run=await this.#executors.get(this.#selected).execute({input:this.#input,endpoint:this.#endpoint,store:this.#store!,canonical:this.#canonical});
       if(operation!==this.#operation)return;
       this.select(run.id);
-      this.#message='Native execution receipt validated and admitted; inspection reads retained evidence.';
+      this.#message='Execution receipt validated and admitted; inspection reads retained evidence.';
     }catch(e){if(operation!==this.#operation)return;this.#message=`Execution refused or failed: ${e instanceof Error?e.message:String(e)}`;}
     finally{if(operation===this.#operation){this.#busy=false;this.render();}}
   }
