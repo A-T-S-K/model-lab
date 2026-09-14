@@ -1,6 +1,6 @@
 {
   "profile": "pythia-14m-cpu-f32-eager-v1",
-  "runtime": "sha256:290becead8351ebb54ab765c1f49091e3837209fb183909e457f6240687cd298",
+  "runtime": "sha256:ea128d6858613534387d0089163786eb34b4c3f5d494e2d10cc4b36c0c21c69d",
   "definition": "pythia-14m:f97f966a66c444890ed461fff2a51eefb15d74303df05b948124719f199b0b17",
   "checkpoint": "sha256:116a02532db461f91386a5b20f942ff2c8d4de7341e21b55caafc3d7b25f49a1",
   "inputTransform": "sha256:851d74e9e330ac8c4412feb921ec691a41c29fc22e2997121f48b2708e54fa2a",

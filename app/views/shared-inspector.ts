@@ -1,7 +1,7 @@
 import { EvidencePlayer, serializeEvidence, parseEvidence, MAX_RECORD_BYTES, check, type EvidenceStore, type EvidencePoint } from '../../trace/evidence.js';
 import { ExecutorRegistry, type CanonicalReceipt } from '../worker/executors.js';
 import { RUNTIME_REVISION } from '../../runtime/revision.js';
-import nativeSource from '../../research/pythia/source.json';
+import { boundSource } from '../source/registered.js';
 import { sourceFiles } from '../source/catalog.js';
 const esc=(x:unknown)=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const SAVED='model-lab-evidence-v1';
@@ -10,7 +10,7 @@ const SAVED='model-lab-evidence-v1';
 export class SharedInspector {
   #root=document.createElement('section');#executors=new ExecutorRegistry();#player?:EvidencePlayer;
   #store?:EvidenceStore;#open=false;#busy=false;#message='';#selected=this.#executors.list()[0].id;#offset=0;
-  #endpoint='http://127.0.0.1:4319/execute';#input='The cat sat';#replay=false;#rendering=false;#operation=0;
+  #action='predict';#endpoint='http://127.0.0.1:4319/execute';#input='The cat sat';#replay=false;#rendering=false;#operation=0;
   constructor(){
     this.#root.addEventListener('keydown',event=>{
       if(event.key==='Escape'&&this.#open){this.#open=false;this.render();this.#root.querySelector<HTMLButtonElement>('button')?.focus();}
@@ -30,7 +30,7 @@ export class SharedInspector {
   #canSwitch=true;#canonical:()=>Promise<CanonicalReceipt>=async()=>({status:'refused',reason:'Canonical executor unavailable'});
   private select(id:string,replay=false){check(this.#store,'Store unavailable');this.#player=new EvidencePlayer(this.#store,id);this.#offset=0;this.#replay=replay;this.#selected=this.#player.run.integration;}
   private distribution(p:EvidencePoint):string{
-    if(p.axes.length!==1||p.axes[0].role!=='output_index'||!this.#store||!this.#player)return '';
+    if(p.availability!=='available'||p.axes.length!==1||p.axes[0].role!=='output_index'||!this.#store||!this.#player)return '';
     let maximum=-Infinity;
     for(let i=0;i<p.shape[0];i+=256)for(const v of this.#store.slice(this.#player.runId,p.id,i,Math.min(256,p.shape[0]-i)))maximum=Math.max(maximum,v);
     let denominator=0;const top:{index:number;logit:number}[]=[];
@@ -40,8 +40,7 @@ export class SharedInspector {
     return `<h3>Derived full-support softmax</h3><p>Denominator covers all ${p.shape[0]} output indices. No sampling or top-k renormalization. Output indices are shown without invented tokenizer labels.</p><table><thead><tr><th>Output index</th><th>Observed logit</th><th>Derived probability</th></tr></thead><tbody>${top.map(p=>`<tr><td>${p.index}</td><td>${p.logit}</td><td>${Math.exp(p.logit-maximum)/denominator}</td></tr>`).join('')}</tbody></table><p data-testid="omitted-mass">Omitted mass: ${1-shown}</p><p data-testid="selected-probability">Exact selected index ${this.#offset}: logit ${selected}; derived probability ${Math.exp(selected-maximum)/denominator}</p>`;
   }
   private source(p:EvidencePoint):string {
-    const code=p.source.revision===nativeSource.revision?nativeSource.code:
-      p.source.revision===RUNTIME_REVISION?sourceFiles[p.source.file as keyof typeof sourceFiles]:undefined;
+    const code=boundSource(p.source);
     return `<details><summary>Read bound source · ${esc(p.source.symbol)}</summary><p>${esc(p.source.file)}<br><code>${esc(p.source.revision)}</code></p>${code?`<pre class="shared-source">${esc(code)}</pre>`:'<p>Source body not bundled for this historical revision; identity retained. No source from a different runtime is substituted.</p>'}</details>`;
   }
   render(){
@@ -53,26 +52,29 @@ export class SharedInspector {
     if(!this.#store)return;
     if(!this.#open){this.#root.innerHTML='<button id="open-shared-inspector">Models & saved evidence</button>';this.#root.querySelector('button')!.onclick=()=>{this.#open=true;this.render();this.#root.querySelector<HTMLElement>('#shared-model')?.focus();};return;}
     const player=this.#player,p=player?.current,run=player?.run;
-    const list=this.#store.list();
+    const list=this.#store.list(),binding=this.#executors.get(this.#selected);
+    const inputLabel=(input:typeof list[number]['input'])=>'text' in input?input.text:JSON.stringify(input.values);
     this.#root.innerHTML=`<div class="shared-shade"><section class="shared-panel" role="dialog" aria-modal="true" aria-labelledby="shared-title"><header><div><small>MODEL LAB · SHARED EVIDENCE</small><h2 id="shared-title">Inspect a recorded computation</h2></div><button id="close-shared">Return to world</button></header>
-      <div class="shared-controls"><label>Producer<select id="shared-model">${this.#executors.list().map(binding=>`<option value="${esc(binding.id)}" ${binding.id===this.#selected?'selected':''}>${esc(binding.label)}</option>`).join('')}</select></label>
-      ${this.#executors.get(this.#selected).inputLocation==='request'?`<label>Prompt<input id="native-prompt" value="${esc(this.#input)}" maxlength="128"></label><label>Local bridge endpoint<input id="native-endpoint" value="${esc(this.#endpoint)}"></label>`:'<p>Predict uses the canonical input in the world. Accepted state and candidate decisions remain in the canonical controls.</p>'}
-      <button id="shared-execute" ${this.#busy||!this.#canSwitch?'disabled':''}>Run selected producer</button><button id="shared-cancel" ${!this.#busy?'disabled':''}>Cancel request</button></div>
-      <div class="shared-controls"><label>Run<select id="shared-run"><option value="">Select retained evidence</option>${list.map(r=>`<option value="${esc(r.id)}" ${r.id===run?.id?'selected':''}>${esc(r.integration)} · ${esc(r.input.text)} · ${esc(r.id)}</option>`).join('')}</select></label><button id="shared-save" ${!run?'disabled':''}>Save selected run</button><button id="shared-load">Open saved run</button><button id="shared-export" ${!run?'disabled':''}>Export JSON</button><label>Import inert recording<input id="shared-import" type="file" accept="application/json"></label></div>
+      <div class="shared-controls"><label>Producer<select id="shared-model">${this.#executors.list().map(binding=>`<option value="${esc(binding.id)}" ${binding.id===this.#selected?'selected':''}>${esc(binding.label)}</option>`).join('')}${binding.inputLocation==='saved'?`<option selected value="${esc(binding.id)}">${esc(binding.label)} · saved only</option>`:''}</select></label>
+      ${binding.inputLocation==='request'?`<label>${esc(binding.inputLabel??'Input')}<input id="native-prompt" value="${esc(this.#input)}" maxlength="2048"></label>${binding.endpoint?`<label>Local bridge endpoint<input id="native-endpoint" value="${esc(this.#endpoint)}"></label>`:''}<label>Action<select id="shared-action">${(binding.actions??['predict']).map(a=>`<option ${a===this.#action?'selected':''}>${esc(a)}</option>`).join('')}</select></label>`:binding.inputLocation==='saved'?'<p>Saved structural or numerical evidence. No registered execution action.</p>':'<p>Predict uses the canonical input in the world. Accepted state and candidate decisions remain in the canonical controls.</p>'}
+      <button id="shared-execute" ${this.#busy||!this.#canSwitch||binding.inputLocation==='saved'?'disabled':''}>Run selected producer</button><button id="shared-cancel" ${!this.#busy?'disabled':''}>Cancel request</button></div>
+      <div class="shared-controls"><label>Run<select id="shared-run"><option value="">Select retained evidence</option>${list.map(r=>`<option value="${esc(r.id)}" ${r.id===run?.id?'selected':''}>${esc(r.integration)} · ${esc(inputLabel(r.input))} · ${esc(r.id)}</option>`).join('')}</select></label><button id="shared-save" ${!run?'disabled':''}>Save selected run</button><button id="shared-load">Open saved run</button><button id="shared-export" ${!run?'disabled':''}>Export JSON</button><label>Import inert recording<input id="shared-import" type="file" accept="application/json"></label></div>
       <p role="status" data-testid="shared-status">${esc(this.#message)}</p>
-      ${p&&run?`<p class="shared-provenance" data-testid="shared-provenance">${this.#replay?'SAVED REPLAY':'RETAINED EVIDENCE'} · ${esc(p.origin)} · ${esc(p.availability)} · verification: not independently certified · executor ${!this.#replay&&this.#executors.get(run.integration).connected()?'connected':'not required for inspection'}</p><div class="shared-grid"><nav aria-label="Captured points"><h3>Captured boundaries</h3>${run.points.map((point,i)=>`<button data-point="${i}" aria-pressed="${i===player!.index}">${esc(point.node)} / ${esc(point.port)}</button>`).join('')}</nav><article>
+      ${p&&run?`<p class="shared-provenance" data-testid="shared-provenance">${this.#replay?'SAVED REPLAY':'RETAINED EVIDENCE'} · ${esc(run.execution)} · ${esc(p.origin)} · ${esc(p.availability)} · verification: not independently certified · executor ${!this.#replay&&this.#executors.get(run.integration).connected()?'connected':'not required for inspection'}</p><div class="shared-grid"><nav aria-label="Captured points"><h3>Captured boundaries</h3>${run.points.map((point,i)=>`<button data-point="${i}" aria-pressed="${i===player!.index}">${esc(point.node)} / ${esc(point.port)}</button>`).join('')}</nav><article>
       <div class="shared-controls"><button id="shared-next">Next recorded point</button><span>Explanation playback · no execution or timing claim</span></div>
-      <h3 data-testid="shared-point">${esc(p.node)} / ${esc(p.port)}</h3><p>${esc(p.semantics)}</p><p>${esc(p.dtype)} · ${esc(p.encoding)} · shape [${p.shape.join(', ')}]<br>${p.axes.map(a=>`${esc(a.role)}: ${a.size}`).join(' · ')}</p>
-      <label>Flat row-major offset<input id="shared-offset" type="number" min="0" max="${Math.max(0,(p.values?.length??1)-1)}" value="${this.#offset}"></label><pre data-testid="shared-values">${p.values?esc(JSON.stringify(this.#store.slice(run.id,p.id,this.#offset,Math.min(16,p.values.length-this.#offset)))):'Not captured; no numerical value'}</pre>
+      <h3 data-testid="shared-point">${esc(p.node)} / ${esc(p.port)}</h3><p>${esc(p.semantics)}</p><p>${esc(p.dtype)} · ${esc(p.encoding)} · shape [${p.shape.join(', ')}]<br>${p.axes.map(a=>`${esc(a.role)}: ${a.size} [${esc(a.space)}]`).join(' · ')}</p>
+      <label>Flat row-major offset<input id="shared-offset" type="number" min="0" max="${Math.max(0,(p.values?.length??1)-1)}" value="${this.#offset}"></label><pre data-testid="shared-values">${p.values?esc(JSON.stringify(this.#store.slice(run.id,p.id,this.#offset,Math.min(16,p.values.length-this.#offset)))):`Numerical values unavailable: ${esc(p.availability)}; no value substituted`}</pre>
       <p>Invocation ${esc(p.invocation)} · phase ${esc(p.phase)} · request epoch ${run.request.epoch}</p><p>Parameter/module owners: ${esc(p.owners.join(', ')||'Not declared in this capture')}</p><p>Captured dependencies: ${p.dependencies.map(d=>`<button data-dependency="${esc(d)}">${esc(d)}</button>`).join(' ')||'No captured dependency edge; see coverage above'}</p>
       ${this.distribution(p)}${this.source(p)}<button id="shared-detail">Request uncaptured scalar detail</button><p>${run.limits.map(esc).join('<br>')}</p>
-      <details><summary>Exact run and execution identities</summary><pre>${esc(JSON.stringify({...run,points:undefined},null,2))}</pre></details></article></div>`:'<p>Choose a retained run or explicitly request an execution. Opening saved evidence never starts Python or downloads weights.</p>'}</section></div>`;
+      <details><summary>Exact run and execution identities</summary><pre>${esc(JSON.stringify({...run,points:undefined},null,2))}</pre></details><details><summary>Original recording and supported state</summary><pre>${esc(JSON.stringify(this.#store.envelope(run.id),(_k,v)=>_k==='points'?undefined:v,2))}</pre></details></article></div>`:'<p>Choose a retained run or explicitly request an execution. Opening saved evidence never starts Python or downloads weights.</p>'}</section></div>`;
     const on=(id:string,fn:()=>void)=>this.#root.querySelector<HTMLElement>(id)?.addEventListener('click',fn);
     on('#close-shared',()=>{this.#open=false;this.render();});
     this.#root.querySelector<HTMLSelectElement>('#shared-model')!.onchange=e=>{
       if(!this.#canSwitch){this.#message='Resolve the active canonical operation before changing producers.';this.render();return;}
       this.#operation++;this.#executors.cancel();this.#busy=false;this.#selected=(e.target as HTMLSelectElement).value;this.#player=undefined;this.#offset=0;this.#replay=false;
+      const binding=this.#executors.get(this.#selected);this.#input=binding.defaultInput??'';this.#action=binding.actions?.[0]??'predict';
       this.#message='Producer changed. Evidence selection cleared explicitly; canonical state and its world selection are retained.';this.render();};
+    const action=this.#root.querySelector<HTMLSelectElement>('#shared-action');if(action)action.onchange=()=>this.#action=action.value;
     for(const [id,set] of [['#native-prompt',(v:string)=>this.#input=v],['#native-endpoint',(v:string)=>this.#endpoint=v]] as const){const el=this.#root.querySelector<HTMLInputElement>(id);if(el)el.oninput=()=>set(el.value);}
     this.#root.querySelector<HTMLSelectElement>('#shared-run')!.onchange=e=>{const id=(e.target as HTMLSelectElement).value;if(id){this.#operation++;this.#executors.cancel();this.#busy=false;this.select(id);this.#message='Selected immutable evidence; no executor invoked.';this.render();}};
     on('#shared-execute',()=>void this.execute());on('#shared-cancel',()=>{this.#operation++;this.#executors.cancel();this.#busy=false;this.#message='Cancelled admission; canonical state unchanged.';this.render();});
@@ -95,7 +97,7 @@ export class SharedInspector {
     const operation=++this.#operation;
     this.#busy=true;this.#message='Executing selected producer…';this.render();
     try{
-      const run=await this.#executors.get(this.#selected).execute({input:this.#input,endpoint:this.#endpoint,store:this.#store!,canonical:this.#canonical});
+      const run=await this.#executors.get(this.#selected).execute({action:this.#action,input:this.#input,endpoint:this.#endpoint,store:this.#store!,canonical:this.#canonical});
       if(operation!==this.#operation)return;
       this.select(run.id);
       this.#message='Execution receipt validated and admitted; inspection reads retained evidence.';

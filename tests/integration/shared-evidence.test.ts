@@ -64,7 +64,7 @@ test('real optional native capture enters the same store and replays all heads w
   assert.deepEqual([...archive.snapshots],before);assert.equal(run.precision.storage,'F16');
   const p=new EvidencePlayer(archive.evidence,run.id);p.seek(run.points.findIndex(p=>p.id==='attention.weights'));
   assert.equal(p.current.axes[0].size,4);assert.equal(p.current.node,'gpt_neox.layers.1.attention');
-  const n=run.input.tokenIds.length;assert.equal(archive.evidence.slice(run.id,p.current.id,0,n*n).length,n*n);
+  assert('tokenIds' in run.input);const n=run.input.tokenIds.length;assert.equal(archive.evidence.slice(run.id,p.current.id,0,n*n).length,n*n);
   assert.equal(archive.evidence.slice(run.id,p.current.id,n*n,n*n).length,n*n);
   const store=new EvidenceStore(integrations());await store.admit(parseEvidence(serializeEvidence(envelope)));
   assert.deepEqual(store.get(run.id),run);

@@ -8,11 +8,14 @@ export class NativeClient {
   connected=false;
   cancel(){this.#epoch++;this.#abort?.abort();this.#abort=undefined;this.connected=false;}
   async execute(input:string,endpoint:string,store:EvidenceStore):Promise<EvidenceRun>{
+    return this.executeRequest({version:1,integration:'pythia-native-v1',profile:profile.profile,action:'predict',input},endpoint,store);
+  }
+  async executeRequest(intent:Pick<ExecutionRequest,'version'|'integration'|'profile'|'action'|'input'|'state'>,endpoint:string,store:EvidenceStore):Promise<EvidenceRun>{
     check(!this.#abort,'Native execution already pending');
     const url=new URL(endpoint);
     check(url.protocol==='http:'&&url.hostname==='127.0.0.1'&&!!url.port&&url.pathname==='/execute'&&!url.search&&!url.hash&&!url.username&&!url.password,'Only explicit loopback /execute endpoint allowed');
-    const request:ExecutionRequest=validateRequest({version:1,integration:'pythia-native-v1',profile:profile.profile,sessionId:this.sessionId,
-      requestId:`native-${++this.#sequence}`,epoch:this.#epoch,action:'predict',input});
+    const request:ExecutionRequest=validateRequest({...intent,sessionId:this.sessionId,
+      requestId:`native-${++this.#sequence}`,epoch:this.#epoch});
     const epoch=this.#epoch,abort=new AbortController();this.#abort=abort;
     const timeout=setTimeout(()=>abort.abort(),30_000);
     try{

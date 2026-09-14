@@ -1,0 +1,1592 @@
+{
+  "runtime": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5",
+  "initial": {
+    "version": 1,
+    "parameters": {
+      "w1": [
+        [
+          0.25,
+          -0.5
+        ],
+        [
+          0.75,
+          0.125
+        ],
+        [
+          -0.25,
+          0.5
+        ]
+      ],
+      "b1": [
+        0.125,
+        -0.25,
+        0.25
+      ],
+      "w2": [
+        [
+          0.5,
+          -0.25,
+          0.75
+        ]
+      ],
+      "b2": [
+        -0.125
+      ]
+    },
+    "optimizer": {
+      "family": "SGD",
+      "learningRate": 0.0625,
+      "momentum": 0,
+      "step": 0,
+      "schedule": "constant",
+      "datasetCursor": 0,
+      "rngState": null
+    }
+  },
+  "schema": [
+    {
+      "id": "inputs",
+      "node": "inputs",
+      "port": "inputs",
+      "invocation": "batch:0",
+      "phase": "forward",
+      "dtype": "float32",
+      "encoding": "json-numbers-row-major",
+      "origin": "observed",
+      "availability": "available",
+      "source": {
+        "file": "research/witnesses/mlp.py",
+        "symbol": "execute",
+        "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+      },
+      "owners": [],
+      "dependencies": [],
+      "semantics": "Observed inputs. ",
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "example",
+          "space": "mlp-native-v1:example"
+        },
+        {
+          "role": "input_feature",
+          "space": "mlp-native-v1:input_feature"
+        }
+      ]
+    },
+    {
+      "id": "targets",
+      "node": "targets",
+      "port": "targets",
+      "invocation": "batch:0",
+      "phase": "forward",
+      "dtype": "float32",
+      "encoding": "json-numbers-row-major",
+      "origin": "observed",
+      "availability": "available",
+      "source": {
+        "file": "research/witnesses/mlp.py",
+        "symbol": "execute",
+        "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+      },
+      "owners": [],
+      "dependencies": [],
+      "semantics": "Observed targets. ",
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "example",
+          "space": "mlp-native-v1:example"
+        },
+        {
+          "role": "output_feature",
+          "space": "mlp-native-v1:output_feature"
+        }
+      ]
+    },
+    {
+      "id": "hidden.pre",
+      "node": "hidden.pre",
+      "port": "pre",
+      "invocation": "batch:0",
+      "phase": "forward",
+      "dtype": "float32",
+      "encoding": "json-numbers-row-major",
+      "origin": "observed",
+      "availability": "available",
+      "source": {
+        "file": "research/witnesses/mlp.py",
+        "symbol": "execute",
+        "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+      },
+      "owners": [],
+      "dependencies": [
+        "inputs",
+        "w1.before",
+        "b1.before"
+      ],
+      "semantics": "Observed hidden.pre. ",
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "example",
+          "space": "mlp-native-v1:example"
+        },
+        {
+          "role": "hidden_feature",
+          "space": "mlp-native-v1:hidden_feature"
+        }
+      ]
+    },
+    {
+      "id": "hidden",
+      "node": "hidden",
+      "port": "hidden",
+      "invocation": "batch:0",
+      "phase": "forward",
+      "dtype": "float32",
+      "encoding": "json-numbers-row-major",
+      "origin": "observed",
+      "availability": "available",
+      "source": {
+        "file": "research/witnesses/mlp.py",
+        "symbol": "execute",
+        "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+      },
+      "owners": [],
+      "dependencies": [
+        "hidden.pre"
+      ],
+      "semantics": "Observed hidden. ",
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "example",
+          "space": "mlp-native-v1:example"
+        },
+        {
+          "role": "hidden_feature",
+          "space": "mlp-native-v1:hidden_feature"
+        }
+      ]
+    },
+    {
+      "id": "prediction",
+      "node": "prediction",
+      "port": "prediction",
+      "invocation": "batch:0",
+      "phase": "forward",
+      "dtype": "float32",
+      "encoding": "json-numbers-row-major",
+      "origin": "observed",
+      "availability": "available",
+      "source": {
+        "file": "research/witnesses/mlp.py",
+        "symbol": "execute",
+        "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+      },
+      "owners": [],
+      "dependencies": [
+        "hidden",
+        "w2.before",
+        "b2.before"
+      ],
+      "semantics": "Observed prediction. ",
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "example",
+          "space": "mlp-native-v1:example"
+        },
+        {
+          "role": "output_feature",
+          "space": "mlp-native-v1:output_feature"
+        }
+      ]
+    },
+    {
+      "id": "squared.error",
+      "node": "squared.error",
+      "port": "error",
+      "invocation": "batch:0",
+      "phase": "forward",
+      "dtype": "float32",
+      "encoding": "json-numbers-row-major",
+      "origin": "observed",
+      "availability": "available",
+      "source": {
+        "file": "research/witnesses/mlp.py",
+        "symbol": "execute",
+        "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+      },
+      "owners": [],
+      "dependencies": [
+        "prediction",
+        "targets"
+      ],
+      "semantics": "Observed squared.error. ",
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "example",
+          "space": "mlp-native-v1:example"
+        },
+        {
+          "role": "output_feature",
+          "space": "mlp-native-v1:output_feature"
+        }
+      ]
+    },
+    {
+      "id": "loss",
+      "node": "loss",
+      "port": "loss",
+      "invocation": "batch:0",
+      "phase": "forward",
+      "dtype": "float32",
+      "encoding": "json-numbers-row-major",
+      "origin": "observed",
+      "availability": "available",
+      "source": {
+        "file": "research/witnesses/mlp.py",
+        "symbol": "execute",
+        "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+      },
+      "owners": [],
+      "dependencies": [
+        "squared.error"
+      ],
+      "semantics": "Observed loss. Mean squared error: sum over every example and output feature divided by element count; no token objective.",
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": []
+    },
+    {
+      "id": "input.gradient",
+      "node": "input.gradient",
+      "port": "gradient",
+      "invocation": "batch:0",
+      "phase": "backward",
+      "dtype": "float32",
+      "encoding": "json-numbers-row-major",
+      "origin": "observed",
+      "availability": "available",
+      "source": {
+        "file": "research/witnesses/mlp.py",
+        "symbol": "execute",
+        "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+      },
+      "owners": [],
+      "dependencies": [
+        "loss"
+      ],
+      "semantics": "Observed input.gradient. ",
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "example",
+          "space": "mlp-native-v1:example"
+        },
+        {
+          "role": "input_feature",
+          "space": "mlp-native-v1:input_feature"
+        }
+      ]
+    },
+    {
+      "id": "w1.gradient",
+      "node": "w1",
+      "port": "gradient",
+      "invocation": "batch:0",
+      "phase": "backward",
+      "dtype": "float32",
+      "encoding": "json-numbers-row-major",
+      "origin": "observed",
+      "availability": "available",
+      "source": {
+        "file": "research/witnesses/mlp.py",
+        "symbol": "execute",
+        "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+      },
+      "owners": [
+        "w1"
+      ],
+      "dependencies": [
+        "loss",
+        "w1.before"
+      ],
+      "semantics": "Observed w1.gradient. ",
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "hidden_feature",
+          "space": "mlp-native-v1:hidden_feature:w1"
+        },
+        {
+          "role": "input_feature",
+          "space": "mlp-native-v1:input_feature:w1"
+        }
+      ]
+    },
+    {
+      "id": "b1.gradient",
+      "node": "b1",
+      "port": "gradient",
+      "invocation": "batch:0",
+      "phase": "backward",
+      "dtype": "float32",
+      "encoding": "json-numbers-row-major",
+      "origin": "observed",
+      "availability": "available",
+      "source": {
+        "file": "research/witnesses/mlp.py",
+        "symbol": "execute",
+        "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+      },
+      "owners": [
+        "b1"
+      ],
+      "dependencies": [
+        "loss",
+        "b1.before"
+      ],
+      "semantics": "Observed b1.gradient. ",
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "hidden_feature",
+          "space": "mlp-native-v1:hidden_feature:b1"
+        }
+      ]
+    },
+    {
+      "id": "w2.gradient",
+      "node": "w2",
+      "port": "gradient",
+      "invocation": "batch:0",
+      "phase": "backward",
+      "dtype": "float32",
+      "encoding": "json-numbers-row-major",
+      "origin": "observed",
+      "availability": "available",
+      "source": {
+        "file": "research/witnesses/mlp.py",
+        "symbol": "execute",
+        "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+      },
+      "owners": [
+        "w2"
+      ],
+      "dependencies": [
+        "loss",
+        "w2.before"
+      ],
+      "semantics": "Observed w2.gradient. ",
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "output_feature",
+          "space": "mlp-native-v1:output_feature:w2"
+        },
+        {
+          "role": "hidden_feature",
+          "space": "mlp-native-v1:hidden_feature:w2"
+        }
+      ]
+    },
+    {
+      "id": "b2.gradient",
+      "node": "b2",
+      "port": "gradient",
+      "invocation": "batch:0",
+      "phase": "backward",
+      "dtype": "float32",
+      "encoding": "json-numbers-row-major",
+      "origin": "observed",
+      "availability": "available",
+      "source": {
+        "file": "research/witnesses/mlp.py",
+        "symbol": "execute",
+        "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+      },
+      "owners": [
+        "b2"
+      ],
+      "dependencies": [
+        "loss",
+        "b2.before"
+      ],
+      "semantics": "Observed b2.gradient. ",
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "output_feature",
+          "space": "mlp-native-v1:output_feature:b2"
+        }
+      ]
+    },
+    {
+      "id": "w1.before",
+      "node": "w1",
+      "port": "before",
+      "invocation": "batch:0",
+      "phase": "forward",
+      "dtype": "float32",
+      "encoding": "json-numbers-row-major",
+      "origin": "observed",
+      "availability": "available",
+      "source": {
+        "file": "research/witnesses/mlp.py",
+        "symbol": "execute",
+        "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+      },
+      "owners": [
+        "w1"
+      ],
+      "dependencies": [],
+      "semantics": "Observed w1.before. ",
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "hidden_feature",
+          "space": "mlp-native-v1:hidden_feature:w1"
+        },
+        {
+          "role": "input_feature",
+          "space": "mlp-native-v1:input_feature:w1"
+        }
+      ]
+    },
+    {
+      "id": "w1.after",
+      "node": "w1",
+      "port": "after",
+      "invocation": "batch:0",
+      "phase": "update",
+      "dtype": "float32",
+      "encoding": "json-numbers-row-major",
+      "origin": "observed",
+      "availability": "available",
+      "source": {
+        "file": "research/witnesses/mlp.py",
+        "symbol": "execute",
+        "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+      },
+      "owners": [
+        "w1"
+      ],
+      "dependencies": [
+        "w1.before",
+        "w1.gradient"
+      ],
+      "semantics": "Observed w1.after. ",
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "hidden_feature",
+          "space": "mlp-native-v1:hidden_feature:w1"
+        },
+        {
+          "role": "input_feature",
+          "space": "mlp-native-v1:input_feature:w1"
+        }
+      ]
+    },
+    {
+      "id": "w1.delta",
+      "node": "w1",
+      "port": "delta",
+      "invocation": "batch:0",
+      "phase": "update",
+      "dtype": "float32",
+      "encoding": "json-numbers-row-major",
+      "origin": "observed",
+      "availability": "available",
+      "source": {
+        "file": "research/witnesses/mlp.py",
+        "symbol": "execute",
+        "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+      },
+      "owners": [
+        "w1"
+      ],
+      "dependencies": [
+        "w1.before",
+        "w1.after"
+      ],
+      "semantics": "Observed w1.delta. Representable after minus before; SGD uses before - 0.0625 * gradient, no momentum.",
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "hidden_feature",
+          "space": "mlp-native-v1:hidden_feature:w1"
+        },
+        {
+          "role": "input_feature",
+          "space": "mlp-native-v1:input_feature:w1"
+        }
+      ]
+    },
+    {
+      "id": "b1.before",
+      "node": "b1",
+      "port": "before",
+      "invocation": "batch:0",
+      "phase": "forward",
+      "dtype": "float32",
+      "encoding": "json-numbers-row-major",
+      "origin": "observed",
+      "availability": "available",
+      "source": {
+        "file": "research/witnesses/mlp.py",
+        "symbol": "execute",
+        "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+      },
+      "owners": [
+        "b1"
+      ],
+      "dependencies": [],
+      "semantics": "Observed b1.before. ",
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "hidden_feature",
+          "space": "mlp-native-v1:hidden_feature:b1"
+        }
+      ]
+    },
+    {
+      "id": "b1.after",
+      "node": "b1",
+      "port": "after",
+      "invocation": "batch:0",
+      "phase": "update",
+      "dtype": "float32",
+      "encoding": "json-numbers-row-major",
+      "origin": "observed",
+      "availability": "available",
+      "source": {
+        "file": "research/witnesses/mlp.py",
+        "symbol": "execute",
+        "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+      },
+      "owners": [
+        "b1"
+      ],
+      "dependencies": [
+        "b1.before",
+        "b1.gradient"
+      ],
+      "semantics": "Observed b1.after. ",
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "hidden_feature",
+          "space": "mlp-native-v1:hidden_feature:b1"
+        }
+      ]
+    },
+    {
+      "id": "b1.delta",
+      "node": "b1",
+      "port": "delta",
+      "invocation": "batch:0",
+      "phase": "update",
+      "dtype": "float32",
+      "encoding": "json-numbers-row-major",
+      "origin": "observed",
+      "availability": "available",
+      "source": {
+        "file": "research/witnesses/mlp.py",
+        "symbol": "execute",
+        "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+      },
+      "owners": [
+        "b1"
+      ],
+      "dependencies": [
+        "b1.before",
+        "b1.after"
+      ],
+      "semantics": "Observed b1.delta. Representable after minus before; SGD uses before - 0.0625 * gradient, no momentum.",
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "hidden_feature",
+          "space": "mlp-native-v1:hidden_feature:b1"
+        }
+      ]
+    },
+    {
+      "id": "w2.before",
+      "node": "w2",
+      "port": "before",
+      "invocation": "batch:0",
+      "phase": "forward",
+      "dtype": "float32",
+      "encoding": "json-numbers-row-major",
+      "origin": "observed",
+      "availability": "available",
+      "source": {
+        "file": "research/witnesses/mlp.py",
+        "symbol": "execute",
+        "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+      },
+      "owners": [
+        "w2"
+      ],
+      "dependencies": [],
+      "semantics": "Observed w2.before. ",
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "output_feature",
+          "space": "mlp-native-v1:output_feature:w2"
+        },
+        {
+          "role": "hidden_feature",
+          "space": "mlp-native-v1:hidden_feature:w2"
+        }
+      ]
+    },
+    {
+      "id": "w2.after",
+      "node": "w2",
+      "port": "after",
+      "invocation": "batch:0",
+      "phase": "update",
+      "dtype": "float32",
+      "encoding": "json-numbers-row-major",
+      "origin": "observed",
+      "availability": "available",
+      "source": {
+        "file": "research/witnesses/mlp.py",
+        "symbol": "execute",
+        "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+      },
+      "owners": [
+        "w2"
+      ],
+      "dependencies": [
+        "w2.before",
+        "w2.gradient"
+      ],
+      "semantics": "Observed w2.after. ",
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "output_feature",
+          "space": "mlp-native-v1:output_feature:w2"
+        },
+        {
+          "role": "hidden_feature",
+          "space": "mlp-native-v1:hidden_feature:w2"
+        }
+      ]
+    },
+    {
+      "id": "w2.delta",
+      "node": "w2",
+      "port": "delta",
+      "invocation": "batch:0",
+      "phase": "update",
+      "dtype": "float32",
+      "encoding": "json-numbers-row-major",
+      "origin": "observed",
+      "availability": "available",
+      "source": {
+        "file": "research/witnesses/mlp.py",
+        "symbol": "execute",
+        "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+      },
+      "owners": [
+        "w2"
+      ],
+      "dependencies": [
+        "w2.before",
+        "w2.after"
+      ],
+      "semantics": "Observed w2.delta. Representable after minus before; SGD uses before - 0.0625 * gradient, no momentum.",
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "output_feature",
+          "space": "mlp-native-v1:output_feature:w2"
+        },
+        {
+          "role": "hidden_feature",
+          "space": "mlp-native-v1:hidden_feature:w2"
+        }
+      ]
+    },
+    {
+      "id": "b2.before",
+      "node": "b2",
+      "port": "before",
+      "invocation": "batch:0",
+      "phase": "forward",
+      "dtype": "float32",
+      "encoding": "json-numbers-row-major",
+      "origin": "observed",
+      "availability": "available",
+      "source": {
+        "file": "research/witnesses/mlp.py",
+        "symbol": "execute",
+        "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+      },
+      "owners": [
+        "b2"
+      ],
+      "dependencies": [],
+      "semantics": "Observed b2.before. ",
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "output_feature",
+          "space": "mlp-native-v1:output_feature:b2"
+        }
+      ]
+    },
+    {
+      "id": "b2.after",
+      "node": "b2",
+      "port": "after",
+      "invocation": "batch:0",
+      "phase": "update",
+      "dtype": "float32",
+      "encoding": "json-numbers-row-major",
+      "origin": "observed",
+      "availability": "available",
+      "source": {
+        "file": "research/witnesses/mlp.py",
+        "symbol": "execute",
+        "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+      },
+      "owners": [
+        "b2"
+      ],
+      "dependencies": [
+        "b2.before",
+        "b2.gradient"
+      ],
+      "semantics": "Observed b2.after. ",
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "output_feature",
+          "space": "mlp-native-v1:output_feature:b2"
+        }
+      ]
+    },
+    {
+      "id": "b2.delta",
+      "node": "b2",
+      "port": "delta",
+      "invocation": "batch:0",
+      "phase": "update",
+      "dtype": "float32",
+      "encoding": "json-numbers-row-major",
+      "origin": "observed",
+      "availability": "available",
+      "source": {
+        "file": "research/witnesses/mlp.py",
+        "symbol": "execute",
+        "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+      },
+      "owners": [
+        "b2"
+      ],
+      "dependencies": [
+        "b2.before",
+        "b2.after"
+      ],
+      "semantics": "Observed b2.delta. Representable after minus before; SGD uses before - 0.0625 * gradient, no momentum.",
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "output_feature",
+          "space": "mlp-native-v1:output_feature:b2"
+        }
+      ]
+    },
+    {
+      "id": "prediction.after",
+      "node": "prediction.after",
+      "port": "after",
+      "invocation": "batch:0",
+      "phase": "post-update",
+      "dtype": "float32",
+      "encoding": "json-numbers-row-major",
+      "origin": "observed",
+      "availability": "available",
+      "source": {
+        "file": "research/witnesses/mlp.py",
+        "symbol": "execute",
+        "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+      },
+      "owners": [],
+      "dependencies": [
+        "inputs",
+        "w1.after",
+        "b1.after",
+        "w2.after",
+        "b2.after"
+      ],
+      "semantics": "Observed prediction.after. ",
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "example",
+          "space": "mlp-native-v1:example"
+        },
+        {
+          "role": "output_feature",
+          "space": "mlp-native-v1:output_feature"
+        }
+      ]
+    }
+  ],
+  "fixtures": {
+    "grouped": {
+      "version": 2,
+      "id": "fixture:grouped",
+      "integration": "fixture-grouped-v1",
+      "definition": "fixture-grouped-v1",
+      "checkpoint": "deterministic-fixture-v1",
+      "inputTransform": "fixture-constants-v1",
+      "profile": "developer-fixture-v1",
+      "runtime": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5",
+      "request": {
+        "version": 1,
+        "integration": "fixture-grouped-v1",
+        "profile": "developer-fixture-v1",
+        "requestId": "grouped",
+        "sessionId": "fixture",
+        "epoch": 0,
+        "action": "predict",
+        "input": "grouped"
+      },
+      "execution": "native",
+      "precision": {
+        "storage": "float32",
+        "compute": "float32",
+        "policy": "Deterministic CPU fixture"
+      },
+      "input": {
+        "text": "grouped",
+        "tokenIds": [],
+        "labels": [],
+        "offsets": []
+      },
+      "points": [
+        {
+          "id": "query",
+          "node": "query",
+          "port": "output",
+          "invocation": "fixture:0",
+          "phase": "forward",
+          "shape": [
+            4,
+            2
+          ],
+          "axes": [
+            {
+              "role": "query_head",
+              "space": "grouped-v1:query_head",
+              "size": 4
+            },
+            {
+              "role": "feature",
+              "space": "grouped-v1:feature",
+              "size": 2
+            }
+          ],
+          "dtype": "float32",
+          "encoding": "json-numbers-row-major",
+          "values": [
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            -1.0,
+            1.0
+          ],
+          "origin": "observed",
+          "availability": "available",
+          "source": {
+            "file": "research/witnesses/fixtures.py",
+            "symbol": "grouped",
+            "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+          },
+          "owners": [],
+          "dependencies": [],
+          "semantics": "Explicit query-head \u2192 KV-head mapping [0,0,1,1]; unequal head roles cannot be interchanged. query",
+          "capabilities": [
+            "slice",
+            "source"
+          ]
+        },
+        {
+          "id": "key",
+          "node": "key",
+          "port": "output",
+          "invocation": "fixture:0",
+          "phase": "forward",
+          "shape": [
+            2,
+            2,
+            2
+          ],
+          "axes": [
+            {
+              "role": "kv_head",
+              "space": "grouped-v1:kv_head",
+              "size": 2
+            },
+            {
+              "role": "key_position",
+              "space": "grouped-v1:key_position",
+              "size": 2
+            },
+            {
+              "role": "feature",
+              "space": "grouped-v1:feature",
+              "size": 2
+            }
+          ],
+          "dtype": "float32",
+          "encoding": "json-numbers-row-major",
+          "values": [
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            2.0,
+            1.0,
+            -1.0,
+            0.0
+          ],
+          "origin": "observed",
+          "availability": "available",
+          "source": {
+            "file": "research/witnesses/fixtures.py",
+            "symbol": "grouped",
+            "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+          },
+          "owners": [],
+          "dependencies": [],
+          "semantics": "Explicit query-head \u2192 KV-head mapping [0,0,1,1]; unequal head roles cannot be interchanged. key",
+          "capabilities": [
+            "slice",
+            "source"
+          ]
+        },
+        {
+          "id": "value",
+          "node": "value",
+          "port": "output",
+          "invocation": "fixture:0",
+          "phase": "forward",
+          "shape": [
+            2,
+            2,
+            2
+          ],
+          "axes": [
+            {
+              "role": "kv_head",
+              "space": "grouped-v1:kv_head",
+              "size": 2
+            },
+            {
+              "role": "key_position",
+              "space": "grouped-v1:key_position",
+              "size": 2
+            },
+            {
+              "role": "value_feature",
+              "space": "grouped-v1:value_feature",
+              "size": 2
+            }
+          ],
+          "dtype": "float32",
+          "encoding": "json-numbers-row-major",
+          "values": [
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0
+          ],
+          "origin": "observed",
+          "availability": "available",
+          "source": {
+            "file": "research/witnesses/fixtures.py",
+            "symbol": "grouped",
+            "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+          },
+          "owners": [],
+          "dependencies": [],
+          "semantics": "Explicit query-head \u2192 KV-head mapping [0,0,1,1]; unequal head roles cannot be interchanged. value",
+          "capabilities": [
+            "slice",
+            "source"
+          ]
+        },
+        {
+          "id": "mapping",
+          "node": "mapping",
+          "port": "output",
+          "invocation": "fixture:0",
+          "phase": "forward",
+          "shape": [
+            4
+          ],
+          "axes": [
+            {
+              "role": "query_head",
+              "space": "grouped-v1:query_head",
+              "size": 4
+            }
+          ],
+          "dtype": "int32",
+          "encoding": "json-numbers-row-major",
+          "values": [
+            0,
+            0,
+            1,
+            1
+          ],
+          "origin": "observed",
+          "availability": "available",
+          "source": {
+            "file": "research/witnesses/fixtures.py",
+            "symbol": "grouped",
+            "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+          },
+          "owners": [],
+          "dependencies": [],
+          "semantics": "Explicit query-head \u2192 KV-head mapping [0,0,1,1]; unequal head roles cannot be interchanged. mapping",
+          "capabilities": [
+            "slice",
+            "source"
+          ]
+        },
+        {
+          "id": "scores",
+          "node": "scores",
+          "port": "output",
+          "invocation": "fixture:0",
+          "phase": "forward",
+          "shape": [
+            4,
+            2
+          ],
+          "axes": [
+            {
+              "role": "query_head",
+              "space": "grouped-v1:query_head",
+              "size": 4
+            },
+            {
+              "role": "key_position",
+              "space": "grouped-v1:key_position",
+              "size": 2
+            }
+          ],
+          "dtype": "float32",
+          "encoding": "json-numbers-row-major",
+          "values": [
+            0.7071067690849304,
+            0.0,
+            0.0,
+            0.7071067690849304,
+            2.1213204860687256,
+            -0.7071067690849304,
+            -0.7071067690849304,
+            0.7071067690849304
+          ],
+          "origin": "observed",
+          "availability": "available",
+          "source": {
+            "file": "research/witnesses/fixtures.py",
+            "symbol": "grouped",
+            "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+          },
+          "owners": [],
+          "dependencies": [
+            "query",
+            "key",
+            "mapping"
+          ],
+          "semantics": "Explicit query-head \u2192 KV-head mapping [0,0,1,1]; unequal head roles cannot be interchanged. scores",
+          "capabilities": [
+            "slice",
+            "source"
+          ]
+        },
+        {
+          "id": "weights",
+          "node": "weights",
+          "port": "output",
+          "invocation": "fixture:0",
+          "phase": "forward",
+          "shape": [
+            4,
+            2
+          ],
+          "axes": [
+            {
+              "role": "query_head",
+              "space": "grouped-v1:query_head",
+              "size": 4
+            },
+            {
+              "role": "key_position",
+              "space": "grouped-v1:key_position",
+              "size": 2
+            }
+          ],
+          "dtype": "float32",
+          "encoding": "json-numbers-row-major",
+          "values": [
+            0.6697615385055542,
+            0.3302384614944458,
+            0.3302384614944458,
+            0.6697615385055542,
+            0.9441927671432495,
+            0.0558072067797184,
+            0.19557031989097595,
+            0.8044297099113464
+          ],
+          "origin": "observed",
+          "availability": "available",
+          "source": {
+            "file": "research/witnesses/fixtures.py",
+            "symbol": "grouped",
+            "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+          },
+          "owners": [],
+          "dependencies": [
+            "scores"
+          ],
+          "semantics": "Explicit query-head \u2192 KV-head mapping [0,0,1,1]; unequal head roles cannot be interchanged. weights",
+          "capabilities": [
+            "slice",
+            "source"
+          ]
+        },
+        {
+          "id": "output",
+          "node": "output",
+          "port": "output",
+          "invocation": "fixture:0",
+          "phase": "forward",
+          "shape": [
+            4,
+            2
+          ],
+          "axes": [
+            {
+              "role": "query_head",
+              "space": "grouped-v1:query_head",
+              "size": 4
+            },
+            {
+              "role": "value_feature",
+              "space": "grouped-v1:value_feature",
+              "size": 2
+            }
+          ],
+          "dtype": "float32",
+          "encoding": "json-numbers-row-major",
+          "values": [
+            1.6604769229888916,
+            2.6604769229888916,
+            2.3395230770111084,
+            3.3395230770111084,
+            5.111614227294922,
+            6.111614227294922,
+            6.608859539031982,
+            7.608859539031982
+          ],
+          "origin": "observed",
+          "availability": "available",
+          "source": {
+            "file": "research/witnesses/fixtures.py",
+            "symbol": "grouped",
+            "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+          },
+          "owners": [],
+          "dependencies": [
+            "weights",
+            "value",
+            "mapping"
+          ],
+          "semantics": "Explicit query-head \u2192 KV-head mapping [0,0,1,1]; unequal head roles cannot be interchanged. output",
+          "capabilities": [
+            "slice",
+            "source"
+          ]
+        }
+      ],
+      "limits": [
+        "Developer fixture, not pretrained model evidence. No scalar reconstruction, training or state continuation supported."
+      ]
+    },
+    "shape": {
+      "version": 2,
+      "id": "fixture:shape",
+      "integration": "fixture-shape-v1",
+      "definition": "fixture-shape-v1",
+      "checkpoint": "deterministic-fixture-v1",
+      "inputTransform": "fixture-constants-v1",
+      "profile": "developer-fixture-v1",
+      "runtime": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5",
+      "request": {
+        "version": 1,
+        "integration": "fixture-shape-v1",
+        "profile": "developer-fixture-v1",
+        "requestId": "shape",
+        "sessionId": "fixture",
+        "epoch": 0,
+        "action": "preview",
+        "input": "shape"
+      },
+      "execution": "structural-preview",
+      "precision": {
+        "storage": "float32",
+        "compute": "none",
+        "policy": "Deterministic CPU fixture"
+      },
+      "input": {
+        "text": "shape",
+        "tokenIds": [],
+        "labels": [],
+        "offsets": []
+      },
+      "points": [
+        {
+          "id": "input",
+          "node": "input",
+          "port": "output",
+          "invocation": "fixture:0",
+          "phase": "preview",
+          "shape": [
+            2,
+            3
+          ],
+          "axes": [
+            {
+              "role": "example",
+              "space": "grouped-v1:example",
+              "size": 2
+            },
+            {
+              "role": "feature",
+              "space": "grouped-v1:feature",
+              "size": 3
+            }
+          ],
+          "dtype": "float32",
+          "encoding": "json-numbers-row-major",
+          "values": null,
+          "origin": "observed",
+          "availability": "shape_only",
+          "source": {
+            "file": "research/witnesses/fixtures.py",
+            "symbol": "fixture_record",
+            "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+          },
+          "owners": [],
+          "dependencies": [],
+          "semantics": "Structural preview only, no forward execution. input",
+          "capabilities": [
+            "source"
+          ]
+        },
+        {
+          "id": "unknown.custom",
+          "node": "unknown.custom",
+          "port": "output",
+          "invocation": "fixture:0",
+          "phase": "preview",
+          "shape": [
+            2,
+            5
+          ],
+          "axes": [
+            {
+              "role": "example",
+              "space": "grouped-v1:example",
+              "size": 2
+            },
+            {
+              "role": "feature",
+              "space": "grouped-v1:feature",
+              "size": 5
+            }
+          ],
+          "dtype": "float32",
+          "encoding": "json-numbers-row-major",
+          "values": null,
+          "origin": "observed",
+          "availability": "shape_only",
+          "source": {
+            "file": "research/witnesses/fixtures.py",
+            "symbol": "fixture_record",
+            "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+          },
+          "owners": [],
+          "dependencies": [
+            "input"
+          ],
+          "semantics": "Structural preview only, no forward execution. unknown.custom",
+          "capabilities": [
+            "source"
+          ]
+        }
+      ],
+      "limits": [
+        "Developer fixture, not pretrained model evidence. No scalar reconstruction, training or state continuation supported."
+      ]
+    },
+    "opaque": {
+      "version": 2,
+      "id": "fixture:opaque",
+      "integration": "fixture-opaque-v1",
+      "definition": "fixture-opaque-v1",
+      "checkpoint": "deterministic-fixture-v1",
+      "inputTransform": "fixture-constants-v1",
+      "profile": "developer-fixture-v1",
+      "runtime": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5",
+      "request": {
+        "version": 1,
+        "integration": "fixture-opaque-v1",
+        "profile": "developer-fixture-v1",
+        "requestId": "opaque",
+        "sessionId": "fixture",
+        "epoch": 0,
+        "action": "predict",
+        "input": "opaque"
+      },
+      "execution": "native",
+      "precision": {
+        "storage": "float32",
+        "compute": "float32",
+        "policy": "Deterministic CPU fixture"
+      },
+      "input": {
+        "text": "opaque",
+        "tokenIds": [],
+        "labels": [],
+        "offsets": []
+      },
+      "points": [
+        {
+          "id": "input",
+          "node": "input",
+          "port": "output",
+          "invocation": "fixture:0",
+          "phase": "forward",
+          "shape": [
+            2
+          ],
+          "axes": [
+            {
+              "role": "feature",
+              "space": "grouped-v1:feature",
+              "size": 2
+            }
+          ],
+          "dtype": "float32",
+          "encoding": "json-numbers-row-major",
+          "values": [
+            3.0,
+            4.0
+          ],
+          "origin": "observed",
+          "availability": "available",
+          "source": {
+            "file": "research/witnesses/fixtures.py",
+            "symbol": "fixture_record",
+            "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+          },
+          "owners": [],
+          "dependencies": [],
+          "semantics": "Actual torch.linalg.vector_norm boundary; internals opaque. Unknown operator has no registered scalar explanation. input",
+          "capabilities": [
+            "slice",
+            "source"
+          ]
+        },
+        {
+          "id": "opaque.norm",
+          "node": "opaque.norm",
+          "port": "output",
+          "invocation": "fixture:0",
+          "phase": "forward",
+          "shape": [],
+          "axes": [],
+          "dtype": "float32",
+          "encoding": "json-numbers-row-major",
+          "values": null,
+          "origin": "observed",
+          "availability": "opaque",
+          "source": {
+            "file": "research/witnesses/fixtures.py",
+            "symbol": "fixture_record",
+            "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+          },
+          "owners": [],
+          "dependencies": [
+            "input"
+          ],
+          "semantics": "Actual torch.linalg.vector_norm boundary; internals opaque. Unknown operator has no registered scalar explanation. opaque.norm",
+          "capabilities": [
+            "source"
+          ]
+        },
+        {
+          "id": "output",
+          "node": "output",
+          "port": "output",
+          "invocation": "fixture:0",
+          "phase": "forward",
+          "shape": [],
+          "axes": [],
+          "dtype": "float32",
+          "encoding": "json-numbers-row-major",
+          "values": [
+            5.0
+          ],
+          "origin": "observed",
+          "availability": "available",
+          "source": {
+            "file": "research/witnesses/fixtures.py",
+            "symbol": "fixture_record",
+            "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+          },
+          "owners": [],
+          "dependencies": [
+            "opaque.norm"
+          ],
+          "semantics": "Actual torch.linalg.vector_norm boundary; internals opaque. Unknown operator has no registered scalar explanation. output",
+          "capabilities": [
+            "slice",
+            "source"
+          ]
+        },
+        {
+          "id": "unknown.scalar.explanation",
+          "node": "unknown.scalar.explanation",
+          "port": "output",
+          "invocation": "fixture:0",
+          "phase": "forward",
+          "shape": [],
+          "axes": [],
+          "dtype": "float32",
+          "encoding": "json-numbers-row-major",
+          "values": null,
+          "origin": "observed",
+          "availability": "unsupported",
+          "source": {
+            "file": "research/witnesses/fixtures.py",
+            "symbol": "fixture_record",
+            "revision": "sha256:3c46331962a9d82220938e272fd7af50a7e547edbb4b450dac7a5985a7f99dd5"
+          },
+          "owners": [],
+          "dependencies": [
+            "output"
+          ],
+          "semantics": "Actual torch.linalg.vector_norm boundary; internals opaque. Unknown operator has no registered scalar explanation. unknown.scalar.explanation",
+          "capabilities": [
+            "source"
+          ]
+        }
+      ],
+      "limits": [
+        "Developer fixture, not pretrained model evidence. No scalar reconstruction, training or state continuation supported."
+      ]
+    }
+  }
+}

@@ -1,9 +1,17 @@
 """Explicitly launched, loopback-only, bounded read-only inference bridge."""
 import argparse
 import json
+import sys
+from pathlib import Path
+
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlsplit
 from adapter import NativePythia, validate_request
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'witnesses'))
+import importlib.util
+_spec=importlib.util.spec_from_file_location("witness_adapter",Path(__file__).resolve().parents[1]/"witnesses/adapter.py")
+witness_adapter=importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(witness_adapter)
 
 
 def serve(port, origin):
@@ -34,14 +42,16 @@ def serve(port, origin):
             try:
                 length=int(self.headers.get('Content-Length','0'))
                 if not 1<=length<=4096:raise ValueError('Request byte budget')
-                r=validate_request(json.loads(self.rfile.read(length)))
+                raw=json.loads(self.rfile.read(length))
+                is_mlp=isinstance(raw,dict) and raw.get('integration')==witness_adapter.INTEGRATION
+                r=witness_adapter.validate_request(raw) if is_mlp else validate_request(raw)
                 old=epochs.get(r['sessionId'],(-1,set()))
                 if r['epoch']<old[0] or r['requestId'] in old[1]:raise ValueError('Stale epoch or duplicate request')
                 if r['sessionId'] not in epochs and len(epochs)>=128:raise ValueError('Session budget; restart bridge explicitly')
                 ids=set() if r['epoch']>old[0] else old[1]
                 if len(ids)>=128:raise ValueError('Request budget per epoch')
                 ids.add(r['requestId']);epochs[r['sessionId']]=(r['epoch'],ids)
-                self.reply(200,model.capture(r))
+                self.reply(200,witness_adapter.capture(r) if is_mlp else model.capture(r))
             except (ValueError,TypeError,KeyError,json.JSONDecodeError) as e:self.reply(400,{'error':str(e)})
             except Exception as e:self.reply(500,{'error':type(e).__name__+': native execution failed; no fallback'})
         def do_GET(self):self.reply(405,{'error':'Only explicit POST /execute is supported'})

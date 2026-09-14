@@ -1,10 +1,13 @@
+import { registerWitnessCodecs } from './witness-codecs.js';
+import { noncanonicalCodec } from './noncanonical.js';
 import { canonicalIdentity, compareRuns } from './compare.js';
 import { IntegrationRegistry, check, fields, validateRun, evidenceHash, type EvidenceRun, type EvidencePoint } from './evidence.js';
 import { validateLegacyRun } from '../archive/legacy-run.js';
 import type { ArchivedSnapshot } from '../archive/snapshot.js';
 import type { RecordedRun } from './types.js';
 import { sourceMapping } from '../app/source/mappings.js';
-import profile from '../research/pythia/profile.json';
+import currentProfile from '../research/pythia/profile.json';
+import legacyProfile from '../research/pythia/profile-legacy.json';
 
 /** Compatibility metadata is derived; original run, snapshot and their IDs are retained. */
 export async function readLegacyEvidence(record: unknown): Promise<EvidenceRun> {
@@ -30,12 +33,15 @@ export async function readLegacyEvidence(record: unknown): Promise<EvidenceRun> 
     limits:['Format-1 bytes and identities preserved in the envelope. Request text and semantic metadata are a compatibility view; unknown legacy metadata stays unknown.','Scalar/backward/learning actions use the existing canonical worker and candidate lifecycle. Saved evidence never invokes them.']});
 }
 export function integrations():IntegrationRegistry {
-  return new IntegrationRegistry().register({id:'microgpt-legacy-v1',decode:readLegacyEvidence,compare(before,after){return compareRuns((before as {run:RecordedRun}).run,(after as {run:RecordedRun}).run);}}).register({id:'pythia-native-v1',async decode(record){
+  return registerWitnessCodecs(new IntegrationRegistry().register(noncanonicalCodec)).register({id:'microgpt-legacy-v1',decode:readLegacyEvidence,compare(before,after){return compareRuns((before as {run:RecordedRun}).run,(after as {run:RecordedRun}).run);}}).register({id:'pythia-native-v1',async decode(record){
     const run=validateRun(record);
+    const profile=[currentProfile,legacyProfile].find(p=>p.runtime===run.runtime);check(profile,'Unqualified native runtime');
+    check(run.version===1&&run.request.version===1,'Native version');
     check(run.integration==='pythia-native-v1'&&run.profile===profile.profile&&run.runtime===profile.runtime,'Unqualified native binding/profile');
     check(run.definition===profile.definition&&run.checkpoint===profile.checkpoint&&run.inputTransform===profile.inputTransform,'Native identity mismatch');
     check(run.request.action==='predict' && run.precision.storage==='F16' && run.precision.compute==='float32','Unsupported native mode/precision');
     check(run.id===`${run.request.sessionId}:${run.request.requestId}`,'Native receipt ID mismatch');
+    check('tokenIds' in run.input,'Native token input required');
     check(run.input.tokenIds.length>=1&&run.input.tokenIds.length<=16&&run.input.tokenIds.every(n=>n<profile.tokenizerSize)&&run.input.text===run.request.input&&/^[\x00-\x7f]{1,128}$/.test(run.input.text),'Native input mismatch');
     const expected=['tokens','embedding','residual.input','norm.attention','norm.mlp','attention.output','mlp.output','residual.output','attention.qkv','attention.weights','logits'];
     check(run.points.length===expected.length&&expected.every(id=>run.points.some(p=>p.id===id)),'Native capture coverage');
