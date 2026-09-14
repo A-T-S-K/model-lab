@@ -1,17 +1,25 @@
 # Foundation status
 
-D0 is preserved as historical documentation alignment. **M0 preparation is complete.**
-The **repaired first-M1 slice is QUALIFIED within its bounded canonical/native/replay
-scope**, as recorded in the [repair qualification](reviews/M1-repair-qualification.md).
-The original historical preservation failure remains FAILED; the missing worker timing
-sample is LOST / RETIRED BY OWNER and remains absent. Full M1, foundation, M5 and
-release acceptance remain ungranted. See [authority](README.md).
+D0 is preserved as historical documentation alignment. **M0 preparation and M1
+contracts/codecs/heterogeneous witnesses are COMPLETE within their stage scope.**
+The [M1 witness qualification](reviews/M1-witness-qualification.md) records working
+code at `04c9e13`, real executions, shared inspection, strict codecs and disconnected
+replay on the repaired checkout. This is engineering qualification; full FP portfolio,
+independent M5 foundation review and release acceptance remain ungranted.
 
-The canonical browser worker now validates versioned intents and retained runs enter
-the shared store through the strict legacy codec. Native pinned Pythia executes
-through an optional loopback bridge into the same inspector/player. Saved native
-evidence replayed after bridge shutdown; canonical operation required no bridge.
-These are bounded subset results, not complete FP or migration-stage acceptance.
+Canonical MicroGPT, separate two-layer/three-head MicroGPT and native Pythia use the
+shared inspector/store/player. The optional native numeric MLP performs float32
+prediction, MSE, backward and explicit SGD with supported state round-trips. Grouped
+query/KV-axis arithmetic, structural preview, opaque computation and unsupported
+operation fallback are qualified for M1. Saved new-model and Pythia evidence reopened
+without executor activity; canonical operation required no bridge. M2 world/topology
+integration, generation/cache, variants, experiments and later failure/retention
+proof portions remain pending. See [authority](README.md).
+
+The [repaired first-M1 qualification](reviews/M1-repair-qualification.md) retains its
+original scope and identity. The original historical preservation failure remains
+FAILED; the missing worker timing sample remains absent and **LOST / RETIRED BY
+OWNER**. No old pass or retired sample is transferred into the new qualification.
 
 ## Historical engineering evidence
 
@@ -31,18 +39,18 @@ Each row is a status pointer, not a reduced acceptance definition.
 
 | Proof | Witness / definition | Status |
 | --- | --- | --- |
-| FP-01 | [Canonical preservation through new contracts](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | SUBSET EXERCISED; full proof unaccepted; see slice report |
-| FP-02 | [Noncanonical multi-layer tiny transformer](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | NOT_RUN |
-| FP-03 | [Native Pythia execution, selected internals, generation and disconnected replay](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | SUBSET EXERCISED; full proof unaccepted; see slice report |
-| FP-04 | [MLP/SGD plus grouped query/KV-axis numerical fixture](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | NOT_RUN |
-| FP-05 | [Shape-only, unknown and opaque states](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | NOT_RUN |
+| FP-01 | [Canonical preservation through new contracts](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 portion REQUALIFIED; full FP unaccepted; witness report |
+| FP-02 | [Noncanonical multi-layer tiny transformer](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 native multilayer execution, identity and inspector/replay QUALIFIED; M2 world structure pending |
+| FP-03 | [Native Pythia execution, selected internals, generation and disconnected replay](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 native live/disconnected portion REQUALIFIED; broader generation/cache proof pending |
+| FP-04 | [MLP/SGD plus grouped query/KV-axis numerical fixture](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 numeric MLP/SGD/state and grouped-axis witnesses QUALIFIED; full foundation/M5 disposition pending |
+| FP-05 | [Shape-only, unknown and opaque states](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 shape-only, opaque computation and unsupported fallback QUALIFIED; later coverage/M5 disposition pending |
 | FP-06 | [Actual activation and composite parameterized replacement](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | NOT_RUN |
 | FP-07 | [Head ablation and donor activation patch](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | NOT_RUN |
 | FP-08 | [Matched data substitution and defense control](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | NOT_RUN |
 | FP-09 | [Repeated invocations and bounded generation/cache correctness](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | NOT_RUN |
-| FP-10 | [Legacy replay, export/import and representation-aware comparison](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | SUBSET EXERCISED; full proof unaccepted; see slice report |
-| FP-11 | [Async, retention, transport and inert-import failure controls](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | SUBSET EXERCISED; full proof unaccepted; see slice report |
-| FP-12 | [Shared visual/explanation routes and extension change surface](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | SUBSET EXERCISED; full proof unaccepted; see slice report |
+| FP-10 | [Legacy replay, export/import and representation-aware comparison](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 legacy and new-codec replay/state portions QUALIFIED; broader comparison/durability pending |
+| FP-11 | [Async, retention, transport and inert-import failure controls](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 affected receipt/stale/import/transport controls REQUALIFIED; broader M4 failures/retention pending |
+| FP-12 | [Shared visual/explanation routes and extension change surface](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 same-inspector/source/fallback change surface QUALIFIED; M2 world and M5 review pending |
 
 Native Pythia is a required real second transformer executing through the shared
 request/evidence path, with pinned native comparison, useful internal evidence and
@@ -57,7 +65,7 @@ and [native acceptance](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#4
 | Stage | Definition | Status |
 | --- | --- | --- |
 | M0 | [freeze invariants and the migration map, not untested APIs](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m0-freeze-invariants-and-the-migration-map-not-untested-apis) | PREPARATION COMPLETE; slice report migration map |
-| M1 | [contracts, codecs, and dual producers early](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m1-contracts-codecs-and-dual-producers-early) | Repaired first slice QUALIFIED within its scoped report; full M1 unaccepted |
+| M1 | [contracts, codecs, and dual producers early](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m1-contracts-codecs-and-dual-producers-early) | COMPLETE — scoped engineering qualification; no M2/M5 or full FP acceptance |
 | M2 | [topology, world, and interaction separation](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m2-topology-world-and-interaction-separation) | NOT_RUN |
 | M3 | [variants and experiments](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m3-variants-and-experiments) | NOT_RUN |
 | M4 | [durable payloads and failure boundaries](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m4-durable-payloads-and-failure-boundaries) | NOT_RUN |
@@ -181,3 +189,34 @@ converted to PASS. The retired worker sample remains absent, and all other prote
 evidence remains preserved. No remaining blocker was observed in the requested repair
 scope. Full M1, independent M5, foundation and release acceptance remain ungranted;
 no M2 or additional model witness is started.
+
+## Complete M1 stage: heterogeneous witness qualification
+
+The current authorization superseded the historical task stop points above and
+explicitly authorized completing M1 on `wave-1a-spatial` from `9cca17d`. The
+[qualification report](reviews/M1-witness-qualification.md) records implementation
+commit `04c9e13` and application runtime
+`sha256:eff73b8404e28cf895afa733b24eff4ee53af62c78f0b543361d19802d67b8d5`.
+
+All M1 stage criteria passed: live native/browser execution through registered
+bindings, typed numeric input and state codecs, real arithmetic, the shared bounded
+store/query/inspector, truthful missing/opaque values and saved disconnected replay.
+MLP prediction/training/resume matched the independent PyTorch reference across 70
+comparisons with zero difference. Grouped-head arithmetic and invalid mappings were
+checked. The noncanonical model retained every layer/head/position and causal K/V
+reference without changing the canonical implementation or scene.
+
+Qualification passed 146 unit/integration cases without skips, canonical portable
+and byte-exact reference checks, typecheck/build/example, 12 Pythia comparisons,
+18 live transport checks and 25 distinct browser cases including the repaired
+regressions and 14 retained canonical routes. The report preserves the initial
+Playwright response-body failure and unchanged successful rerun. After bridge
+shutdown, all three noncanonical/native saved models replayed exact values with
+honest refusals and no native requests; new-model replay started no executor workers.
+
+There is no remaining blocker within M1. This does not grant full FP-01–FP-12,
+independent M5, user/workshop or release acceptance. MLP training produces disposable
+state, not an adopted candidate; noncanonical MicroGPT supports inference state only;
+Pythia still refuses training/generation/cache. M2 and all later stages remain pending.
+The prepared kit, canonical mathematics/fixtures/oracle, previous evidence and the
+unrelated product review were preserved. The retired sample remains absent.
