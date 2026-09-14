@@ -1,8 +1,9 @@
 import { defineConfig } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
-import { allocateSliceOutput, validateScratchPath } from './tests/support/slice-output.js';
+import { allocateSliceOutput, validateScratchPath, refuseRunnerOutputOverrides } from './tests/support/slice-output.js';
 const root = fileURLToPath(new URL('./', import.meta.url));
+refuseRunnerOutputOverrides(process.argv, process.env);
 // Main invocation allocates; workers inherit its root through their environment.
 if (process.env.TEST_WORKER_INDEX === undefined) {
   const output = await allocateSliceOutput(root, process.env.SLICE_EVIDENCE_DIR);

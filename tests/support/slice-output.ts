@@ -2,6 +2,18 @@ import { lstat, readFile, realpath, mkdir, mkdtemp } from 'node:fs/promises';
 import { resolve, relative, sep, join } from 'node:path';
 import { allocateTestOutput } from './test-output.js';
 
+// Runner CLI/reporter environment overrides take precedence over config. Refuse
+// them before allocation/cleanup; the scoped public override is SLICE_EVIDENCE_DIR.
+export function refuseRunnerOutputOverrides(argv: readonly string[], env: NodeJS.ProcessEnv) {
+  if (argv.some(arg => /^--(?:output|reporter)(?:=|$)/.test(arg))) {
+    throw Error('Output/reporter overrides refused; use a fresh SLICE_EVIDENCE_DIR');
+  }
+  const unsafe = /^(?:PLAYWRIGHT_(?:JSON|HTML|BLOB)_OUTPUT_(?:FILE|DIR|NAME)|PLAYWRIGHT_HTML_REPORT|PW_TEST_REPORTER|SPATIAL_EVIDENCE_DIR|WAVE2_EVIDENCE_DIR|WAVE2C_EVIDENCE_DIR|STOP_EVIDENCE_DIR)$/;
+  for (const name of Object.keys(env)) if (unsafe.test(name) && env[name] !== undefined) {
+    throw Error(`${name} output override refused; use a fresh SLICE_EVIDENCE_DIR`);
+  }
+}
+
 export async function validateScratchPath(root: string, path: string) {
   const base = await realpath(root);
   if (path.includes('\\') || path.split('/').includes('..')) throw Error('Unsafe scratch path');
@@ -29,8 +41,8 @@ export async function allocateSliceOutput(root: string, destination?: string) {
 }
 
 export async function browserEvidenceDirectory(root: string, output: string) {
-  await validateScratchPath(root, output);
-  return mkdtemp(join(output, 'evidence', 'test-'));
+  const evidence = await validateScratchPath(root, join(output, 'evidence'));
+  return mkdtemp(join(evidence, 'test-'));
 }
 
 export async function readReplayPair(root: string, savedPath: string, responsePath: string, output: string) {

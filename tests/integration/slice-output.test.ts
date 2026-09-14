@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, realpath, symlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, realpath, symlink, rename } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { allocateSliceOutput, browserEvidenceDirectory, readReplayPair, validateScratchPath } from '../support/slice-output.js';
+import { allocateSliceOutput, browserEvidenceDirectory, readReplayPair, validateScratchPath, refuseRunnerOutputOverrides } from '../support/slice-output.js';
 
 test('slice output refuses historical/aliased roots and collisions; runner cleanup preserves live-to-offline inputs', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'model-lab-slice-output-')));
@@ -27,4 +27,28 @@ test('slice output refuses historical/aliased roots and collisions; runner clean
   assert.equal(await readFile(savedPath,'utf8'),saved);assert.equal(await readFile(responsePath,'utf8'),response);
   assert.equal(await readFile(join(protectedDir,'sentinel'),'utf8'),'keep');assert.deepEqual(await readdir(protectedDir),['sentinel']);
   assert.notEqual(await browserEvidenceDirectory(root,offline.directory),await browserEvidenceDirectory(root,offline.directory));
+});
+
+
+test('runner/reporter overrides fail before synthetic protected evidence or cleanup can be reached', async () => {
+  const root=await realpath(await mkdtemp(join(tmpdir(),'model-lab-runner-refusal-')));
+  await writeFile(join(root,'sentinel'),'keep');
+  for(const args of [['--output',root],['--output='+root],['--reporter=json']]) {
+    assert.throws(()=>refuseRunnerOutputOverrides(args,{}),/overrides refused/);
+  }
+  for(const name of ['PLAYWRIGHT_JSON_OUTPUT_FILE','PLAYWRIGHT_JSON_OUTPUT_DIR','PLAYWRIGHT_JSON_OUTPUT_NAME','PLAYWRIGHT_HTML_REPORT','PLAYWRIGHT_BLOB_OUTPUT_FILE','PW_TEST_REPORTER','SPATIAL_EVIDENCE_DIR']) {
+    assert.throws(()=>refuseRunnerOutputOverrides([],{[name]:root}),/override refused/);
+  }
+  refuseRunnerOutputOverrides(['--workers=1'],{SLICE_EVIDENCE_DIR:'test-results/scratch/new'});
+  assert.deepEqual(await readdir(root),['sentinel']);assert.equal(await readFile(join(root,'sentinel'),'utf8'),'keep');
+});
+
+test('custom browser evidence child aliases are refused without touching a synthetic protected tree',async()=>{
+  const root=await realpath(await mkdtemp(join(tmpdir(),'model-lab-child-alias-')));
+  const output=await allocateSliceOutput(root),protectedDir=join(root,'protected');
+  await mkdir(protectedDir);await writeFile(join(protectedDir,'sentinel'),'keep');
+  await rename(join(output.directory,'evidence'),join(output.directory,'original-evidence'));
+  await symlink(protectedDir,join(output.directory,'evidence'));
+  await assert.rejects(browserEvidenceDirectory(root,output.directory),/symlink/);
+  assert.deepEqual(await readdir(protectedDir),['sentinel']);assert.equal(await readFile(join(protectedDir,'sentinel'),'utf8'),'keep');
 });
