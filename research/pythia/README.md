@@ -74,3 +74,11 @@ Open saved runs without this environment/service. Historical native profiles oth
 than the explicitly registered profile are refused; a general profile/version reader
 campaign remains M4 work. Detailed evidence and remaining proofs are recorded in
 `docs/reviews/M0-M1-first-vertical-slice.md`.
+
+Qualification outputs are fresh scratch runs: `qualify.py` allocates under
+`test-results/scratch` before loading a model. `NATIVE_EVIDENCE_DIR`, if supplied,
+must name a nonexistent immediate child of that directory. Existing/protected/aliased
+destinations are refused. Use `PYTHONDONTWRITEBYTECODE=1` for qualification.
+`test_bridge.py` now requires `SLICE_NATIVE_ENDPOINT` and `SLICE_ORIGIN` to identify
+the explicitly launched task bridge. Browser output/build/port settings and current
+qualification limits are documented in the [repair report](../../docs/reviews/M1-repair-qualification.md).

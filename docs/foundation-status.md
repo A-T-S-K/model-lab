@@ -1,11 +1,11 @@
 # Foundation status
 
 D0 is preserved as historical documentation alignment. **M0 preparation is complete.**
-The first M1 two-producer implementation has passed its scoped live/native/replay
-checks, but **slice delivery qualification is BLOCKED** by an unrecovered overwrite
-of one historical timing artifact. Full M1 and foundation acceptance remain ungranted.
-See the [M0/M1 report](reviews/M0-M1-first-vertical-slice.md) for actual commands,
-identities, protection failure and remaining criteria, and [authority](README.md).
+The **repaired first-M1 slice is QUALIFIED within its bounded canonical/native/replay
+scope**, as recorded in the [repair qualification](reviews/M1-repair-qualification.md).
+The original historical preservation failure remains FAILED; the missing worker timing
+sample is LOST / RETIRED BY OWNER and remains absent. Full M1, foundation, M5 and
+release acceptance remain ungranted. See [authority](README.md).
 
 The canonical browser worker now validates versioned intents and retained runs enter
 the shared store through the strict legacy codec. Native pinned Pythia executes
@@ -57,7 +57,7 @@ and [native acceptance](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#4
 | Stage | Definition | Status |
 | --- | --- | --- |
 | M0 | [freeze invariants and the migration map, not untested APIs](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m0-freeze-invariants-and-the-migration-map-not-untested-apis) | PREPARATION COMPLETE; slice report migration map |
-| M1 | [contracts, codecs, and dual producers early](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m1-contracts-codecs-and-dual-producers-early) | First slice implemented; delivery BLOCKED on historical artifact recovery; full M1 unaccepted |
+| M1 | [contracts, codecs, and dual producers early](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m1-contracts-codecs-and-dual-producers-early) | Repaired first slice QUALIFIED within its scoped report; full M1 unaccepted |
 | M2 | [topology, world, and interaction separation](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m2-topology-world-and-interaction-separation) | NOT_RUN |
 | M3 | [variants and experiments](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m3-variants-and-experiments) | NOT_RUN |
 | M4 | [durable payloads and failure boundaries](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m4-durable-payloads-and-failure-boundaries) | NOT_RUN |
@@ -162,3 +162,22 @@ validation and inspector selection/replay state. R1 protection has no additional
 blocker within its stated scope; other native/browser writers and runner cleanup
 still need fresh output routing before qualification. No repairs or test reruns
 occurred. The review is not independent M5 acceptance and grants no later gate.
+
+## Repaired first-M1 candidate qualification
+
+The [repair report](reviews/M1-repair-qualification.md) records reproduction and repair
+of all three reviewed defects, fresh native/browser/runner/build output ownership,
+and the complete authorized qualification. Application runtime is
+`sha256:a003043fcf7c9cf3fc9c1c13cbd3e43735c285431f3067bbf9faddbf5070785e`;
+the pinned native binding remains unchanged. Affected tests, canonical/reference,
+typecheck/build, native comparison/transport, shared live/stale routes, 14 retained
+canonical routes and disconnected replay passed. Canonical prediction made zero
+native requests after task-owned bridge shutdown. Local source checkpoints are
+`b5ad07a`, `0404025` and `be11952`; no remote writes occurred.
+
+This qualifies only the repaired first slice. Earlier blocked/pending entries above
+retain their historical task scope; the original failed preservation check is never
+converted to PASS. The retired worker sample remains absent, and all other protected
+evidence remains preserved. No remaining blocker was observed in the requested repair
+scope. Full M1, independent M5, foundation and release acceptance remain ungranted;
+no M2 or additional model witness is started.
