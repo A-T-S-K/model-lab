@@ -6,7 +6,7 @@ import type { ArchivedSnapshot, LearningExperiment } from '../../archive/session
 import type { InspectionTarget, InspectionResult } from '../../inspect/types.js';
 import type { HeadAblationExperiment } from '../../experiments/ablation.js';
 
-export interface RequestTag { sessionId: string; runId: string; generationId: number }
+export interface RequestTag { sessionId: string; runId: string; generationId: number; intent?: import("../../trace/evidence.js").ExecutionRequest }
 export type WorkerRequest = RequestTag & (
   { command: 'initialize' | 'reset' } |
   { command: 'restore'; snapshot: ArchivedSnapshot } |

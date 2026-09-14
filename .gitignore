@@ -5,3 +5,6 @@ playwright-report/
 __pycache__/
 *.pyc
 runtime/revision.ts
+# Optional native research profile; never part of browser deployment.
+research/pythia/.venv/
+research/pythia/cache/

@@ -1,5 +1,12 @@
 # Unfamiliar-user teaching check
 
+**Foundation prerequisite:** full unfamiliar-user testing, timed workshop rehearsal,
+actual-station and release qualification follow independent M5 foundation acceptance
+at M6. See the [status ledger](foundation-status.md) and [authority map](README.md).
+These current MicroGPT/ABQ instructions are retained for that gate and for authorized
+internal engineering/visual/accessibility review; old rehearsal passes do not waive it.
+Human results remain unrun/pending. This document grants no execution permission.
+
 **HUMAN TEACHING VALIDATION: PENDING**
 
 Give an unfamiliar visitor the running Guided page without a technical introduction. Ask them to make a prediction, teach the model, and investigate one changed number. Observe where they pause or need help; do not explain the answer first.

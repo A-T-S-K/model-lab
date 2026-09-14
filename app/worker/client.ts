@@ -1,3 +1,4 @@
+import { canonicalIntent } from './execution-intent.js';
 import type { WorkerRequest, WorkerResponse } from './protocol.js';
 import type { ArchivedSnapshot } from '../../archive/session.js';
 type Command = WorkerRequest extends infer R ? R extends WorkerRequest ? Omit<R, 'sessionId' | 'runId' | 'generationId'> : never : never;
@@ -40,7 +41,9 @@ export class ModelWorkerClient {
     const runId = `${this.sessionId}:${this.generationId}:${++this.sequence}`;
     return new Promise((resolve, reject) => {
       this.pending.set(runId, { resolve, reject });
-      this.worker.postMessage({ ...command, runId, sessionId: this.sessionId, generationId: this.generationId });
+      const request: WorkerRequest = { ...command, runId, sessionId: this.sessionId, generationId: this.generationId };
+      const intent = canonicalIntent(request);
+      this.worker.postMessage(intent ? { ...request, intent } : request);
     });
   }
   initialize(): Promise<WorkerResponse> { return this.request({ command: 'initialize' }); }

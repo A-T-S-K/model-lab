@@ -1,0 +1,3 @@
+# CPU qualification profile, Python 3.14.7 / macOS arm64.
+torch==2.14.0
+transformers==5.17.0

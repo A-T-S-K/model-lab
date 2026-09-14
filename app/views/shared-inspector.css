@@ -1,0 +1,17 @@
+#open-shared-inspector{position:fixed;right:18px;bottom:10px;z-index:25;font-size:12px;background:#262a2d;border:1px solid #777;color:#f0f0ea}
+.shared-shade{position:fixed;inset:0;background:#111e;z-index:100;display:flex;padding:24px;align-items:stretch;justify-content:center}
+.shared-panel{width:min(1400px,100%);overflow:auto;background:#24282b;color:#e6e7e1;border:1px solid #696f70;padding:24px;box-sizing:border-box;font-family:'IBM Plex Sans',sans-serif}
+.shared-panel header{display:flex;justify-content:space-between;align-items:center;gap:20px}.shared-panel h2{margin:4px 0 16px;font-size:24px}.shared-panel h3{font-size:18px}
+.shared-controls{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin-bottom:14px}.shared-controls label{display:grid;gap:5px;font-size:12px}.shared-controls input,.shared-controls select{max-width:330px}
+.shared-grid{display:grid;grid-template-columns:280px minmax(0,1fr);gap:26px}.shared-grid nav{max-height:60vh;overflow:auto}.shared-grid nav button{display:block;width:100%;text-align:left;font-size:12px;margin:3px 0;overflow-wrap:anywhere}.shared-grid nav button[aria-pressed=true]{outline:2px solid #b4ced5}.shared-grid article{min-width:0}.shared-panel pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12px 'IBM Plex Mono',monospace;background:#191d20;padding:12px}.shared-source{max-height:400px;overflow:auto}.shared-panel p{line-height:1.5;overflow-wrap:anywhere}.shared-panel table{width:100%;text-align:left;font-size:13px}.shared-panel td,.shared-panel th{padding:6px;border-bottom:1px solid #535859}.shared-provenance{border-top:1px solid #687074;padding-top:12px}
+@media(max-width:800px){.shared-shade{padding:6px}.shared-panel{padding:14px}.shared-grid{grid-template-columns:1fr}.shared-grid nav{max-height:160px}.shared-controls input,.shared-controls select{max-width:260px}}
+/* Match the existing Instrument Graphite/Plex shell, including classic-mode hosts. */
+#shared-inspector .shared-panel{font-family:Plex,sans-serif;background:#111820;color:#F2F5F7;font-size:14px}
+#shared-inspector .shared-panel header{background:none;border:0;border-bottom:1px solid #3B454D;padding:0 0 16px;margin-bottom:16px;min-height:0;text-align:left}
+#shared-inspector .shared-panel button,#shared-inspector .shared-panel input,#shared-inspector .shared-panel select{background:#17212a;color:#F2F5F7;border:1px solid #53616d;border-radius:3px;padding:7px 10px;font-family:inherit;font-weight:400}
+#shared-inspector .shared-panel button:hover{background:#23333f;border-color:#62C7E8}
+#shared-inspector .shared-panel :focus-visible{outline:2px solid #FFF2A8;outline-offset:2px}
+#shared-inspector .shared-panel pre{font-family:PlexMono,monospace;background:#0B0F12}
+#shared-inspector .shared-panel nav button[aria-pressed=true]{outline:1px solid #FFD166;outline-offset:1px}
+#shared-inspector #shared-offset{width:180px;display:block}
+#shared-inspector #native-endpoint{width:300px;max-width:100%}

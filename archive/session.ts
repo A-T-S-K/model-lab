@@ -1,3 +1,6 @@
+import { EvidenceStore } from '../trace/evidence.js';
+import { integrations } from '../trace/integrations.js';
+import { validateLegacyRun } from './legacy-run.js';
 import { immutableCopy, type RecordedRun } from '../trace/types.js';
 import { archiveSnapshot, snapshotId, canonicalBytes, type ArchivedSnapshot } from './snapshot.js';
 import { exactData, validateLearningExperiment, type LearningExperiment } from './experiment.js';
@@ -26,6 +29,7 @@ class ArchiveView<K, V> implements ReadonlyMap<K, V> {
 
 /** Immutable browser-session history. Validate complete records before insertion. */
 export class SessionArchive {
+  readonly evidence = new EvidenceStore(integrations());
   readonly #snapshots = new Map<string, ArchivedSnapshot>();
   readonly #runs = new Map<string, RecordedRun>();
   readonly #learningExperiments = new Map<string, LearningExperiment>();
@@ -42,23 +46,11 @@ export class SessionArchive {
   }
 
   async addRun(run: RecordedRun): Promise<void> {
-    const copy = immutableCopy(run);
-    canonicalBytes(copy); // Reject undefined, nonfinite, or non-data evidence at the boundary.
+    const copy = await validateLegacyRun(run, this.#snapshots.get(run.manifest.startingSnapshotId ?? ''));
     const m = copy.manifest;
-    const snapshot = this.#snapshots.get(m.startingSnapshotId ?? '');
-    if (!snapshot) throw new Error('Run references a missing starting snapshot');
-    if (await snapshotId(snapshot.state) !== m.startingSnapshotId) throw new Error('Run snapshot content hash mismatch');
-    if (m.startingCheckpointId !== snapshot.id) throw new Error('Run checkpoint reference does not identify archived state');
-    if (copy.formatVersion !== 1 || ![m.runId, m.sessionId, m.model.id, m.model.version, m.runtimeVersion, m.runtimeRevision, m.numeric.policy].every(value =>
-      typeof value === 'string' && value.length > 0) || !Number.isSafeInteger(m.generationId) || m.generationId < 0 ||
-      m.numeric.dtype !== 'float64' || !exactData(m.model.architecture, snapshot.state.config)) throw new Error('Invalid run model/runtime identity');
-    if (new Set(copy.artifacts.map(a => a.id)).size !== copy.artifacts.length || copy.artifacts.some(a =>
-      !a.id || a.dtype !== 'float64' || a.axes.length !== a.shape.length || a.shape.some(n => !Number.isSafeInteger(n) || n < 0) ||
-      (a.availability === 'available' ? !a.values || a.values.length !== a.shape.reduce((n, d) => n * d, 1) : a.values !== null))) {
-      throw new Error('Invalid recorded artifact identity, shape, or availability');
-    }
     const existing = this.#runs.get(m.runId);
     if (existing && !exactData(existing, copy)) throw new Error('Run ID already has different immutable evidence');
+    await this.evidence.admit({ version: 1, codec: 'microgpt-legacy-v1', record: { run: copy, snapshot: this.#snapshots.get(m.startingSnapshotId!) } });
     this.#runs.set(m.runId, copy);
   }
 

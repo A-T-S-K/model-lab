@@ -1,5 +1,11 @@
 # Evidence and operations
 
+This guide describes the current MicroGPT implementation, not implemented cross-backend
+contracts. The [target contracts](design/Model-Lab-Refined-Platform-Design-v2.md#5-execution-and-evidence-contracts)
+and [migration plan](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#6-migration-stages-and-ownership)
+remain unqualified; consult [authority](README.md) and [status](foundation-status.md).
+Versioned codecs, typed payload diversity and per-point capabilities are target work.
+
 Model Lab keeps execution, saved evidence, and explanation separate. The source contracts live in [trace/types.ts](../trace/types.ts); the mathematical runtime lives in [model/](../model/).
 
 | Operation | What happens | What state it needs |
@@ -26,7 +32,7 @@ Unavailable artifacts store `values: null`. The recorder separately tracks store
 
 A first-class `LearningExperiment` links exact starting/resulting snapshots, separate before/training/after semantic runs, observed gradient anchors, and the actual Adam update. The current `run` is the **after** prediction for display compatibility. Backward inspection explicitly targets the training run, whose scalar values and adjoints were frozen before Adam mutation. Both snapshots and all three runs remain independently inspectable.
 
-The runtime's `TrainingSnapshot` in [model/state.ts](../model/state.ts) serializes the concrete model and optimizer for continuation. The trace contract's `TrainingStateRecord` in [trace/types.ts](../trace/types.ts) describes immutable evidence about a checkpoint and continuation state. The record is an immutable checkpoint-oriented evidence contract; it is not the concrete resumable runtime state. Do not cast one into the other. A weights-only checkpoint cannot reproduce the next Adam update without moments and schedule state. A seed cannot stand in for a current RNG state when randomness is consumed.
+The runtime's `TrainingSnapshot` in [model/state.ts](../model/state.ts) serializes the concrete model and optimizer for continuation. The trace contract's `TrainingStateRecord` in [trace/types.ts](../trace/types.ts) describes immutable evidence about a checkpoint and continuation state. This provisional record has no production consumer in the inspected checkout (its constructor is exercised in trace tests); the active snapshot/archive/worker boundary uses `TrainingSnapshot`. The record is an immutable checkpoint-oriented evidence contract; it is not the concrete resumable runtime state. Do not cast one into the other. A weights-only checkpoint cannot reproduce the next Adam update without moments and schedule state. A seed cannot stand in for a current RNG state when randomness is consumed.
 
 See [trace tests](../tests/trace/evidence.test.ts) for immutable replay and missing-evidence properties, and [model tests](../tests/model/conformance.test.ts) for observer invariance and continuation checks.
 

@@ -1,0 +1,366 @@
+{
+  "profile": "pythia-14m-cpu-f32-eager-v1",
+  "runtime": "sha256:ea128d6858613534387d0089163786eb34b4c3f5d494e2d10cc4b36c0c21c69d",
+  "definition": "pythia-14m:f97f966a66c444890ed461fff2a51eefb15d74303df05b948124719f199b0b17",
+  "checkpoint": "sha256:116a02532db461f91386a5b20f942ff2c8d4de7341e21b55caafc3d7b25f49a1",
+  "inputTransform": "sha256:851d74e9e330ac8c4412feb921ec691a41c29fc22e2997121f48b2708e54fa2a",
+  "tokenizerSourceRevision": "sha256:870f4e2baa6b683221fa52004d5d6f40ab8c9d31961617304b78c910c2c3caf2",
+  "sourceRevision": "sha256:c8684ddf23ca40c8151459902f89b19b13372aeb766cc21afc8a5323ac55f538",
+  "binding": "native torch module hooks; no TransformerBridge, processing, provider fallback, remote code or pickle",
+  "versions": {
+    "python": "3.14.7",
+    "torch": "2.14.0",
+    "transformers": "5.17.0"
+  },
+  "modelRevision": "cf967c0a9a04383db6f7b1108d86b2962634b4ac",
+  "tokenizerSize": 50277,
+  "captureSchema": [
+    {
+      "id": "tokens",
+      "node": "tokenizer",
+      "port": "output",
+      "invocation": "prefill:0",
+      "phase": "inference",
+      "source": {
+        "file": "tokenizer.json",
+        "symbol": "tokenizers.Tokenizer.encode",
+        "revision": "sha256:870f4e2baa6b683221fa52004d5d6f40ab8c9d31961617304b78c910c2c3caf2"
+      },
+      "owners": [],
+      "dependencies": [],
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "input_position",
+          "space": "cf967c0a9a04383db6f7b1108d86b2962634b4ac:tokenizer:input_position"
+        }
+      ]
+    },
+    {
+      "id": "embedding",
+      "node": "gpt_neox.embed_in",
+      "port": "output",
+      "invocation": "prefill:0",
+      "phase": "inference",
+      "source": {
+        "file": "transformers/models/gpt_neox/modeling_gpt_neox.py",
+        "symbol": "GPTNeoXModel.forward",
+        "revision": "sha256:c8684ddf23ca40c8151459902f89b19b13372aeb766cc21afc8a5323ac55f538"
+      },
+      "owners": [
+        "gpt_neox.embed_in.weight"
+      ],
+      "dependencies": [
+        "tokens"
+      ],
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "input_position",
+          "space": "cf967c0a9a04383db6f7b1108d86b2962634b4ac:gpt_neox.embed_in:input_position"
+        },
+        {
+          "role": "feature",
+          "space": "cf967c0a9a04383db6f7b1108d86b2962634b4ac:gpt_neox.embed_in:feature"
+        }
+      ]
+    },
+    {
+      "id": "residual.input",
+      "node": "gpt_neox.layers.1",
+      "port": "input",
+      "invocation": "prefill:0",
+      "phase": "inference",
+      "source": {
+        "file": "transformers/models/gpt_neox/modeling_gpt_neox.py",
+        "symbol": "GPTNeoXLayer.forward",
+        "revision": "sha256:c8684ddf23ca40c8151459902f89b19b13372aeb766cc21afc8a5323ac55f538"
+      },
+      "owners": [],
+      "dependencies": [],
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "input_position",
+          "space": "cf967c0a9a04383db6f7b1108d86b2962634b4ac:gpt_neox.layers.1:input_position"
+        },
+        {
+          "role": "feature",
+          "space": "cf967c0a9a04383db6f7b1108d86b2962634b4ac:gpt_neox.layers.1:feature"
+        }
+      ]
+    },
+    {
+      "id": "norm.attention",
+      "node": "gpt_neox.layers.1.input_layernorm",
+      "port": "output",
+      "invocation": "prefill:0",
+      "phase": "inference",
+      "source": {
+        "file": "transformers/models/gpt_neox/modeling_gpt_neox.py",
+        "symbol": "GPTNeoXLayer.forward",
+        "revision": "sha256:c8684ddf23ca40c8151459902f89b19b13372aeb766cc21afc8a5323ac55f538"
+      },
+      "owners": [
+        "gpt_neox.layers.1.input_layernorm"
+      ],
+      "dependencies": [
+        "residual.input"
+      ],
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "input_position",
+          "space": "cf967c0a9a04383db6f7b1108d86b2962634b4ac:gpt_neox.layers.1.input_layernorm:input_position"
+        },
+        {
+          "role": "feature",
+          "space": "cf967c0a9a04383db6f7b1108d86b2962634b4ac:gpt_neox.layers.1.input_layernorm:feature"
+        }
+      ]
+    },
+    {
+      "id": "norm.mlp",
+      "node": "gpt_neox.layers.1.post_attention_layernorm",
+      "port": "output",
+      "invocation": "prefill:0",
+      "phase": "inference",
+      "source": {
+        "file": "transformers/models/gpt_neox/modeling_gpt_neox.py",
+        "symbol": "GPTNeoXLayer.forward",
+        "revision": "sha256:c8684ddf23ca40c8151459902f89b19b13372aeb766cc21afc8a5323ac55f538"
+      },
+      "owners": [
+        "gpt_neox.layers.1.post_attention_layernorm"
+      ],
+      "dependencies": [
+        "residual.input"
+      ],
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "input_position",
+          "space": "cf967c0a9a04383db6f7b1108d86b2962634b4ac:gpt_neox.layers.1.post_attention_layernorm:input_position"
+        },
+        {
+          "role": "feature",
+          "space": "cf967c0a9a04383db6f7b1108d86b2962634b4ac:gpt_neox.layers.1.post_attention_layernorm:feature"
+        }
+      ]
+    },
+    {
+      "id": "attention.output",
+      "node": "gpt_neox.layers.1.attention",
+      "port": "output",
+      "invocation": "prefill:0",
+      "phase": "inference",
+      "source": {
+        "file": "transformers/models/gpt_neox/modeling_gpt_neox.py",
+        "symbol": "GPTNeoXLayer.forward",
+        "revision": "sha256:c8684ddf23ca40c8151459902f89b19b13372aeb766cc21afc8a5323ac55f538"
+      },
+      "owners": [
+        "gpt_neox.layers.1.attention"
+      ],
+      "dependencies": [
+        "norm.attention",
+        "attention.qkv",
+        "attention.weights"
+      ],
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "input_position",
+          "space": "cf967c0a9a04383db6f7b1108d86b2962634b4ac:gpt_neox.layers.1.attention:input_position"
+        },
+        {
+          "role": "feature",
+          "space": "cf967c0a9a04383db6f7b1108d86b2962634b4ac:gpt_neox.layers.1.attention:feature"
+        }
+      ]
+    },
+    {
+      "id": "mlp.output",
+      "node": "gpt_neox.layers.1.mlp",
+      "port": "output",
+      "invocation": "prefill:0",
+      "phase": "inference",
+      "source": {
+        "file": "transformers/models/gpt_neox/modeling_gpt_neox.py",
+        "symbol": "GPTNeoXLayer.forward",
+        "revision": "sha256:c8684ddf23ca40c8151459902f89b19b13372aeb766cc21afc8a5323ac55f538"
+      },
+      "owners": [
+        "gpt_neox.layers.1.mlp"
+      ],
+      "dependencies": [
+        "norm.mlp"
+      ],
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "input_position",
+          "space": "cf967c0a9a04383db6f7b1108d86b2962634b4ac:gpt_neox.layers.1.mlp:input_position"
+        },
+        {
+          "role": "feature",
+          "space": "cf967c0a9a04383db6f7b1108d86b2962634b4ac:gpt_neox.layers.1.mlp:feature"
+        }
+      ]
+    },
+    {
+      "id": "residual.output",
+      "node": "gpt_neox.layers.1",
+      "port": "output",
+      "invocation": "prefill:0",
+      "phase": "inference",
+      "source": {
+        "file": "transformers/models/gpt_neox/modeling_gpt_neox.py",
+        "symbol": "GPTNeoXLayer.forward",
+        "revision": "sha256:c8684ddf23ca40c8151459902f89b19b13372aeb766cc21afc8a5323ac55f538"
+      },
+      "owners": [],
+      "dependencies": [
+        "residual.input",
+        "attention.output",
+        "mlp.output"
+      ],
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "input_position",
+          "space": "cf967c0a9a04383db6f7b1108d86b2962634b4ac:gpt_neox.layers.1:input_position"
+        },
+        {
+          "role": "feature",
+          "space": "cf967c0a9a04383db6f7b1108d86b2962634b4ac:gpt_neox.layers.1:feature"
+        }
+      ]
+    },
+    {
+      "id": "attention.qkv",
+      "node": "gpt_neox.layers.1.attention.query_key_value",
+      "port": "output",
+      "invocation": "prefill:0",
+      "phase": "inference",
+      "source": {
+        "file": "transformers/models/gpt_neox/modeling_gpt_neox.py",
+        "symbol": "GPTNeoXAttention.forward",
+        "revision": "sha256:c8684ddf23ca40c8151459902f89b19b13372aeb766cc21afc8a5323ac55f538"
+      },
+      "owners": [
+        "gpt_neox.layers.1.attention.query_key_value.weight",
+        "gpt_neox.layers.1.attention.query_key_value.bias"
+      ],
+      "dependencies": [
+        "norm.attention"
+      ],
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "input_position",
+          "space": "cf967c0a9a04383db6f7b1108d86b2962634b4ac:gpt_neox.layers.1.attention.query_key_value:input_position"
+        },
+        {
+          "role": "query_head",
+          "space": "cf967c0a9a04383db6f7b1108d86b2962634b4ac:gpt_neox.layers.1.attention.query_key_value:query_head"
+        },
+        {
+          "role": "qkv_member",
+          "space": "cf967c0a9a04383db6f7b1108d86b2962634b4ac:gpt_neox.layers.1.attention.query_key_value:qkv_member"
+        },
+        {
+          "role": "head_feature",
+          "space": "cf967c0a9a04383db6f7b1108d86b2962634b4ac:gpt_neox.layers.1.attention.query_key_value:head_feature"
+        }
+      ]
+    },
+    {
+      "id": "attention.weights",
+      "node": "gpt_neox.layers.1.attention",
+      "port": "probabilities",
+      "invocation": "prefill:0",
+      "phase": "inference",
+      "source": {
+        "file": "transformers/models/gpt_neox/modeling_gpt_neox.py",
+        "symbol": "eager_attention_forward",
+        "revision": "sha256:c8684ddf23ca40c8151459902f89b19b13372aeb766cc21afc8a5323ac55f538"
+      },
+      "owners": [],
+      "dependencies": [
+        "attention.qkv"
+      ],
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "query_head",
+          "space": "cf967c0a9a04383db6f7b1108d86b2962634b4ac:gpt_neox.layers.1.attention:query_head"
+        },
+        {
+          "role": "query_position",
+          "space": "cf967c0a9a04383db6f7b1108d86b2962634b4ac:gpt_neox.layers.1.attention:query_position"
+        },
+        {
+          "role": "key_position",
+          "space": "cf967c0a9a04383db6f7b1108d86b2962634b4ac:gpt_neox.layers.1.attention:key_position"
+        }
+      ]
+    },
+    {
+      "id": "logits",
+      "node": "lm_head",
+      "port": "output",
+      "invocation": "prefill:0",
+      "phase": "inference",
+      "source": {
+        "file": "transformers/models/gpt_neox/modeling_gpt_neox.py",
+        "symbol": "GPTNeoXForCausalLM.forward",
+        "revision": "sha256:c8684ddf23ca40c8151459902f89b19b13372aeb766cc21afc8a5323ac55f538"
+      },
+      "owners": [
+        "lm_head.weight"
+      ],
+      "dependencies": [],
+      "capabilities": [
+        "slice",
+        "source"
+      ],
+      "axes": [
+        {
+          "role": "output_index",
+          "space": "cf967c0a9a04383db6f7b1108d86b2962634b4ac:lm_head:output_index"
+        }
+      ]
+    }
+  ]
+}

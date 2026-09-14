@@ -1,4 +1,6 @@
 import { test, mock } from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { withTestOutput } from '../support/test-output.js';
 import assert from 'node:assert/strict';
 import fixture from '../../fixtures/canonical.initial.json';
 import { Value } from '../../model/value.js';
@@ -110,7 +112,8 @@ test('T07 pin can change read-only to non-embedding and proposals stop in parame
  assert.equal(progress.training!.proposal!.index,index);assert.equal((s as any).training.proposalValues.length,index+1);
 });
 test('T10 repeated bounded accept/cancel cycles and measured worker permits',async()=>{
- const {mkdir,writeFile}=await import('node:fs/promises');const s=await setup();const durations:number[]=[],accepts:number[]=[],fast:number[]=[];
+ await withTestOutput(fileURLToPath(new URL('../../', import.meta.url)), process.env.TRAINING_EVIDENCE_DIR, async output=>{
+ const s=await setup();const durations:number[]=[],accepts:number[]=[],fast:number[]=[];
  for(let cycle=0;cycle<12;cycle++) {
   let progress=p(await s.handle({...tag,runId:'resource'+cycle,command:'startTraining',document:''}));
   while(progress.training!.phase!==(cycle%2?'ready':'optimizer proposal')) {const start=performance.now();progress=await advance(s,progress);durations.push(performance.now()-start);assert(progress.training!.processed<=128);assert(progress.training!.contributions.length<=8);}
@@ -118,7 +121,8 @@ test('T10 repeated bounded accept/cancel cycles and measured worker permits',asy
   assert.equal((s as any).training,undefined);assert((s as any).contexts.size<=2);
  }
  for(let i=0;i<12;i++){const start=performance.now();await s.handle({...tag,runId:'fast'+i,command:'train',document:'abca'});if(i>1)fast.push(performance.now()-start);}
- await mkdir('test-results/wave2b-review',{recursive:true});await writeFile('test-results/wave2b-review/worker-performance.json',JSON.stringify({method:'12 one-position cycles alternating proposal cancel / acceptance; per-permit wall time includes progress copying, excludes transport/UI. Then 2 warmups and 10 ordinary abca Learn requests on same session.',permits:durations.length,maxPermitMs:Math.max(...durations),meanPermitMs:durations.reduce((a,b)=>a+b,0)/durations.length,maxAcceptMs:Math.max(...accepts),fastLearnMs:fast},null,2));
+ await output.write('worker-performance.json',JSON.stringify({method:'12 one-position cycles alternating proposal cancel / acceptance; per-permit wall time includes progress copying, excludes transport/UI. Then 2 warmups and 10 ordinary abca Learn requests on same session.',permits:durations.length,maxPermitMs:Math.max(...durations),meanPermitMs:durations.reduce((a,b)=>a+b,0)/durations.length,maxAcceptMs:Math.max(...accepts),fastLearnMs:fast},null,2));
+ });
 });
 test('T06 cancelled Ready rejects late acceptance and reset invalidates the generation',async()=>{
  const s=await setup();let progress=await until(s,p(await s.handle({...tag,runId:'cancel-first',command:'startTraining',document:''})),'ready');

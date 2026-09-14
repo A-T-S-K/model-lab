@@ -1,5 +1,12 @@
 # Morning human review · results not yet collected
 
+**Foundation prerequisite:** full unfamiliar-user testing, timed workshop rehearsal,
+actual-station and release qualification follow independent M5 foundation acceptance
+at M6. See the [status ledger](foundation-status.md) and [authority map](README.md).
+These current MicroGPT/ABQ instructions are retained for that gate and for authorized
+internal engineering/visual/accessibility review; old rehearsal passes do not waive it.
+Human results remain unrun/pending. This document grants no execution permission.
+
 Engineering rehearsal, facilitated exhibit and unattended walk-up are separate gates. Review `abq-overnight-review.md` first. Do not infer the latter gates from automated browser tests.
 
 ## Six tasks · proposed formative sample of about five unfamiliar visitors
@@ -28,4 +35,4 @@ Record CPU/RAM, OS, browser/version, Node version, display model/native resoluti
 - Practice Keep this session and facilitated opt-out. Decide whether unattended expiry suits the station.
 - Confirm a labeled recorded fallback is locally available. Record operator and event approval separately.
 
-Feature freeze, event acceptance and deployment require human review. Generative continuation, additional models/datasets and general experiment editing remain later work.
+Feature freeze, event acceptance and deployment require human review. Generative continuation, additional models/datasets and general experiment editing are not current exhibit capabilities. Required bounded generation, model and experiment witnesses precede this full-user gate under the foundation plan; a general public editor is not required.

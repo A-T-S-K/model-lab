@@ -1,5 +1,21 @@
 # Model Lab
 
+Model Lab is a local-first, model-independent learning and experimentation workbench.
+MicroGPT is the first deeply inspectable implementation, the continuous world is the
+preferred presentation, and ABQ is a deployment/workshop profile.
+
+## Target foundation
+
+The [full v2 design and proof plan](docs/README.md) govern the target: native model
+integrations, shared evidence/player/inspection, technique variants and controlled
+experiments. These foundations are proposed and unqualified; see the
+[FP/M status ledger](docs/foundation-status.md). Native Pythia and MLP/SGD are required
+complementary witnesses, not capabilities delivered by this documentation pass.
+Full unfamiliar-user testing follows independent foundation acceptance at M5, then M6.
+Internal engineering, visual and accessibility review may continue earlier.
+
+## Current implementation
+
 This tiny GPT sees characters and predicts what comes next. Start with `abca`: after seeing `abc`, how likely does it think `a` is? Predict, teach it with real updates, then compare the probability before and after.
 
 Characters become **tokens**: numbered entries in a small vocabulary. Each token ID and its position select vectors of numbers. Attention mixes information from the current and earlier positions; an MLP (a small feed-forward network) transforms those features. The model turns the resulting scores into **probabilities**—shares of the next-token distribution that sum to one.
@@ -85,8 +101,8 @@ Multi-step training retains every observed loss summary and full experiments at 
 - Run the math without the browser: `npm run example` → [predict, one update, predict](examples/predict-teach.ts).
 - Understand the implementation: [Read the Code](READ_THE_CODE.md), beginning with TypeScript `Value` and `backward`.
 - Understand evidence, state, and runtime identity: [evidence and operations](docs/evidence-and-operations.md).
-- Review current engineering acceptance: [v0.2.1 acceptance](docs/acceptance-v0.2.1.md). [v0.2](docs/acceptance-v0.2.md) and [v0.1](docs/acceptance.md) remain historical records.
+- Review historical engineering acceptance: [v0.2.1 acceptance](docs/acceptance-v0.2.1.md). [v0.2](docs/acceptance-v0.2.md) and [v0.1](docs/acceptance.md) remain historical records.
 - Review measurements: [Guided selection](docs/guided-measurement.md), [capture](docs/capture-benchmark.md), [training](docs/training-benchmark.md).
 - Follow the current exhibit rehearsal: [operator runbook](docs/abq-operator-runbook.md) and [overnight review](docs/abq-overnight-review.md). Historical reports retain their original scope and paths.
 
-**HUMAN TEACHING VALIDATION: PENDING.** Automated acceptance tests verify implementation behavior. Actual unfamiliar-user testing follows the [short facilitator checklist](docs/teaching-check.md).
+**HUMAN TEACHING VALIDATION: PENDING.** Automated acceptance tests verify implementation behavior. After M5 foundation acceptance, use the [short facilitator checklist](docs/teaching-check.md) for M6 unfamiliar-user testing.

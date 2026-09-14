@@ -1,5 +1,12 @@
 # ABQ facilitator guide
 
+**Foundation prerequisite:** full unfamiliar-user testing, timed workshop rehearsal,
+actual-station and release qualification follow independent M5 foundation acceptance
+at M6. See the [status ledger](foundation-status.md) and [authority map](README.md).
+These current MicroGPT/ABQ instructions are retained for that gate and for authorized
+internal engineering/visual/accessibility review; old rehearsal passes do not waive it.
+Human results remain unrun/pending. This document grants no execution permission.
+
 “This is one very small real transformer. We can inspect its calculations and test how changes affect it.” Its three-character vocabulary demonstrates mechanisms, not useful language understanding or the scale of a pretrained language model.
 
 ## Short encounter · pacing target 60–90 seconds

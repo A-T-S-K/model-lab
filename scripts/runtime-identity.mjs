@@ -7,7 +7,9 @@ import { fileURLToPath } from 'node:url';
 // build inputs. Tests/docs/benchmarks and this generated output are not runtime.
 const directories = ['model', 'trace', 'inspect', 'archive', 'experiments', 'app'];
 const inputs = ['fixtures/canonical.initial.json', 'package.json', 'package-lock.json',
-  'tsconfig.json', 'index.html', 'scripts/runtime-identity.mjs'];
+  'tsconfig.json', 'index.html', 'scripts/runtime-identity.mjs',
+  'research/pythia/adapter.py', 'research/pythia/server.py', 'research/pythia/requirements.lock',
+  'research/pythia/dependencies.json', 'research/pythia/model-lock.json', 'research/pythia/profile.json', 'research/pythia/source.json'];
 export const generatedPath = 'runtime/revision.ts';
 
 export async function runtimeSources(root) {

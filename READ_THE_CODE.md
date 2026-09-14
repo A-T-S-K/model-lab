@@ -1,5 +1,11 @@
 # Read the Model Lab code
 
+This walkthrough describes the current MicroGPT teaching organism. Its character
+input, scalar arithmetic and Adam choices are not platform-wide restrictions.
+The [target design](docs/design/Model-Lab-Refined-Platform-Design-v2.md#34-readable-model-code-is-a-release-invariant)
+preserves readable native code and the independent oracle while extending shared
+infrastructure; see [authority and status](docs/README.md).
+
 Model Lab runs a real, very small scalar transformer. Start with the numbers and the model; the browser and trace code can wait. The initial fixture is untrained, uses the characters `a`, `b`, `c` plus BOS, and has **896 parameters**. That count belongs to this configuration: one layer, embedding width 8, two heads, and context 8. It is not a constant for microgpt or transformers generally.
 
 Run the smallest example first:
@@ -132,7 +138,7 @@ abs(actual - expected) <= 1e-10 + 1e-9 * abs(expected)
 
 No canonical numbers are rounded for display. This tolerance allows last-bit differences in ordered reductions and transcendental functions; it is not permission to fabricate unavailable values. Finite-difference gradient checks have their own documented tolerances. Python fixture regeneration separately checks exact serialized bytes in the validated environment.
 
-From the Model Lab directory, `npm run test:reference` runs the offline oracle tests and deterministic regeneration, and `npm test` runs the configured TypeScript suites. [package.json](package.json) lists build and browser acceptance commands. Those commands exercise implementation evidence; this guide itself is not an acceptance log.
+From the Model Lab directory, `npm run test:reference` runs portable offline oracle and numeric conformance checks; `npm run test:reference:canonical` separately checks byte-exact regeneration in the qualified environment. `npm test` runs the configured TypeScript suites. [package.json](package.json) lists build and browser acceptance commands. `npm test` and `npm run typecheck` have hooks that write runtime identity; build invokes typecheck. For documentation-only checks use the read-only procedure in [AGENTS.md](AGENTS.md#validation-and-review). Those commands exercise implementation evidence; this guide itself is not an acceptance log.
 
 ## 8. Use the microscope without hiding the model
 

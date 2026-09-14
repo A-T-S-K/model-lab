@@ -1,3 +1,5 @@
+import { SharedInspector } from './views/shared-inspector.js';
+import './views/shared-inspector.css';
 import { forwardReadModel } from './spatial/forward.js';
 import "./style.css";
 import { ForwardDriver } from "./worker/forward-driver.js";
@@ -88,6 +90,7 @@ const config = fixture.config;
 const client = new ModelWorkerClient();
 const inspector = new InspectorWorkerClient();
 let archive = new SessionArchive();
+const sharedInspector = new SharedInspector();
 let mode: "guided" | "explore" | "microscope" = "guided";
 let inspection: InspectionResult | undefined;
 let inspectionBinding: InspectionBinding | undefined;
@@ -877,6 +880,7 @@ function syncSpatialSelection(): void {
   if (parameter) selectedParameter = parameter.index;
 }
 function bind(): void {
+  sharedInspector.sync(archive.evidence, result?.run.manifest.runId, !busy && !forwardDriver.active, async () => { await execute('predict'); });
   if (!attract) {
     if (!spatialActive) {
       const entry = '<button id="presentation-toggle" class="classic-toggle">Spatial presentation · controlled learning</button>';

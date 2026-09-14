@@ -1,3 +1,4 @@
+import { validateCanonicalIntent } from './execution-intent.js';
 import { TrainingExecution } from './training-execution.js';
 import fixture from '../../fixtures/canonical.initial.json';
 import { loadModel, createOptimizerState, snapshotTraining, restoreTraining } from '../../model/state.js';
@@ -58,6 +59,7 @@ export class ModelSession {
     const tag = { sessionId: request.sessionId, runId: request.runId, generationId: request.generationId };
     let rollback: ReturnType<typeof snapshotTraining> | undefined;
     try {
+      validateCanonicalIntent(request);
       if (request.command === 'initialize' || request.command === 'reset' || request.command === 'restore') {
         if (request.generationId < this.generationId || (this.sessionId && request.sessionId !== this.sessionId)) throw new Error('Stale session or generation');
         if (request.command === 'restore') {
