@@ -5,7 +5,7 @@ import { forwardReadModel } from './spatial/forward.js';
 import "./style.css";
 import { ForwardDriver } from "./worker/forward-driver.js";
 import "./spatial/style.css";
-import { spatialReadModel, type SpatialSelection } from "./spatial/bindings.js";
+import { spatialEvidenceReadModel, spatialEvidenceUnavailable, spatialReadModel, type SpatialSelection } from "./spatial/bindings.js";
 import { learningReadModel, resolveParameter, type LearningStage } from "./spatial/learning.js";
 import { SpatialPresenter } from "./spatial/presenter.js";
 import { exhibitTiming, exhibitState } from "./presentation/exhibit-state.js";
@@ -84,7 +84,7 @@ import {
 
 const spatialEnabled = new URLSearchParams(location.search).get("presentation") === "spatial";
 let spatialActive = spatialEnabled;
-const spatialSelection: SpatialSelection = { query: 4, key: 0, head: 0, feature: 0 };
+const spatialSelection: SpatialSelection = { layer: 0, query: 4, key: 0, head: 0, feature: 0 };
 const spatialPresenter = new SpatialPresenter(spatialSelection);
 let spatialExperimentId = "";
 const config = fixture.config;
@@ -92,6 +92,8 @@ const client = new ModelWorkerClient();
 const inspector = new InspectorWorkerClient();
 let archive = new SessionArchive();
 const sharedInspector = new SharedInspector();
+let spatialEvidenceRunId = "";
+let spatialEvidenceReplay = false;
 let mode: "guided" | "explore" | "microscope" = "guided";
 let inspection: InspectionResult | undefined;
 let inspectionBinding: InspectionBinding | undefined;
@@ -562,31 +564,34 @@ function render(): void {
   if (spatialActive) {
     const displayed = attract && exhibitEntry ? attractReplay?.result : result;
     const source = displayed && sourceBinding(displayed.run, config.vocabulary, sourceSnapshot(displayed.run.manifest.startingSnapshotId??"")?.state.optimizer.step??displayed.trainingStep, liveRunId, documentText, "SPATIAL ATTENTION");
-    const model = displayed && source && spatialReadModel(displayed.run, sourceSnapshot(source.sourceSnapshotId ?? "") ?? displayed.snapshots.find(s=>s.id===source.sourceSnapshotId), source, spatialSelection);
-    const learning = spatialLearningModel();
-    const ablation=[...archive.interventionExperiments.values()].find(e=>e.baselineRun.manifest.runId===result?.run.manifest.runId||e.interventionRun.manifest.runId===result?.run.manifest.runId);
+    const evidenceRun=spatialEvidenceRunId?archive.evidence.get(spatialEvidenceRunId):undefined;
+    const makeModel=()=>evidenceRun?spatialEvidenceReadModel(evidenceRun,archive.evidence.envelope(evidenceRun.id),spatialSelection,spatialEvidenceReplay):displayed&&source?spatialReadModel(displayed.run,sourceSnapshot(source.sourceSnapshotId??"")??displayed.snapshots.find(s=>s.id===source.sourceSnapshotId),source,spatialSelection):undefined;
+    let model=makeModel();if(model&&spatialPresenter.bindWorld(model,!evidenceRun))model=makeModel();
+    const learning = evidenceRun?undefined:spatialLearningModel();
+    const ablation=evidenceRun?undefined:[...archive.interventionExperiments.values()].find(e=>e.baselineRun.manifest.runId===result?.run.manifest.runId||e.interventionRun.manifest.runId===result?.run.manifest.runId);
     const ablationPair=ablation?{before:forwardReadModel(ablation.baselineRun,sourceSnapshot(ablation.startingSnapshotId)),after:forwardReadModel(ablation.interventionRun,sourceSnapshot(ablation.startingSnapshotId))}:undefined;
     mount.innerHTML = spatialPresenter.render(model, {
-      attract: attract && exhibitEntry, exhibit: exhibitEntry, idleResetEnabled:kioskEnabled, idleResetSeconds:exhibitConfiguration.resetAfterMs/1000,
+      attract: !evidenceRun&&attract&&exhibitEntry, exhibit: !evidenceRun&&exhibitEntry, idleResetEnabled:kioskEnabled, idleResetSeconds:exhibitConfiguration.resetAfterMs/1000,
       retention:{bytes:evidenceBytes,runs:archive.runs.size,snapshots:archive.snapshots.size,experiments:archive.learningExperiments.size},
       ablationPending: activeAblation!==undefined,
       inspectedArm:forwardDriver.progress?.training?.readyOutputs?(result?.run.manifest.runId===forwardDriver.progress.training.readyOutputs.before.manifest.runId?'Current · accepted checkpoint':'Candidate · provisional checkpoint'):ablation?(result?.run.manifest.runId===ablation.baselineRun.manifest.runId?'Baseline':'Head output zeroed'):undefined,
-      document: documentText, busy, ready, status, error, execution: forwardDriver.active ? forwardDriver : undefined,
+      document: documentText, busy, ready, status:evidenceRun?'Read-only admitted evidence · no execution requested':status, error, execution: evidenceRun?undefined:forwardDriver.active?forwardDriver:undefined,
       outputPair:ablation?{before:ablation.baselineRun,after:ablation.interventionRun}:undefined,
       comparisonLabels:ablation?['Baseline','Head output zeroed']:undefined,
       intervention:ablation?{head:ablation.selection.head,snapshot:ablation.startingSnapshotId,arm:result?.run.manifest.runId===ablation.baselineRun.manifest.runId?'Baseline':'Head output zeroed'}:undefined,
       comparison: ablationPair ?? (readyComparison && forwardDriver.progress?.training?.readyOutputs ? {
         before:forwardReadModel(forwardDriver.progress.training.readyOutputs.before,forwardDriver.progress.training.readyOutputs.starting),
         after:forwardReadModel(forwardDriver.progress.training.readyOutputs.after,sourceSnapshot(forwardDriver.progress.training.candidateId!))} : undefined),
-      learning, experimentId: spatialExperimentId, liveStep: liveTrainingStep,
+      learning, experimentId: evidenceRun?'':spatialExperimentId, liveStep: liveTrainingStep,evidenceWorld:evidenceRun?{label:evidenceRun.integration,replay:spatialEvidenceReplay}:undefined,
       experiments: [...archive.learningExperiments.values()].map(e => ({id:e.id,step:e.update.step+1})),
-      canLearn: !forwardDriver.active && !!result && result.run.manifest.runId === liveRunId && source?.capturedDocument === documentText && !busy && ready,
-      scalar: microscopeView(inspection, inspectionPath, inspectionLabel, inspectionPending, inspectionWhole, inspectionRelationship(), inspectionBinding),
+      canLearn: !evidenceRun&&!forwardDriver.active&&!!result&&result.run.manifest.runId===liveRunId&&source?.capturedDocument===documentText&&!busy&&ready,
+      scalar:evidenceRun?'No scalar continuation is captured for this run.':microscopeView(inspection,inspectionPath,inspectionLabel,inspectionPending,inspectionWhole,inspectionRelationship(),inspectionBinding),
     });
     bind();
     spatialPresenter.bind(model, spatialSelectionChanged, render, selectExplanationPhase);
     bindSpatialLearning();
     bindForwardControls();
+    mount.querySelector('#return-canonical-world')?.addEventListener('click',()=>{spatialEvidenceRunId='';spatialEvidenceReplay=false;clearDisplayedInspection();spatialPresenter.invalidate();render();});
     mount.querySelector("#exhibit-opt-out")?.addEventListener("click",()=>{ kioskEnabled=!kioskEnabled; lastActivity=Date.now(); saveExhibitConfiguration(); clearExhibitBanner(); render(); });
     mount.querySelectorAll<HTMLElement>("[data-scroll-region]").forEach(element => {
       const scroll = regionScroll.get(element.dataset.scrollRegion);
@@ -881,7 +886,7 @@ function syncSpatialSelection(): void {
   if (parameter) selectedParameter = parameter.index;
 }
 function bind(): void {
-  sharedInspector.sync(archive.evidence, result?.run.manifest.runId, !busy && !forwardDriver.active, async () => execute('predict'));
+  sharedInspector.sync(archive.evidence,result?.run.manifest.runId,!busy&&!forwardDriver.active,async()=>execute('predict'),(runId,replay)=>{spatialEvidenceRunId=runId;spatialEvidenceReplay=replay;attract=false;clearDisplayedInspection();spatialPresenter.invalidate();render();},runId=>spatialEvidenceUnavailable(archive.evidence.get(runId)));
   if (!attract) {
     if (!spatialActive) {
       const entry = '<button id="presentation-toggle" class="classic-toggle">Spatial presentation · controlled learning</button>';
@@ -1168,8 +1173,8 @@ function bind(): void {
     .querySelector("#cancel")
     ?.addEventListener("click", () => void reset(true));
   document
-    .querySelector("#clear-session")!
-    .addEventListener("click", () => void reset(false, true));
+    .querySelector("#clear-session")
+    ?.addEventListener("click", () => void reset(false, true));
   document
     .querySelectorAll<HTMLButtonElement>("button[data-mode]")
     .forEach((button) =>

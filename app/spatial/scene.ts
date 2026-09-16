@@ -2,9 +2,10 @@ import { outputTokenName } from './comparison.js';
 import type { ForwardProgress } from '../worker/protocol.js';
 import type { ForwardModel, Address } from "./forward.js";
 import { operations, parameterOwners, headKinds } from "./forward.js";
+import { layerKinds, parameterOwner } from "./microgpt-topology.js";
 import { probabilityColor, probabilitySimplex, project3 } from "./geometry.js";
 import { escapeHtml as esc } from "../views/evidence.js";
-export interface Station { kind:string; x:number;y:number;width:number;height:number;head?:number;label?:string }
+export interface Station { kind:string; x:number;y:number;width:number;height:number;layer?:number;head?:number;label?:string }
 export const stations:Station[]=[
  {kind:"tokenEmbedding",x:190,y:365,width:110,height:170},{kind:"positionEmbedding",x:190,y:650,width:110,height:170},
  {kind:"embeddingSum",x:360,y:480,width:105,height:170},{kind:"embeddingNorm",x:515,y:480,width:110,height:170},
@@ -14,10 +15,21 @@ export const stations:Station[]=[
 ];
 const bankX:Record<string,number>={wte:150,wpe:315,"layer0.attn_wq":850,"layer0.attn_wk":1040,"layer0.attn_wv":1230,"layer0.attn_wo":2070,"layer0.mlp_fc1":2740,"layer0.mlp_fc2":3210,lm_head:3860};
 export function stationFor(kind:string,head=0):Station {return stations.find(s=>s.kind===kind&&(s.head===undefined||s.head===head))??{kind,x:bankX[kind]??0,y:965,width:150,height:120};}
+export function stationForWorld(f:ForwardModel,kind:string,head=0,layer=0):Station {
+  if(f.descriptor.layout==="microgpt-canonical-curated")return stationFor(kind,head);
+  const base=850+layer*2500,row=220+head*270;
+  const headX:Record<string,number>={q:280,k:410,v:540,attentionLogits:700,attentionProbabilities:850,headOutput:1000};
+  if(headX[kind]!==undefined)return {kind,layer,head,x:base+headX[kind],y:row,width:95,height:145};
+  const layerX:Record<string,number>={preAttentionNorm:70,attentionOutput:1160,attentionProjection:1300,attentionResidual:1440,preMlpNorm:1580,mlpUp:1720,mlpRelu:1860,mlpDown:2000,mlpResidual:2140};
+  if(layerX[kind]!==undefined)return {kind,layer,x:base+layerX[kind],y:540,width:105,height:165};
+  const globalX:Record<string,number>={tokenEmbedding:180,positionEmbedding:180,embeddingSum:360,embeddingNorm:540,logits:850+f.layers*2500,probabilities:1030+f.layers*2500};
+  return {kind,x:globalX[kind]??0,y:kind==="positionEmbedding"?690:kind==="tokenEmbedding"?370:540,width:110,height:165};
+}
 export function reticle(x:number,y:number,w:number,h:number) {return `<path class="external-reticle" d="M${x-10} ${y+20} v-30 h30 M${x+w-20} ${y-10} h30 v30 M${x-10} ${y+h-20} v30 h30 M${x+w-20} ${y+h+10} h30 v-30"/>`;}
 const compact:Record<string,string>={tokenEmbedding:"TE",positionEmbedding:"PE",embeddingSum:"+",embeddingNorm:"RN",preAttentionNorm:"RN",q:"Q",k:"K",v:"V",attentionLogits:"s",attentionProbabilities:"α",headOutput:"Σ",attentionOutput:"∥",attentionProjection:"WO",attentionResidual:"+",preMlpNorm:"RN",mlpUp:"32",mlpRelu:"ReLU",mlpDown:"8",mlpResidual:"+",logits:"z",probabilities:"Tokens"};
 const title:Record<string,string>={tokenEmbedding:"Token",positionEmbedding:"Position",embeddingSum:"Add",embeddingNorm:"RMSNorm",preAttentionNorm:"Pre-attn",q:"Q",k:"K",v:"V",attentionLogits:"Scores",attentionProbabilities:"Softmax",headOutput:"Σ αV",attentionOutput:"Concat",attentionProjection:"WO",attentionResidual:"Residual",preMlpNorm:"Pre-MLP",mlpUp:"Expand · 32",mlpRelu:"ReLU · 32",mlpDown:"Contract · 8",mlpResidual:"Residual",logits:"Logits",probabilities:"Probability"};
 export function sceneSvg(f:ForwardModel,selected:Address,key:number,parameter:string|undefined,labels:string[],query=selected.token,comparison?:{before:ForwardModel;after:ForwardModel},learningMarkup?:string,execution?:ForwardProgress,element=0) {
+  if(f.descriptor.layout==="microgpt-repeated-blocks")return repeatedSceneSvg(f,selected,key,parameter,labels,query);
   const head=selected.head??(["q","k","v"].includes(selected.kind)?Math.floor(element/f.width):0);
   const valuesFor=(s:Station,source=f)=>{
     const values=source.values({kind:s.kind,token:s.kind==="k"||s.kind==="v"?key:query,...(headKinds.has(s.kind)?{head:s.head}: {})});
@@ -72,6 +84,38 @@ export function sceneSvg(f:ForwardModel,selected:Address,key:number,parameter:st
     })():''}
     ${learningMarkup??`<path class="training-placeholder" d="M4260 650 C4480 1280 100 1280 170 1080"/><text class="training-label" x="1220" y="1230">TRAINING / BACKWARD / ADAM RETURN · UNIMPLEMENTED IN B</text>`}
   </svg>`;
+}
+
+function repeatedSceneSvg(f:ForwardModel,selected:Address,key:number,parameter:string|undefined,labels:string[],query:number){
+  const canvasWidth=1250+f.layers*2500,canvasHeight=Math.max(1500,420+f.heads*270),selectedLayer=selected.layer??0;
+  const addressFor=(s:Station):Address=>({kind:s.kind,token:["k","v"].includes(s.kind)?key:query,...(layerKinds.has(s.kind)?{layer:s.layer??selectedLayer}:{}),...(s.head===undefined||!headKinds.has(s.kind)?{}:{head:s.head})});
+  const stationsForLayer=(layer:number):Station[]=>[
+    stationForWorld(f,"preAttentionNorm",0,layer),
+    ...Array.from({length:f.heads},(_,head)=>["q","k","v","attentionLogits","attentionProbabilities","headOutput"].map(kind=>stationForWorld(f,kind,head,layer))).flat(),
+    ...["attentionOutput","attentionProjection","attentionResidual","preMlpNorm","mlpUp","mlpRelu","mlpDown","mlpResidual"].map(kind=>stationForWorld(f,kind,0,layer)),
+  ];
+  const all=[...['tokenEmbedding','positionEmbedding','embeddingSum','embeddingNorm'].map(kind=>stationForWorld(f,kind)),...Array.from({length:f.layers},(_,layer)=>stationsForLayer(layer)).flat(),stationForWorld(f,'logits'),stationForWorld(f,'probabilities')];
+  const field=(s:Station)=>{const address=addressFor(s),raw=f.values(address),values=["q","k","v"].includes(s.kind)?raw?.slice((s.head??0)*f.width,((s.head??0)+1)*f.width):raw;
+    const probability=s.kind.includes('Probabilities')||s.kind==='probabilities',domain=probability?1:Math.max(0,...(values??[]).map(Math.abs)),baseline=s.y+(probability?s.height-13:s.height/2),height=probability?s.height-28:s.height/2-12;
+    const isSelected=!parameter&&s.kind===selected.kind&&(s.layer===undefined||s.layer===selectedLayer)&&(s.head===undefined||s.head===(selected.head??0));
+    return `<g class="world-object" role="button" tabindex="0" data-world-kind="${s.kind}" ${s.layer===undefined?'':`data-world-layer="${s.layer}"`} ${s.head===undefined?'':`data-world-head="${s.head}"`} aria-label="${esc(title[s.kind])}${s.layer===undefined?'':` layer ${s.layer}`}${s.head===undefined?'':` head ${s.head}`}" aria-pressed="${isSelected}"><title>${esc(f.semanticId(address))}</title><text class="station-title" x="${s.x}" y="${s.y-15}">${esc(title[s.kind])}${s.head===undefined?'':` · h${s.head}`}</text><text class="overview-label" x="${s.x}" y="${s.y-15}">${compact[s.kind]}${s.head===undefined?'':`·${s.head}`}</text><rect class="field" x="${s.x}" y="${s.y}" width="${s.width}" height="${s.height}" rx="3"/><path class="zero-axis" d="M${s.x+7} ${baseline} h${s.width-14}"/>
+      ${values?values.map((v,i)=>{const magnitude=domain===0?0:Math.abs(v)/domain*height;return `<rect data-component="${i}" data-world-value="${v}" data-domain="${domain}" x="${s.x+7+i*(s.width-14)/values.length}" y="${baseline-(v>=0?magnitude:0)}" width="${Math.max(1,(s.width-14)/values.length*.62)}" height="${magnitude}" fill="${probability?probabilityColor(v):v<0?'#DC7C7C':'#58B98C'}"><title>[${i}] ${v}</title></rect>`;}).join(''):`<text class="unavailable" x="${s.x+5}" y="${s.y+62}">not captured</text>`}
+      <text class="station-meta" x="${s.x}" y="${s.y+s.height+24}">${s.layer===undefined?'model':`L${s.layer}`} · p${address.token}${s.head===undefined?'':` · h${s.head}`}</text>${isSelected?reticle(s.x,s.y,s.width,s.height):''}</g>`;};
+  const line=(a:Station,b:Station,kind='activation')=>`<path data-edge-from="${a.kind}" data-edge-to="${b.kind}" data-edge-type="${kind}" class="${kind==='saved_residual'?'residual-edge':kind==='parameter'?'parameter-edge':'activation'}" d="M${a.x+a.width} ${a.y+a.height/2} C${a.x+a.width+28} ${a.y+a.height/2} ${b.x-28} ${b.y+b.height/2} ${b.x} ${b.y+b.height/2}"/>`;
+  const edges:string[]=[];edges.push(line(stationForWorld(f,'tokenEmbedding'),stationForWorld(f,'embeddingSum')),line(stationForWorld(f,'positionEmbedding'),stationForWorld(f,'embeddingSum')),line(stationForWorld(f,'embeddingSum'),stationForWorld(f,'embeddingNorm')));
+  for(let layer=0;layer<f.layers;layer++){
+    const pre=stationForWorld(f,'preAttentionNorm',0,layer),prior=layer===0?stationForWorld(f,'embeddingNorm'):stationForWorld(f,'mlpResidual',0,layer-1);edges.push(line(prior,pre,layer===0?'activation':'saved_residual'));
+    for(let head=0;head<f.heads;head++){const q=stationForWorld(f,'q',head,layer),k=stationForWorld(f,'k',head,layer),v=stationForWorld(f,'v',head,layer),score=stationForWorld(f,'attentionLogits',head,layer),prob=stationForWorld(f,'attentionProbabilities',head,layer),out=stationForWorld(f,'headOutput',head,layer);edges.push(line(pre,q),line(pre,k),line(pre,v),line(q,score),line(k,score),line(score,prob),line(prob,out),line(v,out),line(out,stationForWorld(f,'attentionOutput',0,layer)));}
+    const sequence=['attentionOutput','attentionProjection','attentionResidual','preMlpNorm','mlpUp','mlpRelu','mlpDown','mlpResidual'];for(let i=0;i<sequence.length-1;i++)edges.push(line(stationForWorld(f,sequence[i],0,layer),stationForWorld(f,sequence[i+1],0,layer),sequence[i]==='attentionProjection'||sequence[i]==='mlpDown'?'saved_residual':'activation'));
+    edges.push(line(prior,stationForWorld(f,'attentionResidual',0,layer),'saved_residual'));
+  }
+  edges.push(line(stationForWorld(f,'mlpResidual',0,f.layers-1),stationForWorld(f,'logits')),line(stationForWorld(f,'logits'),stationForWorld(f,'probabilities')));
+  const banks=f.parameterNames.map((name,index)=>{const owner=parameterOwner(name),layer=owner?.layer,x=owner?.layer===undefined?(name==='lm_head'?canvasWidth-420:150+index*150):850+owner.layer*2500+250+(index%6)*310,y=canvasHeight-185,m=f.matrix(name),rows=m?.length??0,cols=m?.[0]?.length??0,isSelected=parameter===name,max=Math.max(0,...(m?.flat()??[]).map(Math.abs));
+    return `<g role="button" tabindex="0" data-world-parameter="${name}" ${layer===undefined?'':`data-world-layer="${layer}"`} class="parameter-bank"><text x="${x}" y="${y-12}">${esc(name)}</text><rect x="${x}" y="${y}" width="140" height="90"/>${m?.flatMap((row,r)=>row.map((v,c)=>`<rect x="${x+c*140/cols}" y="${y+r*90/rows}" width="${140/cols}" height="${90/rows}" data-parameter-value="${v}" data-domain="${max}" fill="${v<0?'#7A8791':'#A7B2BC'}" fill-opacity="${max===0?0:Math.abs(v)/max}" stroke="#3B454D" stroke-width=".4"><title>[${r},${c}] ${v}</title></rect>`)).join('')??''}<text class="station-meta" x="${x}" y="${y+115}">${rows} × ${cols} · ${f.parameterProvenance}</text>${isSelected?reticle(x,y,140,90):''}</g>`;}).join('');
+  return `<svg id="spatial-world" class="spatial-world" viewBox="0 0 ${canvasWidth} ${canvasHeight}" data-world-width="${canvasWidth}" data-world-height="${canvasHeight}" tabindex="0" role="group" aria-label="Topology-composed ${esc(f.descriptor.label)} computation"><defs><marker id="forward-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7" fill="#62C7E8"/></marker></defs>
+    <text class="region-title" x="20" y="270">INPUT · ${f.input.length} POSITIONS</text>${Array.from({length:f.layers},(_,layer)=>{const x=850+layer*2500;return `<rect class="region" x="${x}" y="130" width="2320" height="${Math.max(940,f.heads*270+180)}" rx="8"/><text class="region-title" x="${x+15}" y="100">LAYER ${layer} · ${f.heads} HEADS · WIDTH ${f.width*f.heads}</text>`;}).join('')}<text class="region-title" x="${850+f.layers*2500}" y="270">OUTPUT</text>
+    <g class="tokens">${labels.map((label,i)=>`<g role="button" tabindex="0" data-world-token="${i}" aria-label="Position ${esc(label)}"><rect x="20" y="${345+i*56}" width="120" height="44"/><text class="token-label" x="28" y="${376+i*56}">${esc(label)}</text>${query===i?reticle(20,345+i*56,120,44):''}</g>`).join('')}</g>${edges.join('')}${all.map(field).join('')}${banks}
+    <text class="training-label" x="850" y="${canvasHeight-25}">READ-ONLY QUALIFIED INFERENCE · unsupported training and optimizer actions are not routed</text></svg>`;
 }
 export function simplexGlyph(vertices:readonly (readonly number[])[],point:readonly number[],ox:number,oy:number,scale:number,labels?:readonly string[]) {
   const ps=vertices.map(project3),p=project3(point),xy=(v:readonly number[])=>`${ox+v[0]*scale},${oy+v[1]*scale}`;
