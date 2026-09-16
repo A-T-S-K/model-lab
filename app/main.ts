@@ -69,6 +69,8 @@ import {
   PORTABLE_ARCHIVE_EXTENSION,
   PORTABLE_ARCHIVE_LIMITS,
 } from "../archive/portable.js";
+import { RETENTION_RESERVATION_BOUNDS, RETENTION_RESERVATION_BYTES, SessionRetention, type RetentionOperation, type RetentionStatus, type RetentionTransaction } from '../archive/retention.js';
+import { BoundedCache, type CacheReservation } from './presentation/bounded-cache.js';
 import { InspectorWorkerClient } from "./worker/inspector-client.js";
 import { isHeadAblationExperiment } from "../experiments/ablation.js";
 import { isActivationPatchExperiment } from "../experiments/activation-patch.js";
@@ -112,6 +114,9 @@ const config = fixture.config;
 const client = new ModelWorkerClient();
 const inspector = new InspectorWorkerClient();
 let archive = new SessionArchive();
+const retention = new SessionRetention(archive);
+let retentionStatus: RetentionStatus | undefined;
+let activeRetentionTransaction: RetentionTransaction | undefined;
 let importedArchiveId = "";
 let portableArchiveMessage = "";
 const sharedInspector = new SharedInspector();
@@ -125,7 +130,10 @@ let inspectionLabel = "";
 let inspectionPending = false;
 let inspectionOperation = 0;
 let inspectionWhole = false;
-const inspectionCache = new Map<string, InspectionResult>();
+const INSPECTION_CACHE_MAX_BYTES = 8 * 1024 * 1024;
+const INSPECTION_CACHE_ENTRY_BYTES = 2 * 1024 * 1024;
+const inspectionCache = new BoundedCache<string, InspectionResult>(8, INSPECTION_CACHE_MAX_BYTES, INSPECTION_CACHE_ENTRY_BYTES);
+let pendingInspectionCacheReservation: CacheReservation<InspectionResult> | undefined;
 let selectedSnapshotId = "";
 let comparisonRunId = "";
 let trainingCount = 1;
@@ -136,8 +144,6 @@ let attractReplay: AttractReplayBinding | undefined;
 let attract = true;
 let sessionControlsOpen = false;
 let lastAcceptedResult: RunResult | undefined;
-let cancellingOperation: number | undefined;
-let cancellationResult: RunResult | undefined;
 let attentionOpen = false;
 let attentionScope: AttentionScope = "SELECTED_PREFIX";
 let attentionScopeQuery = 3;
@@ -159,8 +165,9 @@ let kioskEnabled = exhibitEntry;
 let exhibitConfiguration = exhibitTiming(new URLSearchParams(location.search));
 let lastActivity = Date.now();
 let visitorPointerDown = false;
-let evidenceBytes = 0;
-const SESSION_BUDGET = 64 * 1024 * 1024;
+const TRAINING_SUMMARY_LIMIT = 500;
+let trainingSummaryTotal = 0;
+let trainingSummaryDiscarded = 0;
 const trainingSummaries: {
   step: number;
   loss: number;
@@ -169,6 +176,21 @@ const trainingSummaries: {
   sourceSnapshotId: string;
   sourceStep: number;
 }[] = [];
+
+async function beginRetention(operation: RetentionOperation): Promise<RetentionTransaction> {
+  const transaction = await retention.begin(operation);
+  retentionStatus = retention.status();
+  return transaction;
+}
+async function commitRetention(transaction: RetentionTransaction): Promise<void> {
+  retentionStatus = await transaction.commit();
+  archive = retention.archive;
+}
+function cancelRetention(transaction: RetentionTransaction | undefined): void {
+  transaction?.cancel();
+  if (transaction === activeRetentionTransaction) activeRetentionTransaction = undefined;
+  if (retentionStatus) retentionStatus = retention.status();
+}
 
 const mount = document.querySelector<HTMLDivElement>("#app")!;
 let documentText = fixture.document;
@@ -185,9 +207,11 @@ function restoreExecutionView() {
   beforeForwardLocation = undefined;
 }
 const forwardDriver = new ForwardDriver(client, forwardChanged, async incoming => {
+  const transaction = activeRetentionTransaction; activeRetentionTransaction = undefined;
   beforeForward = undefined; beforeForwardLocation = undefined;
-  await execute(incoming.learn ? "train" : "predict", 1, false, incoming);
+  await execute(incoming.learn ? "train" : "predict", 1, false, incoming, transaction);
 }, failure => {
+  cancelRetention(activeRetentionTransaction); activeRetentionTransaction = undefined;
   result = beforeForward; beforeForward = undefined; restoreExecutionView();
   player = result && new TracePlayer(result.run);
   clearDisplayedInspection();
@@ -196,6 +220,7 @@ const forwardDriver = new ForwardDriver(client, forwardChanged, async incoming =
 });
 client.onFailure = failure => {
   if (!forwardDriver.active) return;
+  cancelRetention(activeRetentionTransaction); activeRetentionTransaction = undefined;
   discardForward(); ready = false;
   status = "Worker failed · partial prediction released · Reset model or Clear session to restart";
   error = failure.message; render();
@@ -214,6 +239,7 @@ function forwardChanged() {
     if (training) status = `Accepted step ${training.acceptedStep} · ${training.phase === 'ready' ? 'Candidate ready — not accepted' : training.phase} · candidate is provisional`;
     syncSpatialSelection();
   } else if (!forwardDriver.active) {
+    cancelRetention(activeRetentionTransaction); activeRetentionTransaction = undefined;
     result = beforeForward; beforeForward = undefined; restoreExecutionView(); player = result && new TracePlayer(result.run);
     status = "Execution cancelled · prior completed evidence preserved";
     clearDisplayedInspection();
@@ -269,7 +295,8 @@ function syncTrainingPin() {
 }
 async function startForward(training = false) {
   if (busy || !ready || forwardDriver.active) return;
-  if (evidenceBytes >= SESSION_BUDGET) { error = "Session evidence limit reached (64 MiB estimate). Clear session before starting more work."; render(); return; }
+  try { activeRetentionTransaction = await beginRetention('canonical'); }
+  catch (failure) { error = failure instanceof Error ? failure.message : String(failure); status = 'Retention capacity refused · no execution started'; render(); return; }
   readyComparison=true; beforeForwardLocation = spatialPresenter.captureLocation(); beforeForwardExperiment = spatialExperimentId;
   spatialPresenter.invalidate(); spatialPresenter.learningStage = undefined; spatialExperimentId = '';
   clearDisplayedInspection(); operation++; beforeForward = result; result = undefined; player = undefined; error = ''; status = 'Preparing captured input and checkpoint…';
@@ -279,6 +306,7 @@ async function startForward(training = false) {
 async function cancelForward() { await forwardDriver.cancel(); }
 function discardForward() {
   if (!forwardDriver.active) return;
+  cancelRetention(activeRetentionTransaction); activeRetentionTransaction = undefined;
   forwardDriver.discard(); result = beforeForward; beforeForward = undefined; restoreExecutionView();
   player = result && new TracePlayer(result.run); clearDisplayedInspection();
 }
@@ -604,7 +632,7 @@ function render(): void {
     const donorHead=(spatialSelection.head+1)%config.nHead;
     mount.innerHTML = spatialPresenter.render(model, {
       attract: !evidenceRun&&attract&&exhibitEntry, exhibit: !evidenceRun&&exhibitEntry, idleResetEnabled:kioskEnabled, idleResetSeconds:exhibitConfiguration.resetAfterMs/1000,
-      retention:{bytes:evidenceBytes,runs:archive.runs.size,snapshots:archive.snapshots.size,experiments:archive.learningExperiments.size},
+      retention:{bytes:retentionStatus?.retained.archiveBytes??0,runs:archive.runs.size,snapshots:archive.snapshots.size,experiments:archive.learningExperiments.size},
       interventionPending: activeIntervention!==undefined,
       inspectedArm:forwardDriver.progress?.training?.readyOutputs?(result?.run.manifest.runId===forwardDriver.progress.training.readyOutputs.before.manifest.runId?'Current · accepted checkpoint':'Candidate · provisional checkpoint'):interventionExperiment?(result?.run.manifest.runId===interventionExperiment.baselineRun.manifest.runId?'Baseline':result?.run.manifest.runId===interventionExperiment.donorRun?.manifest.runId?'Donor':'Intervention'):variantExperiment?(result?.run.manifest.runId===variantExperiment.baselineRun.manifest.runId?'Canonical definition':'Leaky ReLU definition'):compositeExperiment?(result?.run.manifest.runId===compositeExperiment.baselineRun.manifest.runId?'Canonical definition':result?.run.manifest.runId===compositeExperiment.initializedRun.manifest.runId?'Composite · initialized':'Composite · trained A/B'):undefined,
       document: documentText, busy, ready, status:evidenceRun?'Read-only admitted evidence · no execution requested':status, error, execution: evidenceRun?undefined:forwardDriver.active?forwardDriver:undefined,
@@ -868,7 +896,7 @@ async function inspectSpatialGradient(child?: number) {
     await inspect(m.experiment.trainingRunId,{kind:"node",nodeId:child},"Captured contribution child",[child]);
 }
 function bindSpatialLearning() {
-  mount.querySelector('#cancel-ablation')?.addEventListener('click',()=>{if(activeIntervention===undefined)return;++operation;activeIntervention=undefined;inspector.cancel();busy=false;clearDisplayedInspection();status='Intervention cancelled · accepted model unchanged';render();focusCanonicalPredict();});
+  mount.querySelector('#cancel-ablation')?.addEventListener('click',()=>{if(activeIntervention===undefined)return;++operation;activeIntervention=undefined;inspector.cancel();cancelRetention(activeRetentionTransaction);activeRetentionTransaction=undefined;busy=false;clearDisplayedInspection();status='Intervention cancelled · accepted model unchanged';render();focusCanonicalPredict();});
   mount.querySelector('#spatial-ablate')?.addEventListener('click',()=>{syncSpatialSelection();void ablateHead();});
   mount.querySelector('#spatial-patch')?.addEventListener('click',()=>{syncSpatialSelection();void patchHeadOutput();});
   const on = (id:string, action:()=>void) => mount.querySelector(id)?.addEventListener("click",action);
@@ -920,7 +948,10 @@ function syncSpatialSelection(): void {
   if (parameter) selectedParameter = parameter.index;
 }
 function bind(): void {
-  sharedInspector.sync(archive.evidence,result?.run.manifest.runId,!busy&&!forwardDriver.active,async()=>execute('predict'),(runId,replay)=>{spatialEvidenceRunId=runId;spatialEvidenceReplay=replay;clearWorldSelection();attract=false;clearDisplayedInspection();spatialPresenter.invalidate();render();},runId=>spatialEvidenceUnavailable(archive.evidence.get(runId)));
+  sharedInspector.sync(archive.evidence,result?.run.manifest.runId,!busy&&!forwardDriver.active,async()=>execute('predict'),(runId,replay)=>{spatialEvidenceRunId=runId;spatialEvidenceReplay=replay;clearWorldSelection();attract=false;clearDisplayedInspection();spatialPresenter.invalidate();render();},runId=>spatialEvidenceUnavailable(archive.evidence.get(runId)),{
+    begin:async operation=>{const transaction=await beginRetention(operation);return {store:transaction.archive.evidence,
+      commit:async()=>{await commitRetention(transaction);},cancel:()=>cancelRetention(transaction)};},
+  });
   let portableHost=document.querySelector<HTMLElement>('#portable-archive-host');
   if(spatialActive&&!kioskEnabled){if(!portableHost){portableHost=document.createElement('section');portableHost.id='portable-archive-host';document.body.append(portableHost);}portableHost.innerHTML=portableArchiveControls();}
   else portableHost?.remove();
@@ -1563,6 +1594,7 @@ function clearDisplayedInspection(): void {
   inspectionLabel = "";
   inspectionWhole = false;
   inspectionBinding = undefined;
+  pendingInspectionCacheReservation?.cancel(); pendingInspectionCacheReservation = undefined;
 }
 
 function recordTrainingSummary(incoming: RunResult): void {
@@ -1573,8 +1605,10 @@ function recordTrainingSummary(incoming: RunResult): void {
     trainingSummaries.some(
       (summary) => summary.trainingRunId === experiment.trainingRunId,
     )
-  )
+    )
     return;
+  trainingSummaryTotal++;
+  if (trainingSummaries.length >= TRAINING_SUMMARY_LIMIT) { trainingSummaries.shift(); trainingSummaryDiscarded++; }
   trainingSummaries.push({
     step: incoming.trainingStep,
     loss: incoming.learn.meanLoss,
@@ -1593,15 +1627,10 @@ async function execute(
   count = 1,
   guided = false,
   completedForward?: RunResult,
+  suppliedTransaction?: RetentionTransaction,
 ): Promise<CanonicalReceipt> {
   if (busy || !ready || forwardDriver.active) return {status:'refused',reason:'Canonical execution unavailable while another operation is active'};
   spatialPresenter.invalidate();
-  if (evidenceBytes >= SESSION_BUDGET) {
-    error =
-      "Session evidence limit reached (64 MiB). Clear session before starting more work.";
-    render();
-    return {status:'refused',reason:error};
-  }
   if (!/^[abc]{0,7}$/.test(documentText)) {
     error = "Use up to seven characters from a, b, and c.";
     render();
@@ -1637,39 +1666,36 @@ async function execute(
         : "Computing loss, backward, and one Adam update…"
       : "Recording a live prediction…";
   render();
-  let acceptedThisIteration: RunResult | undefined;
-  let retentionFailed = false;
   let completedRunId: string | undefined;
   let failureReason: string | undefined;
   try {
-    let retainedLoss = Infinity;
     for (let step = 0; step < count; step++) {
-      if (evidenceBytes >= SESSION_BUDGET) {
-        status = "Session evidence limit reached · completed history preserved";
-        failureReason = status;
-        break;
+      let transaction: RetentionTransaction;
+      try { transaction = step === 0 && suppliedTransaction ? suppliedTransaction : await beginRetention('canonical'); }
+      catch (failure) {
+        status = step > 0 ? `Batch stopped before update ${step + 1} · retention capacity insufficient · ${step} completed updates retained` : 'Retention capacity refused · no execution started';
+        error = failure instanceof Error ? failure.message : String(failure); failureReason = status; break;
       }
+      activeRetentionTransaction = transaction;
       pendingModelCommand = command;
-      acceptedThisIteration = undefined;
       const response = completedForward ? { status: "result" as const, result: completedForward } : await client.request({
         command, document: executionDocument,
       });
       if (currentOperation !== operation) {
-        // Cancellation may restore a reply accepted by the client after its UI
-        // authority ended. Retain it only for that cancellation's exact snapshot.
-        if (
-          currentOperation === cancellingOperation &&
-          response.status === "result"
-        )
-          cancellationResult = response.result;
+        cancelRetention(transaction);
         return {status:'refused',reason:'Canonical execution was superseded'};
       }
       if (response.status !== "result")
         throw new Error("Worker did not return model evidence");
       pendingModelCommand = undefined;
       const incoming = response.result;
+      const destination = transaction.archive;
+      for (const snapshot of incoming.snapshots) await destination.addSnapshot(snapshot);
+      for (const run of incoming.runs) await destination.addRun(run);
+      if (incoming.experiment) await destination.addLearningExperiment(incoming.experiment);
+      if (currentOperation !== operation) { cancelRetention(transaction); return {status:'refused',reason:'Canonical execution was superseded'}; }
+      await commitRetention(transaction); activeRetentionTransaction = undefined;
       lastAcceptedResult = incoming;
-      acceptedThisIteration = incoming;
       if (guided && incoming.learn) {
         if (guidedBatch) {
           guidedBatch.completedCount++;
@@ -1725,63 +1751,21 @@ async function execute(
           : `Live prediction complete · ${result.tokenIds.length} positions`;
       if (count > 1) status += ` · ${step + 1}/${count} requested updates`;
       const retain =
-        count === 1 ||
-        step === 0 ||
-        step === count - 1 ||
-        (incoming.learn && incoming.learn.meanLoss <= retainedLoss / 2);
+        true;
       recordTrainingSummary(incoming);
-      if (retain) {
-        const destination = archive;
-        for (const snapshot of incoming.snapshots)
-          await destination.addSnapshot(snapshot);
-        for (const run of incoming.runs) await destination.addRun(run);
-        if (incoming.experiment)
-          await destination.addLearningExperiment(incoming.experiment);
-        if (currentOperation !== operation) return {status:'refused',reason:'Canonical execution was superseded'};
-        evidenceBytes += new TextEncoder().encode(
-          JSON.stringify(incoming),
-        ).byteLength;
-        if (incoming.learn) retainedLoss = incoming.learn.meanLoss;
-        completedRunId = incoming.run.manifest.runId;
-      }
+      if (retain) completedRunId = incoming.run.manifest.runId;
       if (currentOperation !== operation) return {status:'refused',reason:'Canonical execution was superseded'};
       render();
     }
   } catch (failure) {
+    cancelRetention(activeRetentionTransaction); activeRetentionTransaction = undefined;
     if (currentOperation !== operation) return {status:'refused',reason:'Canonical execution was superseded'};
     error = failure instanceof Error ? failure.message : String(failure);
     failureReason = error;
-    retentionFailed = !!acceptedThisIteration;
-    status = retentionFailed ? "Accepted update · local evidence retention failed" : "Run failed";
+    status = "Run failed";
   } finally {
-    // A bounded lesson may end early at the optimizer limit or evidence budget.
-    // Preserve its last completed comparison just as cancellation/reset preserves it.
-    if (
-      currentOperation === operation &&
-      result && result.run.manifest.runId === liveRunId &&
-      (!archive.runs.has(result.run.manifest.runId) ||
-       (result.experiment && !archive.learningExperiments.has(result.experiment.id)))
-    ) {
-      try {
-        const destination = archive;
-        const completed = result;
-        for (const snapshot of completed.snapshots)
-          await destination.addSnapshot(snapshot);
-        for (const run of completed.runs) await destination.addRun(run);
-        if (completed.experiment)
-          await destination.addLearningExperiment(completed.experiment);
-        if (currentOperation === operation)
-          evidenceBytes += new TextEncoder().encode(
-            JSON.stringify(completed),
-          ).byteLength;
-      } catch (retentionFailure) {
-        if (currentOperation === operation)
-          error = `${error ? error + " · " : ""}Completed result retention failed: ${retentionFailure instanceof Error ? retentionFailure.message : String(retentionFailure)}`;
-      }
-    }
     if (currentOperation === operation) {
       pendingModelCommand = undefined;
-      if (retentionFailed && result?.experiment && archive.learningExperiments.has(result.experiment.id)) status = "Accepted update · evidence retained after retry";
       if (guidedBatch?.status === "RUNNING") guidedBatch.status = "STOPPED";
       busy = false;
       render();
@@ -1795,6 +1779,7 @@ async function execute(
 
 async function reset(cancelled: boolean, clear = false): Promise<void> {
   activeIntervention=undefined;
+  cancelRetention(activeRetentionTransaction); activeRetentionTransaction = undefined;
   discardForward();
   spatialPresenter.invalidate();
   if (cancelled && !busy && inspectionPending) {
@@ -1805,8 +1790,6 @@ async function reset(cancelled: boolean, clear = false): Promise<void> {
     render();
     return;
   }
-  cancellingOperation = cancelled ? operation : undefined;
-  cancellationResult = undefined;
   const currentOperation = ++operation;
   ++inspectionOperation;
   pendingModelCommand = undefined;
@@ -1836,10 +1819,11 @@ async function reset(cancelled: boolean, clear = false): Promise<void> {
     selectedBackwardEdge = undefined;
     compactFanIn = false;
     archive = new SessionArchive();
+    retentionStatus = await retention.replace(archive);
     importedArchiveId = "";
     portableArchiveMessage = "";
-    evidenceBytes = 0;
     trainingSummaries.length = 0;
+    trainingSummaryTotal = 0; trainingSummaryDiscarded = 0;
     inspectionCache.clear();
     inspection = undefined;
     inspectionPath = [];
@@ -1873,19 +1857,6 @@ async function reset(cancelled: boolean, clear = false): Promise<void> {
       : "Restoring selected model snapshot…";
   render();
   try {
-    if (!clear && result && !archive.runs.has(result.run.manifest.runId)) {
-      const destination = archive;
-      const completed = result;
-      for (const snapshot of completed.snapshots)
-        await destination.addSnapshot(snapshot);
-      for (const run of completed.runs) await destination.addRun(run);
-      if (completed.experiment)
-        await destination.addLearningExperiment(completed.experiment);
-      if (currentOperation !== operation) return;
-      evidenceBytes += new TextEncoder().encode(
-        JSON.stringify(completed),
-      ).byteLength;
-    }
     if (currentOperation !== operation) return;
     const snapshot =
       clear || !selectedSnapshotId
@@ -1898,6 +1869,7 @@ async function reset(cancelled: boolean, clear = false): Promise<void> {
     if (response.status !== "ready")
       throw new Error("Worker did not initialize");
     await archive.addSnapshot(response.archivedSnapshot);
+    retentionStatus = await retention.synchronize();
     if (currentOperation !== operation) return;
     liveTrainingStep = response.snapshot.optimizer.step;
     liveRunId = "";
@@ -1909,7 +1881,7 @@ async function reset(cancelled: boolean, clear = false): Promise<void> {
       guidedBatch.status =
         guidedBatch.completedCount === 10 ? "COMPLETE" : "CANCELLED";
     }
-    const restoredResult = cancellationResult ?? acceptedAtCancellation;
+    const restoredResult = acceptedAtCancellation;
     if (
       cancelled &&
       restoredResult &&
@@ -1938,7 +1910,6 @@ async function reset(cancelled: boolean, clear = false): Promise<void> {
           afterRunId: result.run.manifest.runId,
         };
       }
-      const newlyRetained = !archive.runs.has(result.run.manifest.runId);
       const destination = archive;
       for (const snapshot of result.snapshots)
         await destination.addSnapshot(snapshot);
@@ -1946,10 +1917,7 @@ async function reset(cancelled: boolean, clear = false): Promise<void> {
       if (result.experiment)
         await destination.addLearningExperiment(result.experiment);
       if (currentOperation !== operation) return;
-      if (newlyRetained)
-        evidenceBytes += new TextEncoder().encode(
-          JSON.stringify(result),
-        ).byteLength;
+      retentionStatus = await retention.synchronize();
     }
     ready = true;
     busy = false;
@@ -1979,11 +1947,6 @@ async function reset(cancelled: boolean, clear = false): Promise<void> {
     error = failure instanceof Error ? failure.message : String(failure);
     status = "Reset failed";
     render();
-  } finally {
-    if (currentOperation === operation) {
-      cancellingOperation = undefined;
-      cancellationResult = undefined;
-    }
   }
 }
 
@@ -1998,6 +1961,7 @@ async function initialize(): Promise<void> {
     if (response.status !== "ready")
       throw new Error("Worker did not initialize");
     await archive.addSnapshot(response.archivedSnapshot);
+    retentionStatus = await retention.synchronize();
     if (currentOperation !== operation) return;
     parameterCount = Object.values(response.snapshot.parameters).reduce(
       (sum, matrix) =>
@@ -2147,9 +2111,9 @@ async function importSessionArchive(event: Event): Promise<void> {
   busy = true; error = ""; status = "Validating portable archive in isolated staging…"; render();
   try {
     const imported = await importPortableArchive(new Uint8Array(await file.arrayBuffer()));
-    archive = imported.archive; importedArchiveId = imported.archiveId; evidenceBytes = file.size;
+    retentionStatus = await retention.replace(imported.archive); archive = retention.archive; importedArchiveId = imported.archiveId;
     selectedSnapshotId = ""; comparisonRunId = ""; learningExperimentId = ""; spatialExperimentId = ""; activeDataExperimentId = "";
-    inspectionCache.clear(); clearDisplayedInspection();
+    inspectionCache.clear(); trainingSummaries.length=0;trainingSummaryTotal=0;trainingSummaryDiscarded=0;clearDisplayedInspection();
     status = `Retained historical archive opened · ${imported.archiveId} · live accepted model unchanged · no executor or network request`;
     portableArchiveMessage = status;
   } catch (failure) {
@@ -2184,7 +2148,9 @@ function renderHistory(): string {
           selected?.id,
         )
       : undefined;
-  return `<section class="source-block history"><h2>Explore exact runs and checkpoints</h2>${result ? `<details data-testid="runtime-provenance"><summary>Exact runtime provenance · available offline</summary><p>This selected run was recorded by Model Lab runtime <code data-testid="runtime-revision">${escapeHtml(result.run.manifest.runtimeRevision)}</code>. Historical inspection requires a compatible runtime.</p></details>` : ""}<p data-testid="history-count">${archive.runs.size} runs · ${archive.snapshots.size} snapshots · ${archive.learningExperiments.size} learning experiments retained in this session. Estimated serialized evidence: ${(evidenceBytes / 1048576).toFixed(1)} MiB / 64 MiB.</p>${!kioskEnabled ? portableArchiveControls() : ""}<div class="controls">
+  const retained=retentionStatus,cache=inspectionCache.status();
+  const retentionText=retained?`Exact portable-v1 footprint ${(retained.retained.archiveBytes/1048576).toFixed(2)} MiB / ${(retained.hardLimitBytes/1048576).toFixed(0)} MiB · ${(retained.remainingBytes/1048576).toFixed(2)} MiB and ${retained.remainingManifestDataNodes.toLocaleString()} manifest nodes unreserved · ${retained.reservationCount} active reservation${retained.reservationCount===1?'':'s'} · new canonical evidence ${retained.remainingBytes>=RETENTION_RESERVATION_BYTES.canonical&&retained.remainingManifestDataNodes>=RETENTION_RESERVATION_BOUNDS.canonical.manifestDataNodes?'available':'blocked'}`:'Exact portable-v1 footprint synchronizing';
+  return `<section class="source-block history"><h2>Explore exact runs and checkpoints</h2>${result ? `<details data-testid="runtime-provenance"><summary>Exact runtime provenance · available offline</summary><p>This selected run was recorded by Model Lab runtime <code data-testid="runtime-revision">${escapeHtml(result.run.manifest.runtimeRevision)}</code>. Historical inspection requires a compatible runtime.</p></details>` : ""}<p data-testid="history-count">${archive.runs.size} runs · ${archive.snapshots.size} snapshots · ${archive.learningExperiments.size} learning experiments retained in this session.</p><p data-testid="retention-status">${retentionText}. Historical records are not evicted.</p><p data-testid="ephemeral-cache-status">Derived inspection cache ${(cache.bytes/1048576).toFixed(2)} MiB / ${(cache.maxBytes/1048576).toFixed(0)} MiB · ${cache.entries} entries · ${cache.evictions} evictions · not portable evidence.</p>${!kioskEnabled ? portableArchiveControls() : ""}<div class="controls">
     <label>Recorded run<select id="history-run" ${busy ? "disabled" : ""}>${options(result?.run.manifest.runId ?? "")}</select></label>
     <label>Reset destination<select id="snapshot-select"><option value="">Canonical initial model</option>${[...archive.snapshots.values()].map((snapshot) => `<option value="${snapshot.id}" ${snapshot.id === selectedSnapshotId ? "selected" : ""}>step ${snapshot.state.optimizer.step} · ${snapshot.id.slice(0, 23)}…</option>`).join("")}</select></label>
     <label>Compare from<select id="compare-run"><option value="">Choose an earlier run</option>${options(comparisonRunId)}</select></label></div>
@@ -2216,9 +2182,9 @@ function renderHistory(): string {
           }</div>`
         : ""
     }
-    <details><summary>Experiment · head ablation</summary><p>Registered interventions run disposable matched arms from the selected run’s immutable starting snapshot. Head ablation zeros layer ${layer}, head ${head} at the existing writable boundary. Donor patch replaces position ${selectedToken}, layer ${layer}, head ${head} with an observed donor occurrence from another head/position. Live accepted state stays unchanged.</p><button id="ablate-head" ${busy || !result ? "disabled" : ""}>Compare selected head ablation</button><button id="patch-head" ${busy || !result ? "disabled" : ""}>Patch selected head output</button><p>${archive.interventionExperiments.size} registered intervention experiments archived. Select baseline, donor, or intervention runs to inspect observed values and matched-policy deltas. No outcome is labeled beneficial or harmful.</p></details><label class="kiosk-option"><input id="kiosk-mode" type="checkbox" ${kioskEnabled ? "checked" : ""}>Exhibit mode · reset after inactivity</label><div class="controls exhibit-timing"><label>Idle reset after (seconds)<input id="idle-seconds" type="number" min="30" max="3600" value="${exhibitConfiguration.resetAfterMs / 1000}"></label><label>Warning before reset (seconds)<input id="warning-seconds" type="number" min="5" max="120" value="${exhibitConfiguration.warningMs / 1000}"></label><p>Initial field-test timing. Settings are kept in this URL; visitor evidence is not persisted.</p></div><details><summary>Bounded learning and complete capture</summary><div class="controls"><label>Actual updates (1–500)<input id="training-count" type="number" min="1" max="500" value="${trainingCount}"></label><button id="train-many" ${busy || !ready ? "disabled" : ""}>Learn selected updates</button><button id="whole-capture" ${busy || !result ? "disabled" : ""}>Record everything · inspect statistics</button></div><p>Every actual update keeps a loss summary. A batch retains full checkpoints at its first and final step and whenever loss halves from the last retained checkpoint. Explicit single updates always retain complete evidence. The 64 MiB evidence budget is checked between operations, with room for one completed operation. Clear session starts a new archive; history is never silently evicted. Complete capture displays statistics.</p>${
+    <details><summary>Experiment · head ablation</summary><p>Registered interventions run disposable matched arms from the selected run’s immutable starting snapshot. Head ablation zeros layer ${layer}, head ${head} at the existing writable boundary. Donor patch replaces position ${selectedToken}, layer ${layer}, head ${head} with an observed donor occurrence from another head/position. Live accepted state stays unchanged.</p><button id="ablate-head" ${busy || !result ? "disabled" : ""}>Compare selected head ablation</button><button id="patch-head" ${busy || !result ? "disabled" : ""}>Patch selected head output</button><p>${archive.interventionExperiments.size} registered intervention experiments archived. Select baseline, donor, or intervention runs to inspect observed values and matched-policy deltas. No outcome is labeled beneficial or harmful.</p></details><label class="kiosk-option"><input id="kiosk-mode" type="checkbox" ${kioskEnabled ? "checked" : ""}>Exhibit mode · reset after inactivity</label><div class="controls exhibit-timing"><label>Idle reset after (seconds)<input id="idle-seconds" type="number" min="30" max="3600" value="${exhibitConfiguration.resetAfterMs / 1000}"></label><label>Warning before reset (seconds)<input id="warning-seconds" type="number" min="5" max="120" value="${exhibitConfiguration.warningMs / 1000}"></label><p>Initial field-test timing. Settings are kept in this URL; visitor evidence is not persisted.</p></div><details><summary>Bounded learning and complete capture</summary><div class="controls"><label>Actual updates (1–500)<input id="training-count" type="number" min="1" max="500" value="${trainingCount}"></label><button id="train-many" ${busy || !ready ? "disabled" : ""}>Learn selected updates</button><button id="whole-capture" ${busy || !result ? "disabled" : ""}>Record everything · inspect statistics</button></div><p>Each update receives durable capacity before execution and retains its complete checkpoint/run/experiment evidence. A batch stops before the next update when its reservation cannot fit. The summary cache keeps only the latest ${TRAINING_SUMMARY_LIMIT}; evicting a summary never removes the underlying retained update.</p>${
       trainingSummaries.length
-        ? `<p data-testid="training-summary">${trainingSummaries.length} actual update summaries · latest pre-update loss ${number(trainingSummaries.at(-1)!.loss)}</p><details><summary>Actual loss timeline</summary><p>Showing the latest ${Math.min(500, trainingSummaries.length)} real update summaries. Earlier summaries remain in session memory.</p><div class="table-scroll"><table><thead><tr><th>Source training run / input</th><th>Source snapshot / step</th><th>Resulting step</th><th>Loss before update</th></tr></thead><tbody>${trainingSummaries
+        ? `<p data-testid="training-summary">${trainingSummaryTotal} actual updates summarized · ${trainingSummaries.length} cached · ${trainingSummaryDiscarded} older summaries discarded · latest pre-update loss ${number(trainingSummaries.at(-1)!.loss)}</p><details><summary>Actual loss timeline</summary><p>Showing the latest ${trainingSummaries.length} cached update summaries. Older summary rows may be discarded; retained update evidence is unchanged.</p><div class="table-scroll"><table><thead><tr><th>Source training run / input</th><th>Source snapshot / step</th><th>Resulting step</th><th>Loss before update</th></tr></thead><tbody>${trainingSummaries
             .slice(-500)
             .map(
               (item) =>
@@ -2352,22 +2318,22 @@ async function inspect(
     operation,
   );
   inspectionBinding = binding;
-  if (
-    evidenceBytes >= SESSION_BUDGET &&
-    !cachedInspection(sourceRunId, target)
-  ) {
+  const cacheKey = `${sourceRunId}:${JSON.stringify(target)}`;
+  const cached = cachedInspection(sourceRunId, target);
+  const needsCacheReservation = !cached && !activeInspectionSource(sourceRunId);
+  const cacheReservation = needsCacheReservation ? inspectionCache.reserve(cacheKey) : undefined;
+  if (needsCacheReservation && !cacheReservation) {
     clearDisplayedInspection();
     inspectionBinding = { ...binding, availability: "BUDGET EXCEEDED" };
     mode = "microscope";
-    error =
-      "Session evidence limit reached. Clear session before capturing additional detail.";
+    error = "Derived inspection cache budget exceeded. Historical evidence remains retained.";
     render();
     return;
   }
+  pendingInspectionCacheReservation = cacheReservation;
   const executionRevision = forwardDriver.progress?.sequence;
   const guideGeneration=spatialPresenter.playback.generation;
   const current = ++inspectionOperation;
-  const cacheKey = `${sourceRunId}:${JSON.stringify(target)}`;
   mode = "microscope";
   inspectionPending = true;
   inspection = undefined;
@@ -2377,7 +2343,7 @@ async function inspect(
   render();
   mount.querySelector<HTMLElement>("#microscope")?.scrollTo({ top: 0 });
   try {
-    let evidence = cachedInspection(sourceRunId, target);
+    let evidence = cached;
     if (!evidence) {
       const response = await client.request({
         command: "inspect",
@@ -2423,10 +2389,11 @@ async function inspect(
         (evidence.provenance !== "recomputed" ||
           evidence.verification?.verified)
       ) {
-        inspectionCache.set(cacheKey, immutableCopy(evidence));
-        evidenceBytes += new TextEncoder().encode(
-          JSON.stringify(evidence),
-        ).byteLength;
+        if (!cacheReservation?.commit(immutableCopy(evidence))) {
+          binding.availability = "BUDGET EXCEEDED";
+          throw new Error('Derived inspection exceeds its bounded cache reservation');
+        }
+        if (pendingInspectionCacheReservation === cacheReservation) pendingInspectionCacheReservation = undefined;
       }
     }
     if (
@@ -2462,9 +2429,11 @@ async function inspect(
       !inspectionIsCurrent(binding, inspectionSelection(), operation)
     )
       return;
-    binding.availability = "NOT CAPTURED";
+    binding.availability = failure instanceof Error && failure.message.includes('bounded cache reservation') ? "BUDGET EXCEEDED" : "NOT CAPTURED";
     error = failure instanceof Error ? failure.message : String(failure);
   } finally {
+    cacheReservation?.cancel();
+    if (pendingInspectionCacheReservation === cacheReservation) pendingInspectionCacheReservation = undefined;
     if(spatialActive && guideGeneration!==spatialPresenter.playback.generation && current===inspectionOperation){clearDisplayedInspection();render();}
     else if (
       current === inspectionOperation &&
@@ -2618,7 +2587,6 @@ for (const event of ["dragover", "drop"])
 async function ablateHead(): Promise<void> {
   if (forwardDriver.active) { error='Finish/cancel execution or accept/discard the candidate before testing a head.';render();return; }
   if (busy || !result) return;
-  if (evidenceBytes >= SESSION_BUDGET) { error="Session evidence limit reached (64 MiB estimate). Clear session before testing another head.";render();return; }
   const source = result;
   if(source.run.manifest.runtimeRevision!==RUNTIME_REVISION){error='Selected source runtime differs; choose a compatible completed run.';render();return;}
   const snapshot = sourceSnapshot(source.run.manifest.startingSnapshotId ?? "");
@@ -2627,6 +2595,8 @@ async function ablateHead(): Promise<void> {
     render();
     return;
   }
+  let transaction:RetentionTransaction;try{transaction=await beginRetention('intervention');}catch(failure){error=failure instanceof Error?failure.message:String(failure);status='Retention capacity refused · ablation did not execute';render();return;}
+  activeRetentionTransaction=transaction;
   clearDisplayedInspection();
   const currentOperation = ++operation; activeIntervention=currentOperation;
   busy = true;
@@ -2641,14 +2611,12 @@ async function ablateHead(): Promise<void> {
       selection: { layer, head },
     });
     if (currentOperation !== operation) return;
-    const destination = archive;
+    const destination = transaction.archive;
     await destination.addRun(experiment.baselineRun);
     await destination.addRun(experiment.interventionRun);
     await destination.addInterventionExperiment(experiment);
     if (currentOperation !== operation) return;
-    evidenceBytes += new TextEncoder().encode(
-      JSON.stringify(experiment),
-    ).byteLength;
+    await commitRetention(transaction);activeRetentionTransaction=undefined;
     activeIntervention=undefined;
     comparisonRunId = experiment.baselineRun.manifest.runId;
     busy = false;
@@ -2658,10 +2626,12 @@ async function ablateHead(): Promise<void> {
     status = `Observed ablation complete · layer ${experiment.selection.layer}, head ${experiment.selection.head} · live training state unchanged`;
     render();
   } catch (failure) {
+    cancelRetention(transaction);activeRetentionTransaction=undefined;
     if (currentOperation !== operation) return;
     error = failure instanceof Error ? failure.message : String(failure);
     status = "Ablation failed";
   } finally {
+    if(activeRetentionTransaction===transaction){cancelRetention(transaction);activeRetentionTransaction=undefined;}
     if (currentOperation === operation) {
       activeIntervention=undefined; busy = false;
       render();
@@ -2672,7 +2642,6 @@ async function ablateHead(): Promise<void> {
 async function patchHeadOutput(): Promise<void> {
   if (forwardDriver.active) { error='Finish/cancel execution or accept/discard the candidate before patching an activation.';render();return; }
   if (busy || !result) return;
-  if (evidenceBytes >= SESSION_BUDGET) { error="Session evidence limit reached (64 MiB estimate). Clear session before testing another intervention.";render();return; }
   const source = result;
   if(source.run.manifest.runtimeRevision!==RUNTIME_REVISION){error='Selected source runtime differs; choose a compatible completed run.';render();return;}
   const snapshot = sourceSnapshot(source.run.manifest.startingSnapshotId ?? "");
@@ -2680,6 +2649,8 @@ async function patchHeadOutput(): Promise<void> {
   const targetToken = Math.max(0, Math.min(source.tokenIds.length - 1, selectedToken));
   const donorToken = targetToken === 0 ? Math.min(1, source.tokenIds.length - 1) : 0;
   const donorHead = (head + 1) % snapshot.state.config.nHead;
+  let transaction:RetentionTransaction;try{transaction=await beginRetention('intervention');}catch(failure){error=failure instanceof Error?failure.message:String(failure);status='Retention capacity refused · donor patch did not execute';render();return;}
+  activeRetentionTransaction=transaction;
   clearDisplayedInspection();
   const currentOperation = ++operation; activeIntervention=currentOperation;
   busy = true; error = ""; status = "Capturing donor, baseline, and patched target arms…"; render();
@@ -2687,13 +2658,13 @@ async function patchHeadOutput(): Promise<void> {
     const experiment = await inspector.activationPatch({ snapshot, inputIds: source.tokenIds, targetIds: source.targetIds,
       donor: { token: donorToken, layer, head: donorHead }, target: { token: targetToken, layer, head } });
     if (currentOperation !== operation) return;
-    const destination = archive;
+    const destination = transaction.archive;
     await destination.addRun(experiment.donorRun);
     await destination.addRun(experiment.baselineRun);
     await destination.addRun(experiment.interventionRun);
     await destination.addInterventionExperiment(experiment);
     if (currentOperation !== operation) return;
-    evidenceBytes += new TextEncoder().encode(JSON.stringify(experiment)).byteLength;
+    await commitRetention(transaction);activeRetentionTransaction=undefined;
     activeIntervention=undefined; comparisonRunId = experiment.baselineRun.manifest.runId; busy = false;
     selectRun(experiment.interventionRun.manifest.runId);
     selectedToken = targetToken; selectedKind = "headOutput";
@@ -2701,10 +2672,12 @@ async function patchHeadOutput(): Promise<void> {
     status = `Observed donor patch complete · p${targetToken}/L${layer}/h${head} ← p${donorToken}/L${layer}/h${donorHead} · matched-intervention · accepted state unchanged`;
     render();
   } catch (failure) {
+    cancelRetention(transaction);activeRetentionTransaction=undefined;
     if (currentOperation !== operation) return;
     error = failure instanceof Error ? failure.message : String(failure);
     status = "Activation patch failed";
   } finally {
+    if(activeRetentionTransaction===transaction){cancelRetention(transaction);activeRetentionTransaction=undefined;}
     if (currentOperation === operation) { activeIntervention=undefined; busy = false; render(); }
   }
 }
@@ -2712,20 +2685,21 @@ async function patchHeadOutput(): Promise<void> {
 async function openActivationVariant(): Promise<void> {
   if (forwardDriver.active) { error='Finish or cancel the active execution before creating a model variant.';render();return; }
   if (busy || !result) return;
-  if (evidenceBytes >= SESSION_BUDGET) { error='Session evidence limit reached (64 MiB estimate). Clear session before creating another variant.';render();return; }
   const source=result;
   if(source.run.manifest.model.id!=='microgpt'||source.run.manifest.runtimeRevision!==RUNTIME_REVISION){error='Select a compatible canonical MicroGPT run before creating the variant.';render();return;}
   const snapshot=sourceSnapshot(source.run.manifest.startingSnapshotId??'');
   if(!snapshot){error='The selected canonical source snapshot is unavailable.';render();return;}
+  let transaction:RetentionTransaction;try{transaction=await beginRetention('modelVariant');}catch(failure){error=failure instanceof Error?failure.message:String(failure);status='Retention capacity refused · model variant did not execute';render();return;}
+  activeRetentionTransaction=transaction;
   clearDisplayedInspection();const currentOperation=++operation;activeIntervention=currentOperation;
   busy=true;error='';status='Initializing and executing the registered Leaky ReLU model definition…';render();
   try{
     const experiment:ActivationVariantExperiment=await inspector.activationVariant({snapshot,inputIds:source.tokenIds,targetIds:source.targetIds});
     if(currentOperation!==operation)return;
-    await archive.addRun(experiment.baselineRun);
-    await archive.addModelVariantExperiment(experiment);
+    await transaction.archive.addRun(experiment.baselineRun);
+    await transaction.archive.addModelVariantExperiment(experiment);
     if(currentOperation!==operation)return;
-    evidenceBytes+=new TextEncoder().encode(JSON.stringify(experiment)).byteLength;
+    await commitRetention(transaction);activeRetentionTransaction=undefined;
     activeIntervention=undefined;comparisonRunId=experiment.baselineRun.manifest.runId;busy=false;
     selectRun(experiment.variantRun.manifest.runId);
     selectedToken=experiment.witness.token;selectedKind='mlpLeakyRelu';
@@ -2734,28 +2708,30 @@ async function openActivationVariant(): Promise<void> {
     status=`Leaky ReLU model variant complete · matched-variant@1 · accepted canonical state unchanged`;
     render();
   }catch(failure){
+    cancelRetention(transaction);activeRetentionTransaction=undefined;
     if(currentOperation!==operation)return;
     error=failure instanceof Error?failure.message:String(failure);status='Activation variant failed';
-  }finally{if(currentOperation===operation){activeIntervention=undefined;busy=false;render();}}
+  }finally{if(activeRetentionTransaction===transaction){cancelRetention(transaction);activeRetentionTransaction=undefined;}if(currentOperation===operation){activeIntervention=undefined;busy=false;render();}}
 }
 
 async function openCompositeVariant(): Promise<void> {
   if (forwardDriver.active) { error='Finish or cancel the active execution before creating a composite model variant.';render();return; }
   if (busy || !result) return;
-  if (evidenceBytes >= SESSION_BUDGET) { error='Session evidence limit reached (64 MiB estimate). Clear session before creating another variant.';render();return; }
   const source=result;
   if(source.run.manifest.model.id!=='microgpt'||source.run.manifest.runtimeRevision!==RUNTIME_REVISION){error='Select a compatible canonical MicroGPT run before creating the composite variant.';render();return;}
   const snapshot=sourceSnapshot(source.run.manifest.startingSnapshotId??'');
   if(!snapshot){error='The selected canonical source snapshot is unavailable.';render();return;}
+  let transaction:RetentionTransaction;try{transaction=await beginRetention('modelVariant');}catch(failure){error=failure instanceof Error?failure.message:String(failure);status='Retention capacity refused · composite variant did not execute';render();return;}
+  activeRetentionTransaction=transaction;
   clearDisplayedInspection();const currentOperation=++operation;activeIntervention=currentOperation;
   busy=true;error='';status='Initializing A/B, training the registered composite branch, and proving exact resume…';render();
   try{
     const experiment:CompositeVariantExperiment=await inspector.compositeVariant({snapshot,inputIds:source.tokenIds,targetIds:source.targetIds});
     if(currentOperation!==operation)return;
-    await archive.addRun(experiment.baselineRun);
-    await archive.addModelVariantExperiment(experiment);
+    await transaction.archive.addRun(experiment.baselineRun);
+    await transaction.archive.addModelVariantExperiment(experiment);
     if(currentOperation!==operation)return;
-    evidenceBytes+=new TextEncoder().encode(JSON.stringify(experiment)).byteLength;
+    await commitRetention(transaction);activeRetentionTransaction=undefined;
     activeIntervention=undefined;comparisonRunId=experiment.baselineRun.manifest.runId;busy=false;
     selectRun(experiment.trainedRun.manifest.runId);
     selectedToken=experiment.witness.token;selectedKind='mlpCompositeDown';
@@ -2764,15 +2740,15 @@ async function openCompositeVariant(): Promise<void> {
     status='Composite A/B variant trained · exact resume PASS · matched-variant@1 · accepted canonical state unchanged';
     render();
   }catch(failure){
+    cancelRetention(transaction);activeRetentionTransaction=undefined;
     if(currentOperation!==operation)return;
     error=failure instanceof Error?failure.message:String(failure);status='Composite variant failed';
-  }finally{if(currentOperation===operation){activeIntervention=undefined;busy=false;render();}}
+  }finally{if(activeRetentionTransaction===transaction){cancelRetention(transaction);activeRetentionTransaction=undefined;}if(currentOperation===operation){activeIntervention=undefined;busy=false;render();}}
 }
 
 async function openDataExperiment(): Promise<void> {
   if (forwardDriver.active) { error='Finish or cancel the active execution before running a data experiment.';render();return; }
   if (busy || !result || !liveRunId) return;
-  if (evidenceBytes >= SESSION_BUDGET) { error='Session evidence limit reached (64 MiB estimate). Clear session before running another data experiment.';render();return; }
   const acceptedRun=archive.runs.get(liveRunId)??result.run;
   if(acceptedRun.manifest.model.id!=='microgpt'||acceptedRun.manifest.runtimeRevision!==RUNTIME_REVISION){error='The accepted state is not a compatible canonical MicroGPT run.';render();return;}
   const snapshot=sourceSnapshot(acceptedRun.manifest.startingSnapshotId??'');
@@ -2780,22 +2756,25 @@ async function openDataExperiment(): Promise<void> {
   const design={id:'m3-c-matched-data',schedule:['abca','bcab','cabc','abab'],
     substitutions:[{step:0,original:'abca',replacement:'abcc'}],triggeredPrefix:'abc',controlPrefixes:['bca','cab'],
     desiredToken:'c',cleanDocuments:['abca','bcab','cabc','abab']} as const;
+  let transaction:RetentionTransaction;try{transaction=await beginRetention('dataExperiment');}catch(failure){error=failure instanceof Error?failure.message:String(failure);status='Retention capacity refused · data experiment did not execute';render();return;}
+  activeRetentionTransaction=transaction;
   clearDisplayedInspection();const currentOperation=++operation;activeIntervention=currentOperation;
   busy=true;error='';status='Running clean, treatment, and defended matched training arms…';render();
   try{
     const completed=await inspector.dataExperiment({snapshot,design});
     if(currentOperation!==operation)return;
-    for(const item of completed.snapshots)await archive.addSnapshot(item);
-    for(const run of completed.runs)await archive.addRun(run);
-    for(const learning of completed.learningExperiments)await archive.addLearningExperiment(learning);
-    await archive.addDataExperiment(completed.experiment);
+    for(const item of completed.snapshots)await transaction.archive.addSnapshot(item);
+    for(const run of completed.runs)await transaction.archive.addRun(run);
+    for(const learning of completed.learningExperiments)await transaction.archive.addLearningExperiment(learning);
+    await transaction.archive.addDataExperiment(completed.experiment);
     if(currentOperation!==operation)return;
-    evidenceBytes+=new TextEncoder().encode(JSON.stringify(completed)).byteLength;
+    await commitRetention(transaction);activeRetentionTransaction=undefined;
     activeDataExperimentId=completed.experiment.id;activeIntervention=undefined;busy=false;
     selectRun(completed.experiment.evaluations.triggered.arms.treatment.runId);
     status='Matched data experiment complete · three equal budgets · accepted canonical state unchanged';render();
   }catch(failure){
+    cancelRetention(transaction);activeRetentionTransaction=undefined;
     if(currentOperation!==operation)return;
     error=failure instanceof Error?failure.message:String(failure);status='Data experiment failed';
-  }finally{if(currentOperation===operation){activeIntervention=undefined;busy=false;render();}}
+  }finally{if(activeRetentionTransaction===transaction){cancelRetention(transaction);activeRetentionTransaction=undefined;}if(currentOperation===operation){activeIntervention=undefined;busy=false;render();}}
 }

@@ -4,14 +4,25 @@ import { RUNTIME_REVISION } from '../../runtime/revision.js';
 import { boundSource } from '../source/registered.js';
 import { sourceFiles } from '../source/catalog.js';
 import { fullSupportDistributionFromSlices } from './full-support-distribution.js';
+import type { RetentionOperation } from '../../archive/retention.js';
 const esc=(x:unknown)=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const SAVED='model-lab-evidence-v1';
+
+export interface SharedEvidenceTransaction {
+  readonly store: EvidenceStore;
+  commit(): Promise<void>;
+  cancel(): void;
+}
+export interface SharedEvidenceRetention {
+  begin(operation: RetentionOperation): Promise<SharedEvidenceTransaction>;
+}
 
 /** One inspector/player for every registered producer; all values come from bounded store queries. */
 export class SharedInspector {
   #root=document.createElement('section');#executors=new ExecutorRegistry();#player?:EvidencePlayer;
   #store?:EvidenceStore;#open=false;#busy=false;#message='';#selected=this.#executors.list()[0].id;#offset=0;
   #action='predict';#endpoint='http://127.0.0.1:4319/execute';#input='The cat sat';#replay=false;#rendering=false;#operation=0;
+  #retention?:SharedEvidenceRetention;#pendingRetention?:SharedEvidenceTransaction;
   constructor(){
     this.#root.addEventListener('keydown',event=>{
       if(event.key==='Escape'&&this.#open){this.#open=false;this.render();this.#root.querySelector<HTMLButtonElement>('button')?.focus();}
@@ -23,8 +34,9 @@ export class SharedInspector {
       }
     });
     this.#root.id='shared-inspector';document.body.append(this.#root);}
-  sync(store:EvidenceStore,liveId:string|undefined,canSwitch:boolean,onCanonical:()=>Promise<CanonicalReceipt>,onWorld?:(runId:string,replay:boolean)=>void,worldAvailability?:(runId:string)=>string|undefined){
-    if(this.#store!==store){this.#operation++;this.#executors.cancel();this.#store=store;this.#player=undefined;this.#offset=0;this.#replay=false;}
+  sync(store:EvidenceStore,liveId:string|undefined,canSwitch:boolean,onCanonical:()=>Promise<CanonicalReceipt>,onWorld?:(runId:string,replay:boolean)=>void,worldAvailability?:(runId:string)=>string|undefined,retention?:SharedEvidenceRetention){
+    this.#retention=retention;
+    if(this.#store!==store){this.#operation++;this.#executors.cancel();this.#pendingRetention?.cancel();this.#pendingRetention=undefined;this.#store=store;this.#player=undefined;this.#offset=0;this.#replay=false;}
     if(!this.#open&&liveId&&store.list().some(r=>r.id===liveId)&&this.#executors.get(this.#selected).inputLocation==='world'&&this.#player?.runId!==liveId)this.select(liveId,false);
     this.#canSwitch=canSwitch;this.#canonical=onCanonical;this.#onWorld=onWorld;this.#worldAvailability=worldAvailability;this.render();
   }
@@ -74,7 +86,7 @@ export class SharedInspector {
     const action=this.#root.querySelector<HTMLSelectElement>('#shared-action');if(action)action.onchange=()=>this.#action=action.value;
     for(const [id,set] of [['#native-prompt',(v:string)=>this.#input=v],['#native-endpoint',(v:string)=>this.#endpoint=v]] as const){const el=this.#root.querySelector<HTMLInputElement>(id);if(el)el.oninput=()=>set(el.value);}
     this.#root.querySelector<HTMLSelectElement>('#shared-run')!.onchange=e=>{const id=(e.target as HTMLSelectElement).value;if(id){this.#operation++;this.#executors.cancel();this.#busy=false;this.select(id);this.#message='Selected immutable evidence; no executor invoked.';this.render();}};
-    on('#shared-execute',()=>void this.execute());on('#shared-cancel',()=>{this.#operation++;this.#executors.cancel();this.#busy=false;this.#message='Cancelled admission; canonical state unchanged.';this.render();});
+    on('#shared-execute',()=>void this.execute());on('#shared-cancel',()=>{this.#operation++;this.#executors.cancel();this.#pendingRetention?.cancel();this.#pendingRetention=undefined;this.#busy=false;this.#message='Cancelled admission; canonical state unchanged.';this.render();});
     on('#shared-world',()=>{if(!run||!this.#onWorld)return;if(!this.#canSwitch){this.#message='Finish or cancel the active canonical operation before opening another world.';this.render();return;}const unavailable=this.#worldAvailability?.(run.id);if(unavailable){this.#message=unavailable;this.render();return;}this.#open=false;this.#onWorld(run.id,this.#replay);this.render();});
     this.#root.querySelectorAll<HTMLElement>('[data-point]').forEach(el=>el.onclick=()=>{player!.seek(Number(el.dataset.point));this.#offset=0;this.render();});
     this.#root.querySelectorAll<HTMLElement>('[data-dependency]').forEach(el=>el.onclick=()=>{player!.seek(player!.run.points.findIndex(p=>p.id===el.dataset.dependency));this.#offset=0;this.render();});
@@ -93,18 +105,23 @@ export class SharedInspector {
   }
   private async execute(){
     const operation=++this.#operation;
-    this.#busy=true;this.#message='Executing selected producer…';this.render();
+    this.#busy=true;this.#message='Checking durable retention capacity…';this.render();
     try{
-      const run=await this.#executors.get(this.#selected).execute({action:this.#action,input:this.#input,endpoint:this.#endpoint,store:this.#store!,canonical:this.#canonical});
-      if(operation!==this.#operation)return;
+      const binding=this.#executors.get(this.#selected),transaction=binding.inputLocation==='world'?undefined:await this.#retention?.begin('nativeEvidence');
+      if(operation!==this.#operation){transaction?.cancel();return;}
+      this.#pendingRetention=transaction;this.#message='Executing selected producer…';this.render();
+      const run=await binding.execute({action:this.#action,input:this.#input,endpoint:this.#endpoint,store:transaction?.store??this.#store!,canonical:this.#canonical});
+      if(operation!==this.#operation){transaction?.cancel();return;}
+      if(transaction){await transaction.commit();if(operation!==this.#operation)return;this.#store=transaction.store;this.#pendingRetention=undefined;}
       this.select(run.id);
       this.#message='Execution receipt validated and admitted; inspection reads retained evidence.';
-    }catch(e){if(operation!==this.#operation)return;this.#message=`Execution refused or failed: ${e instanceof Error?e.message:String(e)}`;}
+    }catch(e){this.#pendingRetention?.cancel();this.#pendingRetention=undefined;if(operation!==this.#operation)return;this.#message=`Execution refused or failed: ${e instanceof Error?e.message:String(e)}`;}
     finally{if(operation===this.#operation){this.#busy=false;this.render();}}
   }
   private async load(json:string|null){
-    try{check(json,'No saved recording');check(new TextEncoder().encode(json).length<=MAX_RECORD_BYTES,'Import byte budget');this.#operation++;this.#executors.cancel();this.#busy=false;const run=await this.#store!.admit(parseEvidence(json));this.select(run.id,true);this.#message='Saved replay loaded. Native executor disconnected; no execution requested.';}
-    catch(e){this.#message=`Recording refused: ${e instanceof Error?e.message:String(e)}`;}
+    const operation=++this.#operation;this.#executors.cancel();this.#pendingRetention?.cancel();this.#pendingRetention=undefined;
+    try{check(json,'No saved recording');check(new TextEncoder().encode(json).length<=MAX_RECORD_BYTES,'Import byte budget');const transaction=await this.#retention?.begin('standaloneImport');if(operation!==this.#operation){transaction?.cancel();return;}this.#pendingRetention=transaction;const store=transaction?.store??this.#store!;const run=await store.admit(parseEvidence(json),undefined,()=>operation===this.#operation);if(operation!==this.#operation){transaction?.cancel();return;}if(transaction){await transaction.commit();this.#store=transaction.store;this.#pendingRetention=undefined;}this.select(run.id,true);this.#message='Saved replay loaded. Native executor disconnected; no execution requested.';}
+    catch(e){this.#pendingRetention?.cancel();this.#pendingRetention=undefined;if(operation===this.#operation)this.#message=`Recording refused: ${e instanceof Error?e.message:String(e)}`;}
     this.render();
   }
 }

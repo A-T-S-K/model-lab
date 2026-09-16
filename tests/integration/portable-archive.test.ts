@@ -1,14 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import '../../experiments/matched-data-substitution.js';
 import { SessionArchive } from '../../archive/session.js';
-import { exportPortableArchive, importPortableArchive } from '../../archive/portable.js';
+import { exportPortableArchive, importPortableArchive, measurePortableArchive, PORTABLE_ARCHIVE_LIMITS } from '../../archive/portable.js';
+import { RETENTION_RESERVATION_BOUNDS, RETENTION_RESERVATION_BYTES, SessionRetention, RetentionCapacityError } from '../../archive/retention.js';
 import { EvidenceStore, evidenceHash } from '../../trace/evidence.js';
 import { integrations } from '../../trace/integrations.js';
 import { InMemoryNumericalPayloadStore } from '../../trace/payload.js';
 import { ModelSession } from '../../app/worker/controller.js';
 import { canonicalIntent } from '../../app/worker/execution-intent.js';
 import type { WorkerRequest } from '../../app/worker/protocol.js';
+import { BoundedCache } from '../../app/presentation/bounded-cache.js';
 
 async function canonicalArchive():Promise<{archive:SessionArchive;runId:string}>{
   const session=new ModelSession(),tag={sessionId:'portable-test',generationId:0};
@@ -21,9 +24,22 @@ async function canonicalArchive():Promise<{archive:SessionArchive;runId:string}>
 
 test('portable archive v1 is deterministic, content-addressed and reconstructs isolated canonical history',async()=>{
   const {archive,runId}=await canonicalArchive(),first=await exportPortableArchive(archive),second=await exportPortableArchive(archive);
+  const measured=await measurePortableArchive(archive);assert.equal(measured.archiveBytes,first.bytes.length);assert.equal(measured.manifestBytes,first.manifestBytes);assert.equal(measured.payloadEntries,first.payloadCount);assert.equal(measured.uniquePayloadBytes,first.uniquePayloadBytes);
   assert.deepEqual(first.bytes,second.bytes);assert.equal(first.archiveId,second.archiveId);assert.match(first.archiveId,/^sha256:[0-9a-f]{64}$/);
   const imported=await importPortableArchive(first.bytes);assert.equal(imported.archiveId,first.archiveId);assert.deepEqual([...imported.archive.snapshots.keys()],[...archive.snapshots.keys()]);assert.deepEqual(imported.archive.runs.get(runId),archive.runs.get(runId));
   assert.equal(imported.archive.evidence.contentId(runId),archive.evidence.contentId(runId));assert.equal(imported.archive.learningExperiments.size,0);
+});
+
+test('session retention counts active reservations, commits atomically, and invalidates stale domains',async()=>{
+  const {archive,runId}=await canonicalArchive(),authority=new SessionRetention(archive),initial=await authority.synchronize();
+  const first=await authority.begin('intervention');
+  await assert.rejects(authority.begin('intervention'),RetentionCapacityError);
+  first.cancel();assert.equal(authority.status().reservationCount,0);
+  const duplicate=await authority.begin('canonical');await duplicate.archive.addRun(archive.runs.get(runId)!);const committed=await duplicate.commit();
+  assert.equal(committed.retained.archiveBytes,initial.retained.archiveBytes,'duplicate immutable admission must not double-charge');
+  const stale=await authority.begin('nativeEvidence'),replacement=new SessionArchive();await authority.replace(replacement);
+  await assert.rejects(stale.commit(),/Stale retention reservation/);assert.equal(authority.archive,replacement);assert.equal(authority.status().reservationCount,0);
+  const current=await authority.begin('canonical');assert.equal(authority.status().reservationCount,1);current.cancel();assert.equal(authority.status().reservationCount,0,'released capacity must be reusable by a current operation');
 });
 
 test('portable ordering ignores map insertion order while preserving learning lineage and comparison',async()=>{
@@ -49,15 +65,46 @@ test('portable archive refuses malformed framing atomically without changing cur
 });
 
 const generationPath=process.env.NATIVE_GENERATION_RECORDING;
+const mixedArchivePath=process.env.M4_B2_MIXED_ARCHIVE;
+
+test('train-many boundary reserves before the next mutation and retains the last completed update',{skip:!mixedArchivePath},async()=>{
+  let archive=(await importPortableArchive(new Uint8Array(await readFile(mixedArchivePath!)))).archive;
+  const filler=new ModelSession(),fillTag={sessionId:'retention-fill',generationId:0};await filler.handle({...fillTag,runId:'fill-init',command:'initialize'});
+  let index=0,measurement=await measurePortableArchive(archive),remainingNodes=()=>PORTABLE_ARCHIVE_LIMITS.dataNodes-measurement.manifestDataNodes;
+  while(remainingNodes()>RETENTION_RESERVATION_BOUNDS.canonical.manifestDataNodes+50_000){
+    const request:WorkerRequest={...fillTag,runId:`fill-${++index}`,command:'predict',document:'abca'},response=await filler.handle({...request,intent:canonicalIntent(request)});assert.equal(response.status,'result');if(response.status!=='result')throw new Error('Missing filler prediction');
+    for(const snapshot of response.result.snapshots)await archive.addSnapshot(snapshot);for(const run of response.result.runs)await archive.addRun(run);if(index%12===0)measurement=await measurePortableArchive(archive);
+  }
+  measurement=await measurePortableArchive(archive);
+  while(true){
+    const candidate=await archive.fork(),request:WorkerRequest={...fillTag,runId:`fill-${++index}`,command:'predict',document:'abca'},response=await filler.handle({...request,intent:canonicalIntent(request)});assert.equal(response.status,'result');if(response.status!=='result')throw new Error('Missing filler prediction');
+    for(const snapshot of response.result.snapshots)await candidate.addSnapshot(snapshot);for(const run of response.result.runs)await candidate.addRun(run);const next=await measurePortableArchive(candidate);
+    if(PORTABLE_ARCHIVE_LIMITS.dataNodes-next.manifestDataNodes<RETENTION_RESERVATION_BOUNDS.canonical.manifestDataNodes)break;
+    archive=candidate;measurement=next;
+  }
+  const authority=new SessionRetention(archive);await authority.synchronize();assert(authority.status().remainingBytes>=RETENTION_RESERVATION_BYTES.canonical);
+  const model=new ModelSession(),tag={sessionId:'retention-train',generationId:0};await model.handle({...tag,runId:'train-init',command:'initialize'});
+  let executorContacts=0;const transaction=await authority.begin('canonical'),request:WorkerRequest={...tag,runId:'train-1',command:'train',document:'abca'};executorContacts++;
+  const response=await model.handle({...request,intent:canonicalIntent(request)});assert.equal(response.status,'result');if(response.status!=='result'||!response.result.experiment)throw new Error('Missing retained training update');
+  for(const snapshot of response.result.snapshots)await transaction.archive.addSnapshot(snapshot);for(const run of response.result.runs)await transaction.archive.addRun(run);await transaction.archive.addLearningExperiment(response.result.experiment);await transaction.commit();
+  assert.equal(response.result.trainingStep,1);assert.equal(authority.archive.learningExperiments.has(response.result.experiment.id),true);
+  await assert.rejects(authority.begin('canonical'),RetentionCapacityError);assert.equal(executorContacts,1,'update N+1 must not contact the executor');
+});
+
 test('payload-backed M4-A generation round-trips through registered retained validation with no executor',{skip:!generationPath},async()=>{
   const envelope=JSON.parse(await readFile(generationPath!,'utf8')),source=new SessionArchive(),run=await source.evidence.admit(envelope),originalId=source.evidence.contentId(run.id);
   const exported=await exportPortableArchive(source);assert(exported.payloadCount>0);assert(exported.uniquePayloadBytes>0);
+  const measured=await measurePortableArchive(source);assert.equal(measured.archiveBytes,exported.bytes.length);assert.equal(measured.payloadEntries,18);assert.equal(measured.uniquePayloadBytes,438272);
   const {archive}=await importPortableArchive(exported.bytes);assert.equal(archive.evidence.contentId(run.id),originalId);assert.equal(archive.evidence.hasEnvelope(run.id),false);
   assert.deepEqual(archive.evidence.slice(run.id,'generation:2/logits',50303,1),[-3.8919265270233154]);
   assert.deepEqual(archive.evidence.slice(run.id,'generation:2/attention.qkv',511,8),[-0.14655473828315735,2.905082941055298,3.862351417541504,-7.279216766357422,-12.423630714416504,1.786351203918457,-6.3037872314453125,-0.3044796884059906]);
   const importedRun=archive.evidence.get(run.id),metadata=archive.evidence.metadataEnvelope(run.id).record as any;
   assert.deepEqual(metadata.generation.generated.tokenIds,[327,253]);assert.deepEqual(metadata.generation.invocations[2].effectivePrefixIds,[510,5798,2206,327]);assert.equal(metadata.generation.cache.capability,'unsupported');
   const payloadIds=importedRun.points.flatMap(point=>point.payload?[point.payload.contentId]:[]);assert(payloadIds.length>new Set(payloadIds).size);assert.equal(new Set(payloadIds).size,exported.payloadCount);
+  const archiveIdsBefore=[...source.evidence.list()].map(item=>item.id),payloadIdsBefore=[...new Set(payloadIds)],cache=new BoundedCache<string,{detail:string}>(2,160,80);
+  for(let index=0;index<6;index++)assert.equal(cache.reserve(`detail-${index}`,80)!.commit({detail:String(index).repeat(30)}),true);
+  assert(cache.status().evictions>=4);assert.deepEqual([...source.evidence.list()].map(item=>item.id),archiveIdsBefore);assert.deepEqual([...new Set(run.points.flatMap(point=>point.payload?[point.payload.contentId]:[]))],payloadIdsBefore);
+  assert.deepEqual((await exportPortableArchive(source)).bytes,exported.bytes,'ephemeral cache pressure cannot alter portable archive bytes');
   const entry=await source.evidence.portableEntry(run.id),payloadStore=new InMemoryNumericalPayloadStore();
   for(const descriptor of new Map(run.points.flatMap(point=>point.payload?[[point.payload.contentId,point.payload] as const]:[])).values())await payloadStore.importPayload(descriptor,source.evidence.payloads.exportBytes(descriptor));
   const unknown=structuredClone(entry) as any;unknown.codec='unknown-native-v1';unknown.portableEntryId=await evidenceHash({version:unknown.version,codec:unknown.codec,run:unknown.run,codecMetadata:unknown.codecMetadata,originalContentId:unknown.originalContentId});

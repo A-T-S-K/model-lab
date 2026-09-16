@@ -185,3 +185,41 @@ export class InMemoryNumericalPayloadStore implements NumericalPayloadStorage {
     return new Uint8Array(payload.bytes);
   }
 }
+
+/**
+ * Transaction-local payload overlay. Reads fall through to immutable session bytes;
+ * new bytes remain isolated until the archive that owns this layer is published.
+ */
+export class LayeredNumericalPayloadStore implements NumericalPayloadStorage {
+  readonly #local = new InMemoryNumericalPayloadStore();
+  constructor(readonly parent: NumericalPayloadStorage) {}
+
+  async put(dtype: NumericalDType, values: readonly number[]): Promise<NumericalPayloadDescriptor> {
+    const descriptor = await this.#local.put(dtype, values);
+    if (!this.parent.has(descriptor.contentId)) return descriptor;
+    const existing = this.parent.metadata(descriptor.contentId);
+    requirePayload(sameDescriptor(existing, descriptor), 'Conflicting parent payload identity');
+    return existing;
+  }
+
+  async importPayload(value: unknown, source: Uint8Array): Promise<NumericalPayloadDescriptor> {
+    const descriptor = validatePayloadDescriptor(value);
+    if (this.parent.has(descriptor.contentId)) {
+      const existing = this.parent.metadata(descriptor.contentId);
+      requirePayload(sameDescriptor(existing, descriptor), 'Conflicting parent payload identity');
+      return existing;
+    }
+    return this.#local.importPayload(descriptor, source);
+  }
+
+  has(contentId: string): boolean { return this.#local.has(contentId) || this.parent.has(contentId); }
+  metadata(contentId: string): NumericalPayloadDescriptor {
+    return this.#local.has(contentId) ? this.#local.metadata(contentId) : this.parent.metadata(contentId);
+  }
+  slice(value: NumericalPayloadDescriptor, start: number, count: number): readonly number[] {
+    return this.#local.has(value.contentId) ? this.#local.slice(value, start, count) : this.parent.slice(value, start, count);
+  }
+  exportBytes(value: NumericalPayloadDescriptor): Uint8Array {
+    return this.#local.has(value.contentId) ? this.#local.exportBytes(value) : this.parent.exportBytes(value);
+  }
+}

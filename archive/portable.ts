@@ -66,6 +66,23 @@ export interface PortableArchiveExport {
   readonly uniquePayloadBytes: number;
 }
 
+export interface PortableArchiveMeasurement {
+  readonly archiveBytes: number;
+  readonly manifestBytes: number;
+  readonly payloadEntries: number;
+  readonly uniquePayloadBytes: number;
+  readonly manifestDataNodes: number;
+  readonly records: {
+    readonly snapshots: number;
+    readonly directRuns: number;
+    readonly learningExperiments: number;
+    readonly interventionExperiments: number;
+    readonly modelVariantExperiments: number;
+    readonly dataExperiments: number;
+    readonly evidenceEntries: number;
+  };
+}
+
 function writeU16(view:DataView,offset:number,value:number):void { view.setUint16(offset,value,false); }
 function writeU32(view:DataView,offset:number,value:number):void { view.setUint32(offset,value,false); }
 function readU16(view:DataView,offset:number):number { return view.getUint16(offset,false); }
@@ -76,7 +93,7 @@ async function sha256(bytes:Uint8Array):Promise<string>{
   return `sha256:${Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,'0')).join('')}`;
 }
 
-function canonicalJson(value:unknown):Uint8Array {
+function canonicalJson(value:unknown):{readonly bytes:Uint8Array;readonly dataNodes:number} {
   let nodes=0;
   const encode=(item:unknown,depth:number):unknown=>{
     check(depth<=PORTABLE_ARCHIVE_LIMITS.nestingDepth,'Archive manifest nesting budget');
@@ -92,7 +109,7 @@ function canonicalJson(value:unknown):Uint8Array {
   };
   const bytes=encoder.encode(JSON.stringify(encode(value,0)));
   check(bytes.length<=PORTABLE_ARCHIVE_LIMITS.manifestBytes,'Archive manifest byte budget');
-  return bytes;
+  return Object.freeze({bytes,dataNodes:nodes});
 }
 
 function parseCanonicalJson(bytes:Uint8Array):unknown {
@@ -132,7 +149,13 @@ function pointPayloads(entry:PortableRetainedEvidenceEntry):readonly NumericalPa
   return entry.run.points.flatMap(point=>point.payload?[point.payload]:[]);
 }
 
-export async function exportPortableArchive(archive:SessionArchive):Promise<PortableArchiveExport>{
+interface PortableArchivePlan {
+  readonly manifestBytes: Uint8Array;
+  readonly descriptors: readonly NumericalPayloadDescriptor[];
+  readonly measurement: PortableArchiveMeasurement;
+}
+
+async function portableArchivePlan(archive:SessionArchive):Promise<PortableArchivePlan>{
   const variantRunIds=new Set<string>();
   for(const experiment of archive.modelVariantExperiments.values())for(const run of modelVariantExperiments.require(experiment.identity).variantRuns(experiment))variantRunIds.add(run.manifest.runId);
   const directRuns=sortedValues(archive.runs,(run:RecordedRun)=>run.manifest.runId).filter(run=>!variantRunIds.has(run.manifest.runId));
@@ -156,14 +179,31 @@ export async function exportPortableArchive(archive:SessionArchive):Promise<Port
     dataExperiments:sortedValues(archive.dataExperiments,value=>value.id),evidenceEntries,
   },payloads:descriptors};
   validateManifest(manifest);
-  const manifestBytes=canonicalJson(manifest),payloadBytes=descriptors.map(descriptor=>archive.evidence.payloads.exportBytes(descriptor));
-  const uniquePayloadBytes=payloadBytes.reduce((sum,bytes)=>sum+bytes.length,0);check(uniquePayloadBytes<=PORTABLE_ARCHIVE_LIMITS.totalPayloadBytes,'Archive payload byte budget');
-  payloadBytes.forEach(bytes=>check(bytes.length<=PORTABLE_ARCHIVE_LIMITS.individualPayloadBytes,'Individual archive payload byte budget'));
-  const length=HEADER_BYTES+manifestBytes.length+payloadBytes.reduce((sum,bytes)=>sum+4+bytes.length,0);check(length<=PORTABLE_ARCHIVE_LIMITS.archiveBytes,'Archive byte budget');
+  const encodedManifest=canonicalJson(manifest),manifestBytes=encodedManifest.bytes;
+  const uniquePayloadBytes=descriptors.reduce((sum,descriptor)=>sum+descriptor.byteLength,0);check(uniquePayloadBytes<=PORTABLE_ARCHIVE_LIMITS.totalPayloadBytes,'Archive payload byte budget');
+  descriptors.forEach(descriptor=>{check(descriptor.byteLength<=PORTABLE_ARCHIVE_LIMITS.individualPayloadBytes,'Individual archive payload byte budget');check(archive.evidence.payloads.has(descriptor.contentId),'Missing numerical payload');});
+  const archiveBytes=HEADER_BYTES+manifestBytes.length+descriptors.reduce((sum,descriptor)=>sum+4+descriptor.byteLength,0);check(archiveBytes<=PORTABLE_ARCHIVE_LIMITS.archiveBytes,'Archive byte budget');
+  return Object.freeze({manifestBytes,descriptors,measurement:Object.freeze({archiveBytes,manifestBytes:manifestBytes.length,payloadEntries:descriptors.length,uniquePayloadBytes,manifestDataNodes:encodedManifest.dataNodes,records:Object.freeze({
+    snapshots:manifest.records.snapshots.length,directRuns:manifest.records.directRuns.length,
+    learningExperiments:manifest.records.learningExperiments.length,interventionExperiments:manifest.records.interventionExperiments.length,
+    modelVariantExperiments:manifest.records.modelVariantExperiments.length,dataExperiments:manifest.records.dataExperiments.length,
+    evidenceEntries:manifest.records.evidenceEntries.length,
+  })})});
+}
+
+/** Exact v1 framed size without constructing a second complete archive byte array. */
+export async function measurePortableArchive(archive:SessionArchive):Promise<PortableArchiveMeasurement>{
+  return (await portableArchivePlan(archive)).measurement;
+}
+
+export async function exportPortableArchive(archive:SessionArchive):Promise<PortableArchiveExport>{
+  const plan=await portableArchivePlan(archive),manifestBytes=plan.manifestBytes;
+  const payloadBytes=plan.descriptors.map(descriptor=>archive.evidence.payloads.exportBytes(descriptor));
+  const length=plan.measurement.archiveBytes;
   const bytes=new Uint8Array(length),view=new DataView(bytes.buffer);bytes.set(MAGIC,0);writeU16(view,8,PORTABLE_ARCHIVE_VERSION);writeU32(view,10,manifestBytes.length);writeU32(view,14,payloadBytes.length);bytes.set(manifestBytes,HEADER_BYTES);
   let offset=HEADER_BYTES+manifestBytes.length;for(const payload of payloadBytes){writeU32(view,offset,payload.length);offset+=4;bytes.set(payload,offset);offset+=payload.length;}
   check(offset===bytes.length,'Archive framing length mismatch');
-  return Object.freeze({bytes,archiveId:await sha256(bytes),manifestBytes:manifestBytes.length,payloadCount:payloadBytes.length,uniquePayloadBytes});
+  return Object.freeze({bytes,archiveId:await sha256(bytes),manifestBytes:manifestBytes.length,payloadCount:payloadBytes.length,uniquePayloadBytes:plan.measurement.uniquePayloadBytes});
 }
 
 function validateManifest(value:unknown):PortableManifest{

@@ -1,5 +1,5 @@
 import { EvidenceStore } from '../trace/evidence.js';
-import { InMemoryNumericalPayloadStore, type NumericalPayloadStorage } from '../trace/payload.js';
+import { InMemoryNumericalPayloadStore, LayeredNumericalPayloadStore, type NumericalPayloadStorage } from '../trace/payload.js';
 import { integrations } from '../trace/integrations.js';
 import { validateLegacyRun } from './legacy-run.js';
 import { immutableCopy, type RecordedRun } from '../trace/types.js';
@@ -51,6 +51,38 @@ export class SessionArchive {
 
   constructor(payloads: NumericalPayloadStorage = new InMemoryNumericalPayloadStore()) {
     this.evidence = new EvidenceStore(integrations(), payloads);
+  }
+
+  /**
+   * Build an isolated transaction view over immutable payload bytes. Record maps are
+   * replayed through their normal validators; publishing the returned archive is the
+   * caller's single commit boundary.
+   */
+  async fork(): Promise<SessionArchive> {
+    const fork = new SessionArchive(new LayeredNumericalPayloadStore(this.evidence.payloads));
+    for (const snapshot of this.#snapshots.values()) await fork.addSnapshot(snapshot);
+    const variantRunIds = this.#variantRunIds();
+    for (const run of this.#runs.values()) {
+      if (variantRunIds.has(run.manifest.runId)) continue;
+      await fork.addRun(run);
+    }
+    for (const experiment of this.#learningExperiments.values()) await fork.addLearningExperiment(experiment);
+    for (const experiment of this.#interventionExperiments.values()) await fork.addInterventionExperiment(experiment);
+    for (const experiment of this.#modelVariantExperiments.values()) await fork.addModelVariantExperiment(experiment);
+    for (const experiment of this.#dataExperiments.values()) await fork.addDataExperiment(experiment);
+    for (const run of this.evidence.list()) {
+      if (this.#runs.has(run.id)) continue;
+      if (this.evidence.hasEnvelope(run.id)) await fork.evidence.admit(this.evidence.envelope(run.id));
+      else await fork.evidence.admitPortable(await this.evidence.portableEntry(run.id));
+    }
+    return fork;
+  }
+
+  #variantRunIds(): Set<string> {
+    const ids = new Set<string>();
+    for (const experiment of this.#modelVariantExperiments.values())
+      for (const run of modelVariantExperiments.require(experiment.identity).variantRuns(experiment)) ids.add(run.manifest.runId);
+    return ids;
   }
 
   async addSnapshot(record: ArchivedSnapshot): Promise<void> {
