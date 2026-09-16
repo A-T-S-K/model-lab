@@ -34,7 +34,7 @@ test("A01–A05 spatial evidence follows actual runs, complete head slices, caus
     const r = response.result;
     const source = sourceBinding(r.run, ["a", "b", "c"], 0, document, document, "SPATIAL");
     for (const head of [0, 1]) for (const query of [2, 4]) for (const key of [0, 2, 4]) {
-      const m = spatialReadModel(r.run, r.snapshots[0], source, {query, key, head, feature: 2});
+      const m = spatialReadModel(r.run, r.snapshots[0], source, {layer: 0, query, key, head, feature: 2});
       assert.equal(m.source.sourceRunId, document);
       assert.equal(m.heads.length, 2);
       assert.equal(m.projection?.terms.length, 8);
@@ -45,9 +45,9 @@ test("A01–A05 spatial evidence follows actual runs, complete head slices, caus
       if (key > query) { assert.equal(m.lens?.availability, "NOT APPLICABLE"); assert.equal(m.geometry, undefined); }
       else { assert(Math.abs(m.lens!.scaled! - m.lens!.observedLogit!) < 1e-15); assert.equal(m.geometry!.dot, m.lens!.sum); }
     }
-    outputs.push(spatialReadModel(r.run, r.snapshots[0], source, {query: 4, key: 0, head: 0, feature: 0}).projection!.q!);
-    assert.equal(spatialReadModel(r.run, undefined, source, {query: 4, key: 0, head: 0, feature: 0}).projection?.availability, "NOT CAPTURED");
-    assert.equal(spatialReadModel(r.run, r.snapshots[0], source, {query: 7, key: 0, head: 0, feature: 0}).valid, false);
+    outputs.push(spatialReadModel(r.run, r.snapshots[0], source, {layer: 0, query: 4, key: 0, head: 0, feature: 0}).projection!.q!);
+    assert.equal(spatialReadModel(r.run, undefined, source, {layer: 0, query: 4, key: 0, head: 0, feature: 0}).projection?.availability, "NOT CAPTURED");
+    assert.equal(spatialReadModel(r.run, r.snapshots[0], source, {layer: 0, query: 7, key: 0, head: 0, feature: 0}).valid, false);
   }
   assert.notEqual(outputs[0], outputs[1]);
 });
