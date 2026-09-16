@@ -13,8 +13,10 @@ prediction, MSE, backward and explicit SGD with supported state round-trips. Gro
 query/KV-axis arithmetic, structural preview, opaque computation and unsupported
 operation fallback are qualified for M1. Saved new-model and Pythia evidence reopened
 without executor activity; canonical operation required no bridge. M2 world/topology
-integration, generation/cache, variants, experiments and later failure/retention
-proof portions remain pending. See [authority](README.md).
+integration now includes canonical/multilayer MicroGPT and the numeric MLP/SGD witness;
+grouped/opaque fallback, Pythia world integration, generation/cache, variants,
+experiments and later failure/retention proof portions remain pending. See
+[authority](README.md).
 
 The [repaired first-M1 qualification](reviews/M1-repair-qualification.md) retains its
 original scope and identity. The original historical preservation failure remains
@@ -40,9 +42,9 @@ Each row is a status pointer, not a reduced acceptance definition.
 | Proof | Witness / definition | Status |
 | --- | --- | --- |
 | FP-01 | [Canonical preservation through new contracts](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 portion REQUALIFIED; full FP unaccepted; witness report |
-| FP-02 | [Noncanonical multi-layer tiny transformer](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 native multilayer execution, identity and inspector/replay QUALIFIED; M2 world structure pending |
+| FP-02 | [Noncanonical multi-layer tiny transformer](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 native multilayer execution/inspector/replay and M2-A world structure QUALIFIED; remaining M2 interaction/change-surface qualification pending |
 | FP-03 | [Native Pythia execution, selected internals, generation and disconnected replay](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 native live/disconnected portion REQUALIFIED; broader generation/cache proof pending |
-| FP-04 | [MLP/SGD plus grouped query/KV-axis numerical fixture](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 numeric MLP/SGD/state and grouped-axis witnesses QUALIFIED; full foundation/M5 disposition pending |
+| FP-04 | [MLP/SGD plus grouped query/KV-axis numerical fixture](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 numeric MLP/SGD/state and grouped-axis witnesses QUALIFIED; M2-B numeric MLP shared-world path QUALIFIED; grouped-axis world fallback/full foundation/M5 disposition pending |
 | FP-05 | [Shape-only, unknown and opaque states](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 shape-only, opaque computation and unsupported fallback QUALIFIED; later coverage/M5 disposition pending |
 | FP-06 | [Actual activation and composite parameterized replacement](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | NOT_RUN |
 | FP-07 | [Head ablation and donor activation patch](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | NOT_RUN |
@@ -50,7 +52,7 @@ Each row is a status pointer, not a reduced acceptance definition.
 | FP-09 | [Repeated invocations and bounded generation/cache correctness](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | NOT_RUN |
 | FP-10 | [Legacy replay, export/import and representation-aware comparison](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 legacy and new-codec replay/state portions QUALIFIED; broader comparison/durability pending |
 | FP-11 | [Async, retention, transport and inert-import failure controls](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 affected receipt/stale/import/transport controls REQUALIFIED; broader M4 failures/retention pending |
-| FP-12 | [Shared visual/explanation routes and extension change surface](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 same-inspector/source/fallback change surface QUALIFIED; M2 world and M5 review pending |
+| FP-12 | [Shared visual/explanation routes and extension change surface](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 same-inspector/source/fallback and M2-A/M2-B MicroGPT/MLP world change surfaces QUALIFIED; remaining M2 witnesses and M5 review pending |
 
 Native Pythia is a required real second transformer executing through the shared
 request/evidence path, with pinned native comparison, useful internal evidence and
@@ -66,7 +68,7 @@ and [native acceptance](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#4
 | --- | --- | --- |
 | M0 | [freeze invariants and the migration map, not untested APIs](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m0-freeze-invariants-and-the-migration-map-not-untested-apis) | PREPARATION COMPLETE; slice report migration map |
 | M1 | [contracts, codecs, and dual producers early](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m1-contracts-codecs-and-dual-producers-early) | COMPLETE — scoped engineering qualification; no M2/M5 or full FP acceptance |
-| M2 | [topology, world, and interaction separation](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m2-topology-world-and-interaction-separation) | IN PROGRESS — M2-A canonical + multilayer MicroGPT shared-world increment qualified; later M2 witnesses pending |
+| M2 | [topology, world, and interaction separation](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m2-topology-world-and-interaction-separation) | IN PROGRESS — M2-A canonical/multilayer MicroGPT and M2-B numeric MLP/SGD shared-world increments qualified; grouped/opaque fallback, Pythia world and integrated M2 interaction/change-surface qualification pending |
 | M3 | [variants and experiments](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m3-variants-and-experiments) | NOT_RUN |
 | M4 | [durable payloads and failure boundaries](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m4-durable-payloads-and-failure-boundaries) | NOT_RUN |
 | M5 | [independent foundation review](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m5-independent-foundation-review) | NOT_RUN |
@@ -258,3 +260,49 @@ grouped/shape-only/opaque fallback, Pythia collapsed/selected-layer views, and t
 remaining integrated M2 interaction/change-surface work are still pending. M5,
 foundation acceptance, unfamiliar-user testing, workshop and release gates remain
 ungranted.
+
+## M2-B numeric MLP shared-world increment
+
+M2 remains **IN PROGRESS**. The qualified `mlp-native-v1` float32 witness now enters
+the same application shell, retained-evidence navigation, semantic identity, source
+access and disconnected replay path as MicroGPT. Generic topology now carries an
+opaque registered presentation identity rather than enumerating MicroGPT layouts;
+the shared selection is node/port/phase plus integration-owned typed coordinates;
+and registered world composition may return a non-MicroGPT semantic world and its
+presentation without pretending it is a `ForwardModel`. MicroGPT retains its
+specialized layer/position/head/key/feature controls and both qualified layouts.
+
+The MLP presentation consumes the admitted M1 evidence directly. Its forward world
+shows `inputs → hidden.pre → hidden → prediction → squared.error → loss`, the target
+edge, and distinct `w1`/`b1`/`w2`/`b2` parameter references. Training preserves
+objective, backward gradient, parameter-state and optimizer-update relationship
+kinds. The selected nonzero `b2[0]` transition was: before `-0.125`, recorded gradient
+`0.625`, recorded representable delta `-0.0390625`, and after `-0.1640625`; this equals
+`float32(-0.125 - 0.0625 * 0.625)`. The world identifies SGD, learning rate `0.0625`,
+zero momentum, constant schedule and disposable state. It exposes no token/head/QKV,
+Adam, canonical candidate or intervention controls.
+
+Application runtime is
+`sha256:262e24160d1b16935c93400803ecfed1ddfcbd076603b6647aa87cd2daeee46f`.
+Qualification passed 153 unit/integration cases without skips, including M1 codec and
+M2-A regressions; 17 portable reference tests plus strict conformance; byte-exact
+canonical regeneration; typecheck; example; a fresh task-owned Vite build; and two
+native output-protection tests. The existing pinned PyTorch witness qualification
+passed 70 independent tensor comparisons with zero maximum absolute difference and
+nine malformed refusals. Bounded native transport passed ten origin/host/request/
+epoch checks. Scoped Playwright passed the live MLP route, six M2-A/retained canonical
+routes and, after verified bridge shutdown, saved MLP replay with zero native requests.
+
+Visual inspection covered the MLP prediction/source path and nonzero SGD transition
+at 1920×1080, return to MicroGPT and saved MLP replay at 1280×720 with reduced motion,
+and retained multilayer parameter/replay views at both representative sizes. The
+Instrument Graphite/Plex language and continuous shell remain; no visual redesign was
+started. Aggregate acceptance, installation isolation, benchmarks, soaks and the broad
+browser matrix were intentionally not run because this bounded M2 slice exercised the
+affected integration, retained canonical routes and exact numerical/reference closure.
+
+This increment does not complete M2 or any full foundation proof. Grouped-axis and
+shape-only/opaque world fallback, native Pythia collapsed/selected-layer world views,
+the remaining integrated interaction/change-surface qualification and all later M2
+requirements remain pending. M3–M6, independent foundation acceptance, unfamiliar-user
+testing, workshop and release gates remain ungranted.
