@@ -105,4 +105,5 @@ export function bindMlpWorld(model:MlpWorldModel,changed:()=>void,render:()=>voi
   root.querySelector('#mlp-operation')?.addEventListener('change',event=>choose((event.target as HTMLSelectElement).value));
   root.querySelectorAll<HTMLElement>('[data-mlp-point]').forEach(el=>{const action=()=>choose(el.dataset.mlpPoint!);el.addEventListener('click',action);el.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();action();}});});
   root.querySelectorAll<HTMLSelectElement>('[data-mlp-coordinate]').forEach(el=>el.addEventListener('change',()=>{model.selection.coordinates[el.dataset.mlpCoordinate!]=Number(el.value);changed();render();}));
+  root.querySelector('#spatial-home')?.addEventListener('click',()=>{Object.assign(model.selection,mlpDefaultSelection(model.run));changed();render();document.querySelector<HTMLElement>('#spatial-home')?.focus({preventScroll:true});});
 }

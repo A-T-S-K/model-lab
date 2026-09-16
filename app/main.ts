@@ -1743,6 +1743,7 @@ async function reset(cancelled: boolean, clear = false): Promise<void> {
   error = "";
   const acceptedAtCancellation = cancelled ? lastAcceptedResult : undefined;
   if (clear) {
+    spatialEvidenceRunId = ""; spatialEvidenceReplay = false; clearWorldSelection();
     spatialExperimentId = ""; spatialPresenter.resetVisitor();
     beforeForward = undefined; beforeForwardLocation = undefined; beforeForwardExperiment = "";
     inspectedExecutionRevision = undefined; readyComparison = true; clearDisplayedInspection();
