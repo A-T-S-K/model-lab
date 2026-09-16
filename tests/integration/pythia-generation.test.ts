@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {EvidenceStore,parseEvidence,serializeEvidence} from '../../trace/evidence.js';
+import {EvidenceStore,evidenceHash,parseEvidence,serializeEvidence} from '../../trace/evidence.js';
 import {integrations} from '../../trace/integrations.js';
 
 const path=process.env.NATIVE_GENERATION_RECORDING;
 async function recording(){return JSON.parse(await readFile(path!,'utf8'));}
+function hasLargeNumberArray(value:unknown):boolean{return Array.isArray(value)?(value.length>256&&value.every(item=>typeof item==='number'))||value.some(hasLargeNumberArray):Boolean(value&&typeof value==='object'&&Object.values(value).some(hasLargeNumberArray));}
 
 test('native bounded generation admits, replays and keeps invocation/step/epoch/selection identities separate',{skip:!path},async()=>{
   const envelope=await recording(),store=new EvidenceStore(integrations()),run=await store.admit(envelope),record=envelope.record,generation=record.generation;
@@ -17,9 +18,14 @@ test('native bounded generation admits, replays and keeps invocation/step/epoch/
   assert.deepEqual(generation.invocations[0].effectivePrefixIds,[510,5798,2206]);
   assert.deepEqual(generation.invocations[1].effectivePrefixIds,[510,5798,2206]);
   assert.deepEqual(generation.invocations[2].effectivePrefixIds,[510,5798,2206,327]);
-  for(const step of [1,2]){const invocation=generation.invocations[step],logits=store.point(run.id,invocation.choice.sourceLogitsOccurrence),choice=store.point(run.id,`generation:${step}/choice`);assert.equal(logits.shape[0],50304);assert.equal(logits.origin,'observed');assert.equal(choice.origin,'derived');assert.deepEqual(choice.dependencies,[logits.id]);assert.equal(choice.values![0],invocation.choice.chosenOutputIndex);assert.equal(invocation.choice.distribution.support,50304);assert(invocation.choice.distribution.omittedMass>0);}
+  const originalLogits=record.run.points.filter((point:any)=>point.id.endsWith('/logits'));
+  for(const point of originalLogits){const retained=store.point(run.id,point.id);assert.equal(retained.shape[0],50304);assert.equal(retained.origin,'observed');assert.equal(retained.values,null);assert(retained.payload);assert.equal(retained.payload.byteLength,50304*4);assert.equal(retained.payload.dtype,'float32');assert(store.payloads.has(retained.payload.contentId));assert.deepEqual(store.slice(run.id,point.id,50303,1),[point.values[50303]]);}
+  for(const step of [1,2]){const invocation=generation.invocations[step],logits=store.point(run.id,invocation.choice.sourceLogitsOccurrence),choice=store.point(run.id,`generation:${step}/choice`);assert.equal(choice.origin,'derived');assert.deepEqual(choice.dependencies,[logits.id]);assert.equal(choice.values![0],invocation.choice.chosenOutputIndex);assert.equal(invocation.choice.distribution.support,50304);assert(invocation.choice.distribution.omittedMass>0);}
   assert.deepEqual(generation.cache,{capability:'unsupported',qualified:false,strategy:'full-prefix-reexecution',useCache:false,retainedState:false});
-  const replay=new EvidenceStore(integrations()),replayed=await replay.admit(parseEvidence(serializeEvidence(envelope)));assert.deepEqual(replayed,run);assert.deepEqual(replay.slice(run.id,'generation:2/logits',50303,1),store.slice(run.id,'generation:2/logits',50303,1));
+  assert.equal(store.contentId(run.id),await evidenceHash(envelope));assert.equal(store.hasEnvelope(run.id),false);assert.throws(()=>store.envelope(run.id),/not retained/);
+  assert.equal(hasLargeNumberArray({run,metadata:store.metadataEnvelope(run.id)}),false);assert(!run.points.some(point=>Array.isArray(point.values)&&point.values.length>256));
+  const qkvOriginal=record.run.points.find((point:any)=>point.id==='generation:2/attention.qkv'),qkv=store.point(run.id,qkvOriginal.id);assert(qkv.payload);assert.equal(qkv.values,null);assert.deepEqual(store.slice(run.id,qkv.id,511,8),qkvOriginal.values.slice(511,519));
+  const replay=new EvidenceStore(integrations()),replayed=await replay.admit(parseEvidence(serializeEvidence(envelope)));assert.deepEqual(replayed,run);assert.deepEqual(replay.slice(run.id,'generation:2/logits',50303,1),store.slice(run.id,'generation:2/logits',50303,1));assert.equal(replayed.id,record.run.id);assert.equal(replayed.request.requestId,record.run.request.requestId);
 });
 
 test('same deterministic generation in another request remains a distinct execution occurrence',{skip:!path},async()=>{

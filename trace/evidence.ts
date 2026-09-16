@@ -1,8 +1,11 @@
 import { canonicalBytes } from '../archive/snapshot.js';
 import { immutableCopy } from './types.js';
+import { INLINE_VALUE_LIMIT, InMemoryNumericalPayloadStore, MAX_PAYLOAD_SLICE_VALUES, validatePayloadForPoint,
+  type NumericalPayloadDescriptor, type NumericalPayloadStorage } from './payload.js';
 
 export const MAX_RECORD_BYTES = 4_000_000;
 export const MAX_VALUES = 200_000;
+export const MAX_RETAINED_CODEC_METADATA_BYTES = 256_000;
 export interface NumericInput { kind: 'numeric'; values: number[][]; targets: number[][] }
 export function validateNumericInput(x: unknown): NumericInput {
   const r=fields(x,['kind','values','targets']);check(r.kind==='numeric','Numeric input kind');
@@ -44,6 +47,8 @@ export interface EvidencePoint {
   id: string; node: string; port: string; invocation: string; phase: string;
   shape: number[]; axes: Axis[]; dtype: 'float64' | 'float32' | 'int32'; encoding: 'json-numbers-row-major';
   values: number[] | null; origin: 'observed' | 'derived' | 'recomputed'; availability: string;
+  /** Present only after admission when large inline producer values have become retained bytes. */
+  payload?: NumericalPayloadDescriptor;
   source: { file: string; symbol: string; revision: string }; owners: string[]; dependencies: string[];
   semantics: string; capabilities: string[];
 }
@@ -55,7 +60,13 @@ export interface EvidenceRun {
   points: EvidencePoint[]; limits: string[];
 }
 export interface EvidenceEnvelope { version: 1; codec: string; record: unknown }
-export interface EvidenceCodec { id: string; decode(record: unknown): Promise<EvidenceRun>; compare?(before:unknown,after:unknown):{compatible:boolean;reasons:readonly string[]} }
+export interface EvidenceCodec {
+  id: string;
+  decode(record: unknown): Promise<EvidenceRun>;
+  /** Bounded, non-executable metadata retained when the original envelope contains payload-backed arrays. */
+  retainMetadata?(record: unknown): unknown;
+  compare?(before:unknown,after:unknown):{compatible:boolean;reasons:readonly string[]};
+}
 export class IntegrationRegistry {
   #codecs = new Map<string, EvidenceCodec>();
   register(codec: EvidenceCodec): this { check(!this.#codecs.has(codec.id),'Duplicate codec'); this.#codecs.set(codec.id,codec); return this; }
@@ -99,34 +110,56 @@ export function validateRun(x: unknown): EvidenceRun {
   for(const p of r.points)for(const d of p.dependencies)check(ids.has(d),'Missing dependency reference');
   return immutableCopy(r) as unknown as EvidenceRun;
 }
+function retainBoundedCodecMetadata(value:unknown):unknown{
+  const copy=immutableCopy(value),json=JSON.stringify(copy);check(new TextEncoder().encode(json).length<=MAX_RETAINED_CODEC_METADATA_BYTES,'Retained codec metadata byte budget');
+  const visit=(item:unknown,depth=0):void=>{check(depth<=32,'Retained codec metadata nesting budget');if(Array.isArray(item)){check(!(item.length>INLINE_VALUE_LIMIT&&item.every(value=>typeof value==='number')),'Retained codec metadata cannot duplicate a large numerical payload');item.forEach(value=>visit(value,depth+1));}else if(item&&typeof item==='object')Object.values(item).forEach(value=>visit(value,depth+1));};visit(copy);return copy;
+}
 /** Admission owns immutable evidence. Registered codecs, never imported code, interpret records. */
 export class EvidenceStore {
-  #runs=new Map<string,{run:EvidenceRun;envelope:EvidenceEnvelope;contentId:string}>();
-  constructor(readonly registry:IntegrationRegistry){}
+  #runs=new Map<string,{run:EvidenceRun;envelope?:EvidenceEnvelope;metadata:EvidenceEnvelope;contentId:string}>();
+  constructor(readonly registry:IntegrationRegistry,readonly payloads:NumericalPayloadStorage=new InMemoryNumericalPayloadStore()){}
   async admit(value:unknown, expected?:ExecutionRequest, current:()=>boolean=()=>true):Promise<EvidenceRun>{
     const envelope=fields(value,['version','codec','record']);check(envelope.version===1,'Unknown envelope version');text(envelope.codec);
     const json=JSON.stringify(value);check(new TextEncoder().encode(json).length<=MAX_RECORD_BYTES,'Recording byte budget');
     const copy=immutableCopy(value) as EvidenceEnvelope;
-    const run=validateRun(await this.registry.codec(copy.codec).decode(copy.record));
+    const codec=this.registry.codec(copy.codec),run=validateRun(await codec.decode(copy.record));
     if(expected)check(JSON.stringify(run.request)===JSON.stringify(validateRequest(expected)),'Stale or cross-request receipt');
     const contentId=await evidenceHash(copy);
     const old=this.#runs.get(run.id);check(!old||old.contentId===contentId,'Conflicting immutable run identity');
     check(current(),"Stale evidence admission");
-    this.#runs.set(run.id,{run,envelope:immutableCopy(copy),contentId});return run;
+    let payloadBacked=false;const points:EvidencePoint[]=[];
+    for(const point of run.points){
+      if(point.availability==='available'&&point.values&&point.values.length>INLINE_VALUE_LIMIT){
+        const payload=await this.payloads.put(point.dtype,point.values);validatePayloadForPoint(payload,point.dtype,point.shape);payloadBacked=true;
+        points.push({...point,values:null,payload});
+      }else points.push(point);
+    }
+    const retained=immutableCopy({...run,points}) as EvidenceRun;
+    const metadata=payloadBacked?immutableCopy({version:1,codec:copy.codec,record:retainBoundedCodecMetadata(codec.retainMetadata?.(copy.record)??{
+      kind:'payload-backed-evidence-metadata',runId:run.id,originalEnvelopeRetained:false,
+    })}) as EvidenceEnvelope:copy;
+    check(current(),"Stale evidence admission");
+    this.#runs.set(run.id,{run:retained,...(payloadBacked?{}:{envelope:copy}),metadata,contentId});return retained;
   }
   get(id:string):EvidenceRun{const entry=this.#runs.get(id);check(entry,'Missing run reference');return entry.run;}
   contentId(id:string):string{this.get(id);return this.#runs.get(id)!.contentId;}
   compare(before:string,after:string):{compatible:boolean;reasons:readonly string[]}{
     const a=this.get(before),b=this.get(after);
     if(a.integration!==b.integration||a.definition!==b.definition)return {compatible:false,reasons:['Model definition or representation differs; no coordinate mapping qualified']};
-    const codec=this.registry.codec(this.envelope(before).codec);
-    return codec.compare?.(this.envelope(before).record,this.envelope(after).record)??{compatible:false,reasons:['No comparison policy qualified for this representation']};
+    const codec=this.registry.codec(this.metadataEnvelope(before).codec);
+    if(!codec.compare)return {compatible:false,reasons:['No comparison policy qualified for this representation']};
+    if(!this.hasEnvelope(before)||!this.hasEnvelope(after))return {compatible:false,reasons:['Comparison requires original evidence unavailable from payload-backed retained storage; no global tensor materialization performed']};
+    return codec.compare(this.envelope(before).record,this.envelope(after).record);
   }
   list():readonly EvidenceRun[]{return [...this.#runs.values()].map(e=>e.run);}
-  envelope(id:string):EvidenceEnvelope{this.get(id);return this.#runs.get(id)!.envelope;}
+  hasEnvelope(id:string):boolean{this.get(id);return this.#runs.get(id)!.envelope!==undefined;}
+  envelope(id:string):EvidenceEnvelope{this.get(id);const envelope=this.#runs.get(id)!.envelope;check(envelope,'Original envelope is not retained for payload-backed evidence; portable export is an M4-B2 concern');return envelope;}
+  metadataEnvelope(id:string):EvidenceEnvelope{this.get(id);return this.#runs.get(id)!.metadata;}
   slice(runId:string,pointId:string,start:number,count:number):readonly number[]{
-    const p=this.point(runId,pointId);integer(start);integer(count,256);check(p.availability==='available'&&p.values,'Point not captured');
-    check(start+count<=p.values.length,'Slice out of bounds');return Object.freeze(p.values.slice(start,start+count));
+    const p=this.point(runId,pointId);integer(start);integer(count,MAX_PAYLOAD_SLICE_VALUES);check(p.availability==='available','Point not captured');
+    const length=pointElementCount(p);check(start+count<=length,'Slice out of bounds');
+    if(p.payload){validatePayloadForPoint(p.payload,p.dtype,p.shape);return this.payloads.slice(p.payload,start,count);}
+    check(p.values,'Point numerical storage missing');return Object.freeze(p.values.slice(start,start+count));
   }
   point(runId:string,pointId:string):EvidencePoint{const p=this.get(runId).points.find(p=>p.id===pointId);check(p,'Point not captured in this run');return p;}
   capability(runId:string,pointId:string,action:string,connected=false):string{
@@ -143,8 +176,10 @@ export class EvidencePlayer {
   get current(){return this.run.points[this.index]!;}
   seek(index:number){integer(index,this.run.points.length-1);this.index=index;return this.current;}
   step(){return this.seek((this.index+1)%this.run.points.length);}
-  slice(start=0,count=16){return this.store.slice(this.runId,this.current.id,start,Math.min(count,this.current.values?.length??0));}
+  slice(start=0,count=16){return this.store.slice(this.runId,this.current.id,start,Math.min(count,this.current.availability==='available'?pointElementCount(this.current):0));}
 }
+
+export function pointElementCount(point:EvidencePoint):number{return point.shape.reduce((product,size)=>product*size,1);}
 
 /** Versioned JSON transport preserves IEEE negative zero, including snapshot hashes. */
 export function serializeEvidence(value:EvidenceEnvelope):string {

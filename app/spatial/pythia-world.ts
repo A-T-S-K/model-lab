@@ -1,10 +1,10 @@
-import type {EvidenceEnvelope,EvidencePoint,EvidenceRun} from '../../trace/evidence.js';
+import type {EvidenceEnvelope,EvidencePoint,EvidenceRun,EvidenceStore} from '../../trace/evidence.js';
 import currentProfile from '../../research/pythia/profile.json';
 import generationProfile from '../../research/pythia/profile-generation.json';
 import legacyProfile from '../../research/pythia/profile-legacy.json';
 import nativeSource from '../../research/pythia/source.json';
 import {escapeHtml as esc} from '../views/evidence.js';
-import {fullSupportDistribution} from '../views/full-support-distribution.js';
+import {fullSupportDistributionFromSlices} from '../views/full-support-distribution.js';
 import {composeWorld,semanticAddressId,type RegisteredWorldPresentation,type SemanticAddress,type SemanticRelationship,type SemanticWorld,type WorldDescriptor,type WorldSelection} from './topology.js';
 
 export const PYTHIA_PRESENTATION='pythia-six-block-v1';
@@ -15,13 +15,15 @@ const generatedProfile={...currentProfile,profile:generationProfile.profile,runt
 const profiles=[generatedProfile,currentProfile,legacyProfile] as readonly Profile[];
 const title:Record<string,string>={tokens:'Tokenizer IDs',embedding:'Token embedding','residual.input':'Block 1 residual input','norm.attention':'Attention LayerNorm','norm.mlp':'MLP LayerNorm','attention.qkv':'Fused QKV · pre-RoPE','attention.weights':'Attention probabilities','attention.output':'Projected attention output','mlp.output':'GELU MLP output','residual.output':'Parallel residual output',logits:'Final-position logits',choice:'Greedy chosen output index'};
 const baseId=(point:EvidencePoint)=>point.id.includes('/')?point.id.slice(point.id.lastIndexOf('/')+1):point.id;
-type GenerationInvocation={identity:string;kind:'prompt'|'generated';generatedStep:number;effectivePrefixIds:number[];finalModelPosition:number;pointIds:string[];dependsOnChoice:string|null;choice?:{chosenOutputIndex:number;tokenizerLabelAvailable:boolean;tokenizerLabel:string|null;generatedPosition:number;stopReason:string|null;sourceLogitsOccurrence:string}};
+type DistributionSummary={support:number;top:{index:number;logit:number;probability:number}[];omittedMass:number;selectedLogit:number;selectedProbability:number};
+type GenerationInvocation={identity:string;kind:'prompt'|'generated';generatedStep:number;effectivePrefixIds:number[];finalModelPosition:number;pointIds:string[];dependsOnChoice:string|null;choice?:{chosenOutputIndex:number;tokenizerLabelAvailable:boolean;tokenizerLabel:string|null;generatedPosition:number;stopReason:string|null;sourceLogitsOccurrence:string;distribution:DistributionSummary}};
 type GenerationReceipt={recipe:{identity:string;requested:{maxNewTokens:number};effective:{maxNewTokens:number}};cache:{capability:string;strategy:string;useCache:boolean;retainedState:boolean};cancellationEpoch:number;invocations:GenerationInvocation[];generated:{tokenIds:number[];tokenizerLabels:(string|null)[]};termination:{reason:string;generatedTokens:number}};
 function generationReceipt(envelope:EvidenceEnvelope):GenerationReceipt|undefined{const record=envelope.record as {kind?:string;generation?:GenerationReceipt};return record?.kind==='generation-v1'?record.generation:undefined;}
 
 export interface PythiaWorldModel {
   presentation:RegisteredWorldPresentation;world:SemanticWorld;source:{sourceRunId:string;relationship:string};valid:boolean;
   run:EvidenceRun;envelope:EvidenceEnvelope;selection:WorldSelection;selected:EvidencePoint;profile:Profile;memory:CoordinateMemory;
+  store?:EvidenceStore;
 }
 
 function profileFor(run:EvidenceRun):Profile{
@@ -66,9 +68,9 @@ function initialize(run:EvidenceRun,selection:WorldSelection){
   if(!memory||memory.identity!==identity||!selected){memory={identity,values:new Map(),block:1,refusal:''};memories.set(selection,memory);const point=run.points.find(p=>baseId(p)==='residual.input')!;Object.assign(selection,selectionFor(point,undefined,selection,memory));selected=point;}
   return {memory,selected};
 }
-export function composePythiaWorld(run:EvidenceRun,envelope:EvidenceEnvelope,selection:WorldSelection,replay=false):PythiaWorldModel{
+export function composePythiaWorld(run:EvidenceRun,envelope:EvidenceEnvelope,selection:WorldSelection,replay=false,store?:EvidenceStore):PythiaWorldModel{
   const profile=profileFor(run),initialized=initialize(run,selection),d=descriptor(run,profile),resolved=resolvePythiaSelection(run,selection),model={} as PythiaWorldModel;
-  Object.assign(model,{world:{descriptor:d,run:run.id,nodes:composeWorld(d,run.id,'prefill:0','inference'),relationships:relationships(run,profile),capabilities:['predict','bounded-inspection','source','saved-replay']},source:{sourceRunId:run.id,relationship:replay?'REPLAY':'HISTORICAL'},valid:resolved.valid,run,envelope,selection,selected:initialized.selected,profile,memory:initialized.memory});
+  Object.assign(model,{world:{descriptor:d,run:run.id,nodes:composeWorld(d,run.id,'prefill:0','inference'),relationships:relationships(run,profile),capabilities:['predict','bounded-inspection','source','saved-replay']},source:{sourceRunId:run.id,relationship:replay?'REPLAY':'HISTORICAL'},valid:resolved.valid,run,envelope,selection,selected:initialized.selected,profile,memory:initialized.memory,store});
   model.presentation={id:PYTHIA_PRESENTATION,viewport:{x:0,y:0,width:3000,height:1350},render:state=>renderPythiaWorld(model,state.status,state.error,state.replay),bind:(changed,render)=>bindPythiaWorld(model,changed,render)};return model;
 }
 
@@ -99,12 +101,20 @@ function pointDetail(model:PythiaWorldModel,p:EvidencePoint,value:number|undefin
   if(id==='choice')return `<section class="pythia-qkv-warning"><h3>Derived generation-policy decision</h3><p>Chosen full output index <strong>${value}</strong>. This is deterministic argmax evidence derived from the referenced observed logits, not a model activation.</p></section>`;
   return '';
 }
+function pointValue(model:PythiaWorldModel,p:EvidencePoint,index:number):number|undefined{
+  if(p.availability!=='available')return undefined;
+  return model.store?model.store.slice(model.run.id,p.id,index,1)[0]:p.values?.[index];
+}
 function distribution(model:PythiaWorldModel,p:EvidencePoint){
-  if(baseId(p)!=='logits'||!p.values)return '';const index=Number(model.selection.coordinates.output_index),d=fullSupportDistribution(p.values,index),label=index>=model.profile.architecture.tokenizerSize?`No tokenizer label exists: index ≥ ${model.profile.architecture.tokenizerSize}`:'Tokenizer label not retained in this evidence; no label invented';
-  return `<section class="pythia-distribution"><h3>Derived full-support distribution</h3><p>Stable softmax denominator includes all <strong>${d.size}</strong> observed logits. Top 5 is a bounded view and is not renormalized.</p><table data-testid="pythia-topk"><thead><tr><th>Output index</th><th>Observed logit</th><th>Derived probability</th></tr></thead><tbody>${d.top.map(row=>`<tr><td>${row.index}</td><td>${row.logit}</td><td>${row.probability}</td></tr>`).join('')}</tbody></table><p data-testid="pythia-omitted-mass">Omitted probability mass: ${d.omittedMass}</p><p data-testid="pythia-selected-output">Exact output index ${index}: observed logit ${d.selected.logit}; derived probability ${d.selected.probability}. ${label}.</p></section>`;
+  if(baseId(p)!=='logits'||p.availability!=='available')return '';const index=Number(model.selection.coordinates.output_index),label=index>=model.profile.architecture.tokenizerSize?`No tokenizer label exists: index ≥ ${model.profile.architecture.tokenizerSize}`:'Tokenizer label not retained in this evidence; no label invented';
+  const choice=generationReceipt(model.envelope)?.invocations.find(invocation=>invocation.identity===p.invocation)?.choice;
+  if(choice){const summary=choice.distribution,logit=pointValue(model,p,index),selected=index===choice.chosenOutputIndex?` retained full-support probability ${summary.selectedProbability}`:' probability is not retained for this arbitrary index; no unrequested full-tensor materialization';
+    return `<section class="pythia-distribution"><h3>Retained full-support distribution summary</h3><p>Retained selection evidence covers all <strong>${summary.support}</strong> observed logits. Top 5 is a bounded view and is not renormalized.</p><table data-testid="pythia-topk"><thead><tr><th>Output index</th><th>Observed logit</th><th>Derived probability</th></tr></thead><tbody>${summary.top.map(row=>`<tr><td>${row.index}</td><td>${row.logit}</td><td>${row.probability}</td></tr>`).join('')}</tbody></table><p data-testid="pythia-omitted-mass">Omitted probability mass: ${summary.omittedMass}</p><p data-testid="pythia-selected-output">Exact output index ${index}: observed logit ${logit};${selected}. ${label}.</p></section>`;}
+  const size=p.shape.reduce((product,value)=>product*value,1),d=fullSupportDistributionFromSlices(size,index,(start,count)=>model.store?model.store.slice(model.run.id,p.id,start,count):p.values!.slice(start,start+count));
+  return `<section class="pythia-distribution"><h3>Derived full-support distribution</h3><p>Stable softmax denominator includes all <strong>${d.size}</strong> observed logits through bounded scans. Top 5 is a bounded view and is not renormalized.</p><table data-testid="pythia-topk"><thead><tr><th>Output index</th><th>Observed logit</th><th>Derived probability</th></tr></thead><tbody>${d.top.map(row=>`<tr><td>${row.index}</td><td>${row.logit}</td><td>${row.probability}</td></tr>`).join('')}</tbody></table><p data-testid="pythia-omitted-mass">Omitted probability mass: ${d.omittedMass}</p><p data-testid="pythia-selected-output">Exact output index ${index}: observed logit ${d.selected.logit}; derived probability ${d.selected.probability}. ${label}.</p></section>`;
 }
 export function renderPythiaWorld(model:PythiaWorldModel,status:string,error:string,replay:boolean){
-  const p=model.selected,resolved=resolvePythiaSelection(model.run,model.selection),value=resolved.valid&&resolved.index!==undefined?p.values?.[resolved.index]:undefined,addressValue=address(model.run,p,model.selection.coordinates),a=model.profile.architecture;
+  const p=model.selected,resolved=resolvePythiaSelection(model.run,model.selection),value=resolved.valid&&resolved.index!==undefined?pointValue(model,p,resolved.index):undefined,addressValue=address(model.run,p,model.selection.coordinates),a=model.profile.architecture;
   const coverage=Array.from({length:a.layerCount},(_,i)=>`<span class="${i===a.capturedLayer?'observed':'unavailable'}">block ${i}: ${i===a.capturedLayer?'observed detail':'structure only / uncaptured'}</span>`).join(''),receipt=generationReceipt(model.envelope),invocationPoints=model.run.points.filter(q=>q.invocation===p.invocation);
   const timeline=receipt?`<section class="pythia-generation" data-testid="pythia-generation"><label>Generation occurrence<select id="pythia-invocation">${receipt.invocations.map(item=>`<option value="${item.identity}" ${item.identity===p.invocation?'selected':''}>${item.kind==='prompt'?'prompt / prefill':`generated step ${item.generatedStep}`} · ${item.identity}</option>`).join('')}</select></label>${receipt.invocations.map(item=>item.identity===p.invocation?`<p data-testid="pythia-effective-prefix"><strong>${item.kind==='prompt'?'Prompt processing':'Generated-token invocation'}</strong> · invocation ${item.identity} · generated step ${item.generatedStep} · model position ${item.finalModelPosition}<br>Effective prefix IDs: [${item.effectivePrefixIds.join(', ')}]${item.choice?`<br>Argmax choice: ${item.choice.chosenOutputIndex}${item.choice.tokenizerLabelAvailable?` · ${esc(item.choice.tokenizerLabel??'')}`:' · unmapped / unlabeled'} · generated position ${item.choice.generatedPosition}${item.choice.stopReason?` · stop ${item.choice.stopReason}`:''}`:''}</p>`:'').join('')}<p data-testid="pythia-cache-policy"><strong>uncached · full prefix reexecuted</strong> · cache unsupported/unqualified · use_cache=False · no retained KV state · cancellation epoch ${receipt.cancellationEpoch}</p></section>`:'';
   const available=receipt?'<span>Predict</span><span>Bounded Generate</span>':'<span>Predict</span>',generationRefusal=receipt?'':'<span>Generation</span>';

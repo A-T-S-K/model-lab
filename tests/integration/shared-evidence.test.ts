@@ -36,10 +36,15 @@ test('typed slices, immutable references, incompatible codecs, malformed evidenc
   const result=await canonical();const store=new EvidenceStore(integrations());
   const envelope={version:1 as const,codec:'microgpt-legacy-v1',record:{run:result.run,snapshot:result.snapshots[0]}};
   const run=await store.admit(envelope),point=run.points.find(p=>p.values?.length)!;
+  assert.deepEqual(store.slice(run.id,point.id,0,1),point.values!.slice(0,1));
+  assert.deepEqual(store.slice(run.id,point.id,point.values!.length-1,1),point.values!.slice(-1));
   assert.throws(()=>store.slice(run.id,point.id,-1,1),/integer/);
+  assert.throws(()=>store.slice(run.id,point.id,0,-1),/integer/);
   assert.throws(()=>store.slice(run.id,point.id,0,257),/integer/);
   assert.throws(()=>store.slice(run.id,point.id,point.values!.length,1),/bounds/);
+  assert.throws(()=>store.slice(run.id,point.id,point.values!.length+1,0),/bounds/);
   assert.throws(()=>store.slice('other-run',point.id,0,1),/Missing run/);
+  assert.throws(()=>store.slice(run.id,'missing-point',0,1),/not captured/);
   assert.match(store.capability(run.id,'uncaptured','scalar'),/Not captured.*disconnected/);
   assert.match(store.capability(run.id,point.id,'write',true),/Unsupported write/);
   await assert.rejects(store.admit({...envelope,codec:'arbitrary-imported-code'}),/Unregistered/);

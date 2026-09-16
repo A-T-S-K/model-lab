@@ -136,5 +136,7 @@ export async function readLegacyEvidence(record: unknown): Promise<EvidenceRun> 
 export function integrations():IntegrationRegistry {
   return registerWitnessCodecs(new IntegrationRegistry().register(noncanonicalCodec)).register({id:'microgpt-legacy-v1',decode:readLegacyEvidence,compare(before,after){return compareRuns((before as {run:RecordedRun}).run,(after as {run:RecordedRun}).run);}}).register({id:'pythia-native-v1',async decode(record){
     return object(record).kind==='generation-v1'?validateGeneration(record):validatePrediction(record);
+  },retainMetadata(record){
+    const value=object(record);return value.kind==='generation-v1'?{kind:'generation-v1',generation:value.generation}:{kind:'prediction-v1'};
   }});
 }

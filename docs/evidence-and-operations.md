@@ -4,7 +4,9 @@ This guide describes the current MicroGPT implementation, not implemented cross-
 contracts. The [target contracts](design/Model-Lab-Refined-Platform-Design-v2.md#5-execution-and-evidence-contracts)
 and [migration plan](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#6-migration-stages-and-ownership)
 remain unqualified; consult [authority](README.md) and [status](foundation-status.md).
-Versioned codecs, typed payload diversity and per-point capabilities are target work.
+Versioned codecs, typed payload diversity and per-point capabilities are implemented
+foundation slices whose broader portable-archive and failure-boundary qualification is
+tracked in the foundation ledger.
 
 Model Lab keeps execution, saved evidence, and explanation separate. The source contracts live in [trace/types.ts](../trace/types.ts); the mathematical runtime lives in [model/](../model/).
 
@@ -29,6 +31,24 @@ Availability is independent of provenance:
 | `budget_exceeded` | The capture limits prevented retaining it. |
 
 Unavailable artifacts store `values: null`. The recorder separately tracks stored numeric values, dropped artifact count, and budget exhaustion. UI consumers must preserve those distinctions instead of filling gaps with zeros or reconstructing invented observations.
+
+At the shared `EvidenceStore` boundary, registered codecs first validate the original
+producer envelope. Admission then keeps available payloads of at most 256 values inline
+and converts larger available payloads to immutable content-addressed bytes. Retained
+payload descriptors declare format, content ID, dtype, element encoding, little-endian
+byte order, row-major layout, element count and byte length. The byte store supports
+IEEE-754 binary64, IEEE-754 binary32 and signed int32; `slice()` returns at most 256
+decoded values. A payload-backed available `EvidencePoint` therefore has `values: null`
+and a `payload` descriptor; unavailable points have neither numerical values nor a
+payload. Availability plus the payload descriptor, not `values: null` alone, distinguishes
+these states.
+
+The original evidence content ID remains the hash of the admitted envelope. Payload IDs
+identify storage bytes plus decoding metadata and do not replace run, request or evidence
+identity. Large admitted envelopes are not retained as hidden duplicate number arrays;
+only bounded registered codec metadata remains. The historical `model-lab-json-v1`
+serializer/parser still operates on original envelopes. Portable export of payload-backed
+retained sessions remains M4-B2 work.
 
 A first-class `LearningExperiment` links exact starting/resulting snapshots, separate before/training/after semantic runs, observed gradient anchors, and the actual Adam update. The current `run` is the **after** prediction for display compatibility. Backward inspection explicitly targets the training run, whose scalar values and adjoints were frozen before Adam mutation. Both snapshots and all three runs remain independently inspectable.
 

@@ -3,7 +3,7 @@ import { evidenceWorldIntegration } from './integrations.js';
 import type { RecordedRun } from "../../trace/types.js";
 import type { ArchivedSnapshot } from "../../archive/session.js";
 import type { ArchivedCompositeVariantState } from "../../experiments/composite-variant-state.js";
-import type { EvidenceEnvelope, EvidenceRun } from "../../trace/evidence.js";
+import type { EvidenceEnvelope, EvidenceRun, EvidenceStore } from "../../trace/evidence.js";
 import type { SourceBinding } from "../presentation/source-binding.js";
 import { qkGeometry } from "./geometry.js";
 import type {RegisteredWorldModel,WorldSelection} from './topology.js';
@@ -32,9 +32,9 @@ function readModel(forward:ForwardModel,source:SourceBinding,selection:MicrogptS
     geometry:lens?.availability==="AVAILABLE"&&lens.q&&lens.k?qkGeometry(lens.q,lens.k):undefined,projection};
 }
 export function spatialReadModel(run:RecordedRun,snapshot:ArchivedSnapshot|undefined,source:SourceBinding,selection:MicrogptSelection,variantState?:ArchivedCompositeVariantState){return readModel(forwardReadModel(run,snapshot,variantState),source,selection);}
-export function spatialEvidenceReadModel(run:EvidenceRun,envelope:EvidenceEnvelope,selection:WorldSelection,microgptSelection:MicrogptSelection,replay=false):AnySpatialReadModel{
+export function spatialEvidenceReadModel(run:EvidenceRun,envelope:EvidenceEnvelope,selection:WorldSelection,microgptSelection:MicrogptSelection,replay=false,store?:EvidenceStore):AnySpatialReadModel{
   const integration=evidenceWorldIntegration(run.integration);if(!integration)throw Error('No continuous-world integration registered for this evidence');
-  const composition=integration.compose(run,envelope,selection,replay);if(composition.kind==='registered')return composition.model;
+  const composition=integration.compose(run,envelope,selection,replay,store);if(composition.kind==='registered')return composition.model;
   const forward=composition.forward,input='text' in run.input?run.input.text:JSON.stringify(run.input.values);
   const source:SourceBinding={sourceRunId:run.id,sourceSnapshotId:run.checkpoint,capturedDocument:input,origin:"OBSERVED",verification:"NONE",relationship:replay?"REPLAY":"HISTORICAL",phase:"SPATIAL EVIDENCE",availability:"AVAILABLE"};
   return readModel(forward,source,microgptSelection);

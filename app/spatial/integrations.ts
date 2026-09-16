@@ -1,4 +1,4 @@
-import type {EvidenceEnvelope,EvidencePoint,EvidenceRun} from '../../trace/evidence.js';
+import type {EvidenceEnvelope,EvidencePoint,EvidenceRun,EvidenceStore} from '../../trace/evidence.js';
 import {NONCANONICAL,pointId} from '../../trace/noncanonical.js';
 import {composeForward,type ForwardModel} from './forward.js';
 import {composeMlpWorld} from './mlp-world.js';
@@ -8,7 +8,7 @@ import type {RegisteredWorldModel,WorldSelection} from './topology.js';
 
 export type WorldComposition={kind:'microgpt';forward:ForwardModel}|{kind:'registered';model:RegisteredWorldModel};
 export interface EvidenceWorldIntegration {
-  compose(run:EvidenceRun,envelope:EvidenceEnvelope,selection:WorldSelection,replay:boolean):WorldComposition;
+  compose(run:EvidenceRun,envelope:EvidenceEnvelope,selection:WorldSelection,replay:boolean,store?:EvidenceStore):WorldComposition;
 }
 const noncanonicalMicrogpt:EvidenceWorldIntegration={compose(run,envelope){
   const record=envelope.record as {state:{config:{nLayer:number;nHead:number;nEmbd:number;vocabulary:string[]};parameters:Record<string,number[][]>}};
@@ -21,6 +21,6 @@ const noncanonicalMicrogpt:EvidenceWorldIntegration={compose(run,envelope){
 const mlp:EvidenceWorldIntegration={compose:(run,envelope,selection,replay)=>({kind:'registered',model:composeMlpWorld(run,envelope,selection,replay)})};
 const fallback=(config:Parameters<typeof composeEvidenceFallback>[4]):EvidenceWorldIntegration=>({compose:(run,envelope,selection,replay)=>({kind:'registered',model:composeEvidenceFallback(run,envelope,selection,replay,config)})});
 const registry=new Map<string,EvidenceWorldIntegration>([[NONCANONICAL,noncanonicalMicrogpt],['mlp-native-v1',mlp],
-  ['pythia-native-v1',{compose:(run,envelope,selection,replay)=>({kind:'registered',model:composePythiaWorld(run,envelope,selection,replay)})}],
+  ['pythia-native-v1',{compose:(run,envelope,selection,replay,store)=>({kind:'registered',model:composePythiaWorld(run,envelope,selection,replay,store)})}],
   ['fixture-grouped-v1',fallback(groupedFallbackConfig)],['fixture-shape-v1',fallback(shapeFallbackConfig)],['fixture-opaque-v1',fallback(opaqueFallbackConfig)]]);
 export function evidenceWorldIntegration(id:string):EvidenceWorldIntegration|undefined{return registry.get(id);}
