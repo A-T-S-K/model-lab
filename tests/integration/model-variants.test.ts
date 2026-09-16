@@ -22,6 +22,7 @@ import { Value } from '../../model/value.js';
 import { compareRuns } from '../../trace/compare.js';
 import { compareMatchedVariantRuns } from '../../experiments/variant-comparison.js';
 import { initializeModelVariant, requireExactVariantResume } from '../../experiments/variant-initialization.js';
+import { isActivationVariantExperiment } from '../../experiments/model-variant-experiment.js';
 
 const fixture = JSON.parse(readFileSync(new URL('../../fixtures/canonical.initial.json', import.meta.url), 'utf8')) as TrainingSnapshot & {
   tokenIds: number[]; targetIds: number[];
@@ -146,12 +147,13 @@ test('variant preflight refuses identity, state, mapping, precision, and declara
   assert.throws(() => new ModelDefinitionRegistry().register(contribution({ replacement: { ...valid.replacement!, targetSemanticKind: 'undeclaredNode' as never } })), /replacement and activation/);
 });
 
-test('archive keeps variant admission separate and canonical snapshot/prediction immutable', async () => {
+test('archive admits the activation replacement through the registered variant family and keeps canonical state immutable', async () => {
   const { snapshot, experiment } = await witness(); const beforeId = await snapshotId(snapshot.state);
   const canonicalBefore = predict(restoreTraining(snapshot.state).model, fixture.tokenIds);
   const archive = new SessionArchive(); await archive.addSnapshot(snapshot); await archive.addRun(experiment.baselineRun);
   await archive.addModelVariantExperiment(experiment);
-  assert.equal(archive.modelVariantExperiments.get(experiment.id)?.variantRun.manifest.model.id, 'microgpt.leaky-relu');
+  const retained = archive.modelVariantExperiments.get(experiment.id); assert.ok(retained && isActivationVariantExperiment(retained));
+  assert.equal(retained.variantRun.manifest.model.id, 'microgpt.leaky-relu');
   assert.equal(archive.runs.get(experiment.variantRun.manifest.runId)?.manifest.startingCheckpointId, experiment.initialization.id);
   assert.equal(await snapshotId(snapshot.state), beforeId);
   assert.deepEqual(predict(restoreTraining(snapshot.state).model, fixture.tokenIds), canonicalBefore);

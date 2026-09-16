@@ -29,6 +29,7 @@ import {
 import { predict } from '../../model/microgpt.js';
 import { restoreTraining, type TrainingSnapshot } from '../../model/state.js';
 import { compareRuns } from '../../trace/compare.js';
+import { isCompositeVariantExperiment } from '../../experiments/model-variant-experiment.js';
 
 const fixture = JSON.parse(readFileSync(new URL('../../fixtures/canonical.initial.json', import.meta.url), 'utf8')) as TrainingSnapshot & {
   tokenIds: number[]; targetIds: number[];
@@ -226,13 +227,14 @@ test('canonical source prediction and hash remain unchanged after the complete c
   assert.deepEqual(predict(restoreTraining(snapshot.state).model, fixture.tokenIds), before);
 });
 
-test('archive admits composite evidence only through its definition-aware path', async () => {
+test('archive admits composite evidence through the shared definition-aware variant family', async () => {
   const snapshot = await source(), experiment = await runCompositeVariant({ snapshot, inputIds: fixture.tokenIds, targetIds: fixture.targetIds,
     tag: { sessionId: 'archive-composite', generationId: 0, runId: 'archive-composite' } });
   const archive = new SessionArchive(); await archive.addSnapshot(snapshot); await archive.addRun(experiment.baselineRun);
-  await archive.addCompositeVariantExperiment(experiment);
-  assert.equal(archive.compositeVariantExperiments.get(experiment.id)?.trainedState.id, experiment.trainedState.id);
+  await archive.addModelVariantExperiment(experiment);
+  const retained = archive.modelVariantExperiments.get(experiment.id); assert.ok(retained && isCompositeVariantExperiment(retained));
+  assert.equal(retained.trainedState.id, experiment.trainedState.id);
   assert.equal(archive.runs.get(experiment.trainedRun.manifest.runId)?.manifest.model.id, COMPOSITE_MLP_MICROGPT_DEFINITION.id);
   const tampered = structuredClone(experiment); (tampered.trainedState as { id: string }).id = 'sha256:tampered';
-  await assert.rejects(archive.addCompositeVariantExperiment(tampered), /state identity/);
+  await assert.rejects(archive.addModelVariantExperiment(tampered), /state identity/);
 });
