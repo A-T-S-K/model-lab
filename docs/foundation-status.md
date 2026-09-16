@@ -16,13 +16,16 @@ without executor activity; canonical operation required no bridge. M2 world/topo
 integration now includes canonical/multilayer MicroGPT, the numeric MLP/SGD witness,
 grouped-axis/shape-only/opaque evidence fallback, and native Pythia's collapsed
 six-block/selected-layer world. **M2 is COMPLETE — scoped engineering qualification**
-after the integrated interaction/change-surface review; generation/cache, variants,
-model variants, later M3 experiment recipes and later failure/retention proof portions
-remain pending. M3-A qualifies the registered runtime-intervention slice; M3-B1 and
+after the integrated interaction/change-surface review. At M2 closure, generation/cache,
+variants, model variants, later M3 experiment recipes and later failure/retention proof
+portions remained pending; subsequent M3 work is accounted below. M3-A qualifies the
+registered runtime-intervention slice; M3-B1 and
 M3-B2 together engineering-qualify FP-06's executable activation and composite
 parameterized replacement scope. M3-C engineering-qualifies the bounded FP-08
-registered matched-data substitution, defense-control and external-correlation slice;
-integrated M3 qualification remains pending. See
+registered matched-data substitution, defense-control and external-correlation slice.
+The final integrated archive/lifecycle/change-surface pass is complete, so **M3 is
+COMPLETE — scoped engineering qualification**; independent M5/foundation disposition
+remains pending. See
 [authority](README.md).
 
 The [repaired first-M1 qualification](reviews/M1-repair-qualification.md) retains its
@@ -76,7 +79,7 @@ and [native acceptance](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#4
 | M0 | [freeze invariants and the migration map, not untested APIs](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m0-freeze-invariants-and-the-migration-map-not-untested-apis) | PREPARATION COMPLETE; slice report migration map |
 | M1 | [contracts, codecs, and dual producers early](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m1-contracts-codecs-and-dual-producers-early) | COMPLETE — scoped engineering qualification; no M2/M5 or full FP acceptance |
 | M2 | [topology, world, and interaction separation](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m2-topology-world-and-interaction-separation) | COMPLETE — scoped engineering qualification; canonical/multilayer MicroGPT, numeric MLP/SGD, grouped-axis/shape-only/opaque fallback, native Pythia and integrated interaction/change-surface qualification passed; no M3, M5 or full FP acceptance |
-| M3 | [variants and experiments](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m3-variants-and-experiments) | IN PROGRESS — M3-A interventions, M3-B1/B2 activation plus composite parameterized replacements, and M3-C registered data/security experiment plus correlation are qualified; final integrated M3 qualification remains pending |
+| M3 | [variants and experiments](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m3-variants-and-experiments) | COMPLETE — scoped engineering qualification; registered interventions, actual activation/composite replacements, definition-aware variant state, matched data/security experiment, correlation and integrated lifecycle/change-surface qualification passed; no M4, M5 or full foundation acceptance |
 | M4 | [durable payloads and failure boundaries](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m4-durable-payloads-and-failure-boundaries) | NOT_RUN |
 | M5 | [independent foundation review](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m5-independent-foundation-review) | NOT_RUN |
 | M6 | [full user testing, workshop, station, release](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m6-full-user-testing-workshop-station-release) | NOT_RUN |
@@ -637,3 +640,37 @@ This engineering-qualifies FP-08 only within the implemented bounded slice. It i
 integrated M3 closure, independent M5 review or foundation acceptance. The next
 dependency is the separately authorized final integrated M3 qualification; no M4 work
 began here.
+
+## M3-D integrated variant and experiment qualification
+
+M3 is **COMPLETE — scoped engineering qualification**. The final fresh review found
+that B1 and B2 model variants still required separate `SessionArchive` maps and
+admission methods. One registered definition-aware model-variant experiment family now
+owns their common immutable envelope, target definition, source checkpoint/snapshot,
+canonical baseline, retained variant runs and duplicate policy, while the existing B1
+and B2 validators retain their different activation and parameter/state/resume rules.
+A future registered replacement no longer adds a shared archive collection or method.
+
+The integrated witness retained head ablation, donor patch, Leaky ReLU, composite A/B
+and matched data receipts simultaneously from one canonical accepted source. Snapshot
+hash, optimizer state and a fresh canonical prediction remained exact after every
+return. Cross-family ID collisions and wrong comparison-policy use refused; canonical
+format-1 continued to reject composite state. Fresh intervention and data
+cancellation/reset/late-result controls published no success and did not clear valid
+evidence from other families.
+
+The browser sequence passed every family transition, cleared incompatible receipts and
+selection, restored keyboard focus to canonical Predict, returned to the byte-identical
+accepted snapshot, and kept Guided/kiosk/attract routes free of M3 execution. Exact
+runtime was
+`sha256:fcb5284439b830cab7a1091f451e346f85c4f5084cbd19dd4613d13356075d8f`.
+All 198 unit/integration cases completed with 193 passes and five optional native
+fixture skips; portable and byte-exact canonical references, typecheck, example and a
+fresh protected build passed. The final representative canonical/M3 browser matrix
+passed 9/9 at 1920×1080 and 1280×720/reduced motion. Durable findings, commands,
+captures, failures and unrun scope are in the
+[M3 integration qualification](reviews/M3-integration-qualification.md).
+
+This disposition grants only the M3 engineering gate described above. It does not
+complete FP-03 generation/cache, FP-09, M4, independent M5/foundation acceptance, M6,
+release or full unfamiliar-user testing. The next dependency is M4; it was not begun.
