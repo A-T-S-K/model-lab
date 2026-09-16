@@ -13,8 +13,9 @@ prediction, MSE, backward and explicit SGD with supported state round-trips. Gro
 query/KV-axis arithmetic, structural preview, opaque computation and unsupported
 operation fallback are qualified for M1. Saved new-model and Pythia evidence reopened
 without executor activity; canonical operation required no bridge. M2 world/topology
-integration now includes canonical/multilayer MicroGPT and the numeric MLP/SGD witness;
-grouped/opaque fallback, Pythia world integration, generation/cache, variants,
+integration now includes canonical/multilayer MicroGPT, the numeric MLP/SGD witness,
+and grouped-axis/shape-only/opaque evidence fallback; Pythia world integration,
+generation/cache, variants,
 experiments and later failure/retention proof portions remain pending. See
 [authority](README.md).
 
@@ -44,15 +45,15 @@ Each row is a status pointer, not a reduced acceptance definition.
 | FP-01 | [Canonical preservation through new contracts](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 portion REQUALIFIED; full FP unaccepted; witness report |
 | FP-02 | [Noncanonical multi-layer tiny transformer](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 native multilayer execution/inspector/replay and M2-A world structure QUALIFIED; remaining M2 interaction/change-surface qualification pending |
 | FP-03 | [Native Pythia execution, selected internals, generation and disconnected replay](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 native live/disconnected portion REQUALIFIED; broader generation/cache proof pending |
-| FP-04 | [MLP/SGD plus grouped query/KV-axis numerical fixture](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 numeric MLP/SGD/state and grouped-axis witnesses QUALIFIED; M2-B numeric MLP shared-world path QUALIFIED; grouped-axis world fallback/full foundation/M5 disposition pending |
-| FP-05 | [Shape-only, unknown and opaque states](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 shape-only, opaque computation and unsupported fallback QUALIFIED; later coverage/M5 disposition pending |
+| FP-04 | [MLP/SGD plus grouped query/KV-axis numerical fixture](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 numeric MLP/SGD/state and grouped-axis witnesses, M2-B numeric MLP shared-world path and M2-C grouped-axis world path QUALIFIED; full foundation/M5 disposition pending |
+| FP-05 | [Shape-only, unknown and opaque states](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 fixture semantics and M2-C truthful shared-world structural/opaque/unsupported fallback QUALIFIED; full foundation/M5 disposition pending |
 | FP-06 | [Actual activation and composite parameterized replacement](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | NOT_RUN |
 | FP-07 | [Head ablation and donor activation patch](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | NOT_RUN |
 | FP-08 | [Matched data substitution and defense control](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | NOT_RUN |
 | FP-09 | [Repeated invocations and bounded generation/cache correctness](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | NOT_RUN |
 | FP-10 | [Legacy replay, export/import and representation-aware comparison](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 legacy and new-codec replay/state portions QUALIFIED; broader comparison/durability pending |
 | FP-11 | [Async, retention, transport and inert-import failure controls](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 affected receipt/stale/import/transport controls REQUALIFIED; broader M4 failures/retention pending |
-| FP-12 | [Shared visual/explanation routes and extension change surface](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 same-inspector/source/fallback and M2-A/M2-B MicroGPT/MLP world change surfaces QUALIFIED; remaining M2 witnesses and M5 review pending |
+| FP-12 | [Shared visual/explanation routes and extension change surface](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 same-inspector/source/fallback and M2-A/M2-B/M2-C world change surfaces QUALIFIED; Pythia world, remaining integrated M2 and M5 review pending |
 
 Native Pythia is a required real second transformer executing through the shared
 request/evidence path, with pinned native comparison, useful internal evidence and
@@ -68,7 +69,7 @@ and [native acceptance](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#4
 | --- | --- | --- |
 | M0 | [freeze invariants and the migration map, not untested APIs](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m0-freeze-invariants-and-the-migration-map-not-untested-apis) | PREPARATION COMPLETE; slice report migration map |
 | M1 | [contracts, codecs, and dual producers early](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m1-contracts-codecs-and-dual-producers-early) | COMPLETE — scoped engineering qualification; no M2/M5 or full FP acceptance |
-| M2 | [topology, world, and interaction separation](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m2-topology-world-and-interaction-separation) | IN PROGRESS — M2-A canonical/multilayer MicroGPT and M2-B numeric MLP/SGD shared-world increments qualified; grouped/opaque fallback, Pythia world and integrated M2 interaction/change-surface qualification pending |
+| M2 | [topology, world, and interaction separation](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m2-topology-world-and-interaction-separation) | IN PROGRESS — M2-A canonical/multilayer MicroGPT, M2-B numeric MLP/SGD and M2-C grouped-axis/shape-only/opaque fallback increments qualified; Pythia world and remaining integrated M2 interaction/change-surface qualification pending |
 | M3 | [variants and experiments](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m3-variants-and-experiments) | NOT_RUN |
 | M4 | [durable payloads and failure boundaries](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m4-durable-payloads-and-failure-boundaries) | NOT_RUN |
 | M5 | [independent foundation review](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m5-independent-foundation-review) | NOT_RUN |
@@ -306,3 +307,65 @@ shape-only/opaque world fallback, native Pythia collapsed/selected-layer world v
 the remaining integrated interaction/change-surface qualification and all later M2
 requirements remain pending. M3–M6, independent foundation acceptance, unfamiliar-user
 testing, workshop and release gates remain ungranted.
+
+## M2-C grouped-axis and truthful evidence fallback increment
+
+M2 remains **IN PROGRESS**. The retained `fixture-grouped-v1`,
+`fixture-shape-v1` and `fixture-opaque-v1` witnesses now enter one registered,
+bounded evidence-world fallback in the existing application shell. The fallback reads
+admitted points, ports, phases, shapes, axes/coordinate spaces, availability,
+provenance, dependencies, source identities and capabilities; it renders at most 24
+scene points, discloses omitted coverage and keeps every retained point selectable.
+Shape-only/opaque/unsupported states are presentation semantics, not integration-name
+branches. Structural and evidence-boundary relationships are distinct from activation,
+and the grouped integration adds one narrow derived coordinate-mapping relationship.
+No fixture-specific scene, executor, store, archive, player or session branch was added.
+
+The grouped vertical proof retained the observed mapping `[0,0,1,1]`. Query heads
+0/1 resolve to KV head 0 and query heads 2/3 resolve to KV head 1. The qualified
+selection used query head 2, observed mapping value 1, KV-head-space K values 2 and
+-1, KV-head-space V value 5, scores 2.1213204860687256 and
+-0.7071067690849304, weights 0.9441927671432495 and 0.0558072067797184,
+and output values 5.111614227294922 and 6.111614227294922. Axis coordinates survive
+navigation only when both role and coordinate-space identity match; invalid
+query-head/KV-head substitution is refused. The mapping statement is labeled derived
+from the unchanged observed mapping rather than added to the original run as observed.
+
+The shape-only world displayed `[2,3] → [2,5]`, its structural dependency, source
+identity and explicit `shape_only` availability with null values and no numerical
+glyphs. A scalar/detail request returned a refusal explaining that this was no forward
+execution and named the reachable input evidence. The opaque world retained observed
+input `[3,4]`, the opaque norm boundary, observed scalar output `5` and the exact
+input → boundary → output relationships. Selecting the unsupported scalar explanation
+reported its identity/source, null values, unsupported coverage and reachable output;
+no norm arithmetic or hidden scalar DAG was reconstructed.
+
+Application runtime is
+`sha256:a58524742a149406f848a8ff8b1dfad4980edc7dc7c57e0078a747e324c65446`.
+Qualification passed 159 unit/integration cases with one unrelated optional native
+Pythia capture skipped, including the M1 fixture codecs, M2-A topology, M2-B MLP and
+new fallback/axis/bounds/replay/state-switching tests. Portable reference passed 17
+tests plus strict conformance with zero differing floats; canonical regeneration was
+byte exact. Typecheck, example and a fresh task-owned Vite build passed. The pinned
+Python witness rerun passed 70 independent tensor comparisons with zero maximum
+absolute difference and nine malformed refusals.
+
+Scoped Playwright on the exact build passed 11 live/retained cases covering M2-C,
+M2-B live MLP, M2-A, shared receipt/selection/replay repairs and retained Wave 1A/1D
+canonical routes; the phase-opposite offline MLP case was intentionally skipped.
+After verified native-bridge shutdown, the saved MLP replay case passed separately
+with zero native requests. The M2-C route imported and replayed all three fixtures
+without an executor, switched to multilayer MicroGPT with fallback state absent, and
+retained reduced-motion meaning at 1280×720. Initial sandboxed localhost attempts
+failed with `EPERM`; unchanged fresh outputs passed with loopback permission.
+
+Visual inspection covered grouped query-head-2/KV-head-1 output, shape-only refusal
+and opaque unsupported-boundary views at 1920×1080, plus the MicroGPT switch at
+1280×720 with reduced motion. Instrument Graphite/Plex and the continuous-world shell
+remain intact. Aggregate acceptance, installation isolation, broad browser matrix,
+benchmark and soak were intentionally not run for this bounded slice.
+
+This increment does not complete FP-04, FP-05, FP-12, M2 or foundation acceptance.
+Native Pythia collapsed/selected-layer world integration and the remaining integrated
+M2 interaction/change-surface qualification are still pending. M3–M6, unfamiliar-user
+testing, workshop, station and release gates remain ungranted.
