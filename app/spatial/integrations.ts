@@ -2,6 +2,7 @@ import type {EvidenceEnvelope,EvidencePoint,EvidenceRun} from '../../trace/evide
 import {NONCANONICAL,pointId} from '../../trace/noncanonical.js';
 import {composeForward,type ForwardModel} from './forward.js';
 import {composeMlpWorld} from './mlp-world.js';
+import {composeEvidenceFallback,groupedFallbackConfig,opaqueFallbackConfig,shapeFallbackConfig} from './evidence-fallback.js';
 import type {RegisteredWorldModel,WorldSelection} from './topology.js';
 
 export type WorldComposition={kind:'microgpt';forward:ForwardModel}|{kind:'registered';model:RegisteredWorldModel};
@@ -17,5 +18,7 @@ const noncanonicalMicrogpt:EvidenceWorldIntegration={compose(run,envelope){
     matrix:name=>record.state.parameters[name],sourceStateId:run.checkpoint,parameterProvenance:'pinned-source-derived'})};
 }};
 const mlp:EvidenceWorldIntegration={compose:(run,envelope,selection,replay)=>({kind:'registered',model:composeMlpWorld(run,envelope,selection,replay)})};
-const registry=new Map<string,EvidenceWorldIntegration>([[NONCANONICAL,noncanonicalMicrogpt],['mlp-native-v1',mlp]]);
+const fallback=(config:Parameters<typeof composeEvidenceFallback>[4]):EvidenceWorldIntegration=>({compose:(run,envelope,selection,replay)=>({kind:'registered',model:composeEvidenceFallback(run,envelope,selection,replay,config)})});
+const registry=new Map<string,EvidenceWorldIntegration>([[NONCANONICAL,noncanonicalMicrogpt],['mlp-native-v1',mlp],
+  ['fixture-grouped-v1',fallback(groupedFallbackConfig)],['fixture-shape-v1',fallback(shapeFallbackConfig)],['fixture-opaque-v1',fallback(opaqueFallbackConfig)]]);
 export function evidenceWorldIntegration(id:string):EvidenceWorldIntegration|undefined{return registry.get(id);}

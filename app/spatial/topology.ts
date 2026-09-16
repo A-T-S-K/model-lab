@@ -17,12 +17,14 @@ export interface SemanticAddress {
   coordinates: Readonly<Record<string, SemanticCoordinate>>;
 }
 export type RelationshipKind = "activation" | "parameter" | "saved_residual" | "control_state" |
-  "target" | "objective" | "gradient" | "parameter_state" | "optimizer_update";
+  "target" | "objective" | "gradient" | "parameter_state" | "optimizer_update" |
+  "structural" | "coordinate_mapping" | "evidence_boundary";
 export interface SemanticRelationship {
   from: SemanticAddress;
   to: SemanticAddress;
   port: string;
   kind: RelationshipKind;
+  origin?: "observed" | "derived";
 }
 export interface WorldNode {
   id: string;

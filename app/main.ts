@@ -87,6 +87,7 @@ const spatialEnabled = new URLSearchParams(location.search).get("presentation") 
 let spatialActive = spatialEnabled;
 const spatialSelection: MicrogptSelection = { layer: 0, query: 4, key: 0, head: 0, feature: 0 };
 const worldSelection: WorldSelection = {node:'',port:'',phase:'',coordinates:{}};
+function clearWorldSelection(){Object.assign(worldSelection,{node:'',port:'',phase:'',coordinates:{}});}
 const spatialPresenter = new SpatialPresenter(spatialSelection);
 let spatialExperimentId = "";
 const config = fixture.config;
@@ -593,7 +594,7 @@ function render(): void {
     spatialPresenter.bind(model, spatialSelectionChanged, render, selectExplanationPhase);
     bindSpatialLearning();
     bindForwardControls();
-    mount.querySelector('#return-canonical-world')?.addEventListener('click',()=>{spatialEvidenceRunId='';spatialEvidenceReplay=false;clearDisplayedInspection();spatialPresenter.invalidate();render();});
+    mount.querySelector('#return-canonical-world')?.addEventListener('click',()=>{spatialEvidenceRunId='';spatialEvidenceReplay=false;clearWorldSelection();clearDisplayedInspection();spatialPresenter.invalidate();render();});
     mount.querySelector("#exhibit-opt-out")?.addEventListener("click",()=>{ kioskEnabled=!kioskEnabled; lastActivity=Date.now(); saveExhibitConfiguration(); clearExhibitBanner(); render(); });
     mount.querySelectorAll<HTMLElement>("[data-scroll-region]").forEach(element => {
       const scroll = regionScroll.get(element.dataset.scrollRegion);
@@ -888,7 +889,7 @@ function syncSpatialSelection(): void {
   if (parameter) selectedParameter = parameter.index;
 }
 function bind(): void {
-  sharedInspector.sync(archive.evidence,result?.run.manifest.runId,!busy&&!forwardDriver.active,async()=>execute('predict'),(runId,replay)=>{spatialEvidenceRunId=runId;spatialEvidenceReplay=replay;attract=false;clearDisplayedInspection();spatialPresenter.invalidate();render();},runId=>spatialEvidenceUnavailable(archive.evidence.get(runId)));
+  sharedInspector.sync(archive.evidence,result?.run.manifest.runId,!busy&&!forwardDriver.active,async()=>execute('predict'),(runId,replay)=>{spatialEvidenceRunId=runId;spatialEvidenceReplay=replay;clearWorldSelection();attract=false;clearDisplayedInspection();spatialPresenter.invalidate();render();},runId=>spatialEvidenceUnavailable(archive.evidence.get(runId)));
   if (!attract) {
     if (!spatialActive) {
       const entry = '<button id="presentation-toggle" class="classic-toggle">Spatial presentation · controlled learning</button>';
