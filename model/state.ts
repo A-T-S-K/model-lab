@@ -15,6 +15,19 @@ export interface Model {
   config: ModelConfig;
   parameters: Record<string, Value[][]>;
   parameterOrder: string[];
+  /** Optional complete inspection order for a registered parameterized variant. */
+  parameterInspectionOrder?: string[];
+}
+
+export interface CompositeVariantModel extends Model {
+  readonly variant: {
+    readonly definition: { readonly id: string; readonly version: string };
+    readonly baseDefinition: { readonly id: string; readonly version: string };
+    readonly baseCheckpointId: string;
+    readonly trainableParameterOrder: readonly string[];
+    readonly inheritedParameterPolicy: 'frozen';
+    readonly scalePolicy: 'fixed-definition-constant';
+  };
 }
 
 export interface OptimizerState {
@@ -74,6 +87,18 @@ export function loadModel(config: ModelConfig, parameters: ParameterData, parame
 
 export function parameterValues(model: Model): Value[] {
   return model.parameterOrder.flatMap(name => model.parameters[name].flat());
+}
+
+export function namedParameterValues(model: Model, order: readonly string[]): Value[] {
+  return order.flatMap(name => {
+    const matrix = model.parameters[name];
+    if (!matrix) throw new Error(`Unknown parameter in declared order: ${name}`);
+    return matrix.flat();
+  });
+}
+
+export function isCompositeVariantModel(model: Model): model is CompositeVariantModel {
+  return 'variant' in model && model.variant !== null && typeof model.variant === 'object';
 }
 
 export function parameterData(model: Model): ParameterData {

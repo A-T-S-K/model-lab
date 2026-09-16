@@ -1,5 +1,5 @@
 import { sum, Value } from './value.js';
-import { type Model } from './state.js';
+import { isCompositeVariantModel, type Model } from './state.js';
 import { canonicalMicrogptDefinition, type ModelDefinitionContribution } from './definitions.js';
 
 import { observeVector, observeScalar, structure, type Observer, type StructuralObservation } from './observation.js';
@@ -7,6 +7,15 @@ export type { Observation, StructuralObservation, Observer } from './observation
 
 export function linear(input: readonly Value[], weights: readonly (readonly Value[])[]): Value[] {
   return weights.map(row => sum(row.map((weight, i) => weight.mul(input[i]))));
+}
+
+export function scaleCompositeAdapter(input: readonly Value[], scale: number): Value[] {
+  return input.map(value => value.mul(Value.constant(scale, 'fixed composite adapter scale')));
+}
+
+export function addCompositeBranches(base: readonly Value[], adapter: readonly Value[]): Value[] {
+  if (base.length !== adapter.length) throw new Error('Composite MLP branches must share the embedding output basis');
+  return base.map((value, index) => value.add(adapter[index]!));
 }
 
 export function softmax(logits: readonly Value[], observer?: Observer, concept?: StructuralObservation['concept']): Value[] {
@@ -58,7 +67,9 @@ export function forwardBoundaries(model: { config: Pick<Model['config'], 'nLayer
       for (const kind of ['preAttentionNorm','q','k','v']) boundaries.push({kind, token, layer});
       for (let head = 0; head < model.config.nHead; head++)
         for (const kind of ['attentionLogits','attentionProbabilities','headOutput']) boundaries.push({kind, token, layer, head});
-      for (const kind of ['attentionOutput','attentionProjection','attentionResidual','preMlpNorm','mlpUp',definition.activation.semanticKind,'mlpDown','mlpResidual']) boundaries.push({kind, token, layer});
+      const downKinds = definition.replacement?.kind === 'composite-mlp-down'
+        ? ['mlpBaseDown','mlpAdapterA','mlpAdapterB','mlpAdapterScaled','mlpCompositeDown'] : ['mlpDown'];
+      for (const kind of ['attentionOutput','attentionProjection','attentionResidual','preMlpNorm','mlpUp',definition.activation.semanticKind,...downKinds,'mlpResidual']) boundaries.push({kind, token, layer});
     }
     for (const kind of ['logits','probabilities']) boundaries.push({kind, token});
   }
@@ -98,6 +109,18 @@ export function* forwardSequenceForDefinition(definition: ModelDefinitionContrib
     throw new Error('Input must contain valid token IDs within the context window');
   }
   const headDimension = nEmbd / nHead;
+  const composite = definition.replacement?.kind === 'composite-mlp-down' ? definition.replacement : undefined;
+  if (composite) {
+    if (!isCompositeVariantModel(model) ||
+        `${model.variant.definition.id}@${model.variant.definition.version}` !== `${definition.identity.id}@${definition.identity.version}` ||
+        `${model.variant.baseDefinition.id}@${model.variant.baseDefinition.version}` !== `${definition.base?.id}@${definition.base?.version}`)
+      throw new Error('Composite definition requires its validated definition-aware model state');
+    for (const schema of composite.parameterSchema) {
+      const matrix = model.parameters[schema.name];
+      if (!matrix || matrix.length !== schema.shape[0] || matrix.some(row => row.length !== schema.shape[1] || row.some(value => !Number.isFinite(value.data))))
+        throw new Error(`Composite parameter does not match its registered schema: ${schema.name}`);
+    }
+  }
   if (patch && (patch.target.invocation !== 0 || patch.target.boundary !== HEAD_OUTPUT_BOUNDARY ||
       patch.target.coordinateSpace.id !== HEAD_OUTPUT_COORDINATE_SPACE ||
       patch.target.coordinateSpace.dtype !== 'float64' || patch.target.coordinateSpace.axes.length !== 1 ||
@@ -199,9 +222,28 @@ export function* forwardSequenceForDefinition(definition: ModelDefinitionContrib
       x = x.map(value => definition.activation.apply(value));
       observe(definition.activation.semanticKind, x, layer);
       yield { kind: definition.activation.semanticKind, token, layer };
-      x = linear(x, weights('mlp_fc2'));
-      observe('mlpDown', x, layer);
-      yield { kind: 'mlpDown', token, layer };
+      if (composite) {
+        const activation = x;
+        const base = linear(activation, weights('mlp_fc2'));
+        observe(composite.baseSemanticKind, base, layer);
+        yield { kind: composite.baseSemanticKind, token, layer };
+        const a = linear(activation, weights('mlp_adapter_a'));
+        observe(composite.adapterASemanticKind, a, layer, undefined, 'bottleneckFeature');
+        yield { kind: composite.adapterASemanticKind, token, layer };
+        const b = linear(a, weights('mlp_adapter_b'));
+        observe(composite.adapterBSemanticKind, b, layer);
+        yield { kind: composite.adapterBSemanticKind, token, layer };
+        const adapter = scaleCompositeAdapter(b, composite.scale);
+        observe(composite.scaledAdapterSemanticKind, adapter, layer);
+        yield { kind: composite.scaledAdapterSemanticKind, token, layer };
+        x = addCompositeBranches(base, adapter);
+        observe(composite.targetSemanticKind, x, layer);
+        yield { kind: composite.targetSemanticKind, token, layer };
+      } else {
+        x = linear(x, weights('mlp_fc2'));
+        observe('mlpDown', x, layer);
+        yield { kind: 'mlpDown', token, layer };
+      }
       x = x.map((value, i) => value.add(residual[i]));
       observe('mlpResidual', x, layer);
       yield { kind: 'mlpResidual', token, layer };

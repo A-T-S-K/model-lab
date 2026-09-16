@@ -1,10 +1,11 @@
 import { inspectHistorical } from './inspector.js';
-import type { HistoricalRequest, AblationRequest, ActivationPatchRequest, ActivationVariantRequest, WorkerResponse } from './protocol.js';
+import type { HistoricalRequest, AblationRequest, ActivationPatchRequest, ActivationVariantRequest, CompositeVariantRequest, WorkerResponse } from './protocol.js';
 import { HEAD_ABLATION_RECIPE, isHeadAblationExperiment } from '../../experiments/ablation.js';
 import { ACTIVATION_PATCH_RECIPE, headOutputOccurrence, isActivationPatchExperiment } from '../../experiments/activation-patch.js';
 import { interventionRecipes } from '../../experiments/recipes.js';
 import { runActivationVariant } from '../../experiments/model-variant.js';
-const scope = globalThis as unknown as { onmessage: (event: MessageEvent<HistoricalRequest | AblationRequest | ActivationPatchRequest | ActivationVariantRequest>) => void; postMessage(response: WorkerResponse): void };
+import { runCompositeVariant } from '../../experiments/composite-model-variant.js';
+const scope = globalThis as unknown as { onmessage: (event: MessageEvent<HistoricalRequest | AblationRequest | ActivationPatchRequest | ActivationVariantRequest | CompositeVariantRequest>) => void; postMessage(response: WorkerResponse): void };
 scope.onmessage = event => {
   const request = event.data;
   const tag = { sessionId: request.sessionId, runId: request.runId, generationId: request.generationId };
@@ -26,6 +27,9 @@ scope.onmessage = event => {
       : request.command === 'activationVariant'
         ? runActivationVariant({ snapshot: request.snapshot, inputIds: request.inputIds, targetIds: request.targetIds, tag })
           .then(experiment => ({ ...tag, status: 'activationVariant' as const, experiment }))
+        : request.command === 'compositeVariant'
+          ? runCompositeVariant({ snapshot: request.snapshot, inputIds: request.inputIds, targetIds: request.targetIds, tag })
+            .then(experiment => ({ ...tag, status: 'compositeVariant' as const, experiment }))
         : inspectHistorical(request).then(inspection => ({ ...tag, status: 'inspection' as const, inspection }));
   void execution.then(response => scope.postMessage(response))
     .catch(error => scope.postMessage({ ...tag, status: 'error', error: error instanceof Error ? error.message : String(error) }));

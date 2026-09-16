@@ -24,6 +24,12 @@ const concepts: Record<string, [string, string, string, string]> = {
   log: ['Natural logarithm', 'ln(input)', 'model/value.ts', 'log'],
   relu: ['ReLU', 'max(0, input)', 'model/value.ts', 'relu'],
   leakyRelu: ['Leaky ReLU', 'input when input > 0; negativeSlope × input otherwise', 'model/value.ts', 'leakyRelu'],
+  mlpBaseDown: ['Inherited base branch W x', 'Σ W[j,i] × x[i]; W is frozen for this variant', 'model/microgpt.ts', 'linear'],
+  mlpAdapterA: ['Trainable adapter A projection', 'A row · MLP activation x in the declared hidden-feature basis', 'model/microgpt.ts', 'linear'],
+  mlpAdapterB: ['Trainable adapter B projection', 'B row · Ax in the declared bottleneck basis', 'model/microgpt.ts', 'linear'],
+  fixedAdapterScale: ['Fixed composite scale', 's is an immutable model-definition constant and not an optimizer parameter', 'model/microgpt.ts', 'scaleCompositeAdapter'],
+  mlpAdapterScaled: ['Scaled adapter branch', 's × B(Ax)', 'model/microgpt.ts', 'scaleCompositeAdapter'],
+  mlpCompositeDown: ['Composite MLP output', 'W x + s × B(Ax)', 'model/microgpt.ts', 'addCompositeBranches'],
 };
 function conceptKey(kind: string): string {
   if (/Norm$/.test(kind)) return 'rmsNorm';
@@ -32,6 +38,7 @@ function conceptKey(kind: string): string {
   if (/Residual$/.test(kind)) return 'residual';
   if (kind === 'mlpRelu') return 'relu';
   if (kind === 'mlpLeakyRelu' || kind === 'leaky_relu') return 'leakyRelu';
+  if (['mlpBaseDown','mlpAdapterA','mlpAdapterB','fixedAdapterScale','mlpAdapterScaled','mlpCompositeDown'].includes(kind)) return kind;
   if (kind === 'gradient') return 'backward';
   if (kind === 'meanLoss') return 'loss';
   return kind;

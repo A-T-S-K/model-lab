@@ -26,7 +26,7 @@ export class CaptureContext implements Observer {
 
   constructor(model: Model, private readonly recorder: TraceRecorder) {
     let index = 0;
-    for (const name of model.parameterOrder) {
+    for (const name of model.parameterInspectionOrder ?? model.parameterOrder) {
       model.parameters[name].forEach((rowValues, row) => rowValues.forEach((value, column) => {
         this.parameterRefs.set(value, Object.freeze({ index, name, row, column }));
         this.parameterIds.set(index++, this.register(value));

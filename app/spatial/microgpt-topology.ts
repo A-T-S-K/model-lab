@@ -4,12 +4,15 @@ export interface MicrogptTopologyConfig {
   integration: string; modelDefinition: string; label: string;
   nLayer: number; nHead: number; nEmbd: number; vocabulary: readonly string[];
   activation?: { kind: 'mlpRelu' | 'mlpLeakyRelu'; label: string; purpose: string };
+  compositeMlpDown?: { bottleneckWidth: number; scale: number };
 }
 export const globalKinds = new Set(["tokenEmbedding", "positionEmbedding", "embeddingSum", "embeddingNorm", "logits", "probabilities"]);
 export const headKinds = new Set(["attentionLogits", "attentionProbabilities", "headOutput"]);
 export const layerKinds = new Set(["preAttentionNorm", "q", "k", "v", ...headKinds,
-  "attentionOutput", "attentionProjection", "attentionResidual", "preMlpNorm", "mlpUp", "mlpRelu", "mlpLeakyRelu", "mlpDown", "mlpResidual"]);
-const layerParameterRole: Record<string, string> = {q:"attn_wq",k:"attn_wk",v:"attn_wv",attentionProjection:"attn_wo",mlpUp:"mlp_fc1",mlpDown:"mlp_fc2"};
+  "attentionOutput", "attentionProjection", "attentionResidual", "preMlpNorm", "mlpUp", "mlpRelu", "mlpLeakyRelu", "mlpDown",
+  "mlpBaseDown", "mlpAdapterA", "mlpAdapterB", "fixedAdapterScale", "mlpAdapterScaled", "mlpCompositeDown", "mlpResidual"]);
+const layerParameterRole: Record<string, string> = {q:"attn_wq",k:"attn_wk",v:"attn_wv",attentionProjection:"attn_wo",mlpUp:"mlp_fc1",
+  mlpDown:"mlp_fc2",mlpBaseDown:"mlp_fc2",mlpAdapterA:"mlp_adapter_a",mlpAdapterB:"mlp_adapter_b"};
 export function parameterFor(kind: string, layer?: number): string | undefined {
   if(kind==="tokenEmbedding")return "wte";if(kind==="positionEmbedding")return "wpe";if(kind==="logits")return "lm_head";
   const role=layerParameterRole[kind];return role===undefined||layer===undefined?undefined:`layer${layer}.${role}`;
@@ -29,11 +32,12 @@ export function microgptWorldDescriptor(config:MicrogptTopologyConfig):WorldDesc
       nodes.push({id:`layer.${layer}.${kind}`,operation:kind,port:"output",coordinates:{layer},parameter:parameterFor(kind,layer)});
     for(let head=0;head<config.nHead;head++)for(const kind of headKinds)
       nodes.push({id:`layer.${layer}.${kind}.head.${head}`,operation:kind,port:"output",coordinates:{layer,head}});
-    for(const kind of ["attentionOutput","attentionProjection","attentionResidual","preMlpNorm","mlpUp",activationKind,"mlpDown","mlpResidual"])
+    const downKinds=config.compositeMlpDown?["mlpBaseDown","mlpAdapterA","mlpAdapterB","fixedAdapterScale","mlpAdapterScaled","mlpCompositeDown"]:["mlpDown"];
+    for(const kind of ["attentionOutput","attentionProjection","attentionResidual","preMlpNorm","mlpUp",activationKind,...downKinds,"mlpResidual"])
       nodes.push({id:`layer.${layer}.${kind}`,operation:kind,port:"output",coordinates:{layer},parameter:parameterFor(kind,layer)});
   }
   for(const kind of ["logits","probabilities"])
     nodes.push({id:`model.${kind}`,operation:kind,port:"output",coordinates:{scope:"model"},parameter:parameterFor(kind)});
   return {integration:config.integration,modelDefinition:config.modelDefinition,label:config.label,nodes,
-    presentation:config.nLayer===1&&config.nHead===2&&config.nEmbd===8?"microgpt-canonical-curated":"microgpt-repeated-blocks"};
+    presentation:config.compositeMlpDown?"microgpt-composite-curated":config.nLayer===1&&config.nHead===2&&config.nEmbd===8?"microgpt-canonical-curated":"microgpt-repeated-blocks"};
 }

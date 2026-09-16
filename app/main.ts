@@ -67,6 +67,7 @@ import { InspectorWorkerClient } from "./worker/inspector-client.js";
 import { isHeadAblationExperiment } from "../experiments/ablation.js";
 import { isActivationPatchExperiment } from "../experiments/activation-patch.js";
 import type { ActivationVariantExperiment } from "../experiments/model-variant.js";
+import type { CompositeVariantExperiment } from "../experiments/composite-model-variant.js";
 import type {
   InspectionResult,
   InspectionTarget,
@@ -571,7 +572,9 @@ function render(): void {
     const displayed = attract && exhibitEntry ? attractReplay?.result : result;
     const source = displayed && sourceBinding(displayed.run, config.vocabulary, sourceSnapshot(displayed.run.manifest.startingSnapshotId??"")?.state.optimizer.step??displayed.trainingStep, liveRunId, documentText, "SPATIAL ATTENTION");
     const evidenceRun=spatialEvidenceRunId?archive.evidence.get(spatialEvidenceRunId):undefined;
-    const makeModel=()=>evidenceRun?spatialEvidenceReadModel(evidenceRun,archive.evidence.envelope(evidenceRun.id),worldSelection,spatialSelection,spatialEvidenceReplay):displayed&&source?spatialReadModel(displayed.run,sourceSnapshot(source.sourceSnapshotId??"")??displayed.snapshots.find(s=>s.id===source.sourceSnapshotId),source,spatialSelection):undefined;
+    const compositeExperiment=evidenceRun?undefined:[...archive.compositeVariantExperiments.values()].find(experiment=>[experiment.baselineRun.manifest.runId,experiment.initializedRun.manifest.runId,experiment.trainedRun.manifest.runId].includes(displayed?.run.manifest.runId??''));
+    const compositeState=compositeExperiment?(displayed?.run.manifest.runId===compositeExperiment.initializedRun.manifest.runId?compositeExperiment.initialState:compositeExperiment.trainedState):undefined;
+    const makeModel=()=>evidenceRun?spatialEvidenceReadModel(evidenceRun,archive.evidence.envelope(evidenceRun.id),worldSelection,spatialSelection,spatialEvidenceReplay):displayed&&source?spatialReadModel(displayed.run,sourceSnapshot(source.sourceSnapshotId??"")??displayed.snapshots.find(s=>s.id===source.sourceSnapshotId),source,spatialSelection,compositeState):undefined;
     let model=makeModel();if(model&&spatialPresenter.bindWorld(model,!evidenceRun))model=makeModel();
     const learning = evidenceRun?undefined:spatialLearningModel();
     const interventionExperiment=evidenceRun?undefined:[...archive.interventionExperiments.values()].find(e=>e.baselineRun.manifest.runId===result?.run.manifest.runId||e.interventionRun.manifest.runId===result?.run.manifest.runId||e.donorRun?.manifest.runId===result?.run.manifest.runId);
@@ -580,19 +583,20 @@ function render(): void {
     const interventionPair=interventionExperiment?{before:forwardReadModel(interventionExperiment.baselineRun,sourceSnapshot(interventionExperiment.startingSnapshotId)),after:forwardReadModel(interventionExperiment.interventionRun,sourceSnapshot(interventionExperiment.startingSnapshotId))}:undefined;
     const variantExperiment=evidenceRun?undefined:[...archive.modelVariantExperiments.values()].find(experiment=>[experiment.baselineRun.manifest.runId,experiment.variantRun.manifest.runId].includes(result?.run.manifest.runId??''));
     const variantPair=variantExperiment?{before:forwardReadModel(variantExperiment.baselineRun,sourceSnapshot(variantExperiment.source.snapshotId)),after:forwardReadModel(variantExperiment.variantRun,sourceSnapshot(variantExperiment.source.snapshotId))}:undefined;
+    const compositePair=compositeExperiment?{before:forwardReadModel(compositeExperiment.baselineRun,sourceSnapshot(compositeExperiment.source.snapshotId)),after:forwardReadModel(compositeExperiment.trainedRun,sourceSnapshot(compositeExperiment.source.snapshotId),compositeExperiment.trainedState)}:undefined;
     const donorToken=spatialSelection.query===0?Math.min(1,Math.max(0,(Array.isArray(result?.run.manifest.input)?result.run.manifest.input.length:1)-1)):0;
     const donorHead=(spatialSelection.head+1)%config.nHead;
     mount.innerHTML = spatialPresenter.render(model, {
       attract: !evidenceRun&&attract&&exhibitEntry, exhibit: !evidenceRun&&exhibitEntry, idleResetEnabled:kioskEnabled, idleResetSeconds:exhibitConfiguration.resetAfterMs/1000,
       retention:{bytes:evidenceBytes,runs:archive.runs.size,snapshots:archive.snapshots.size,experiments:archive.learningExperiments.size},
       interventionPending: activeIntervention!==undefined,
-      inspectedArm:forwardDriver.progress?.training?.readyOutputs?(result?.run.manifest.runId===forwardDriver.progress.training.readyOutputs.before.manifest.runId?'Current · accepted checkpoint':'Candidate · provisional checkpoint'):interventionExperiment?(result?.run.manifest.runId===interventionExperiment.baselineRun.manifest.runId?'Baseline':result?.run.manifest.runId===interventionExperiment.donorRun?.manifest.runId?'Donor':'Intervention'):variantExperiment?(result?.run.manifest.runId===variantExperiment.baselineRun.manifest.runId?'Canonical definition':'Leaky ReLU definition'):undefined,
+      inspectedArm:forwardDriver.progress?.training?.readyOutputs?(result?.run.manifest.runId===forwardDriver.progress.training.readyOutputs.before.manifest.runId?'Current · accepted checkpoint':'Candidate · provisional checkpoint'):interventionExperiment?(result?.run.manifest.runId===interventionExperiment.baselineRun.manifest.runId?'Baseline':result?.run.manifest.runId===interventionExperiment.donorRun?.manifest.runId?'Donor':'Intervention'):variantExperiment?(result?.run.manifest.runId===variantExperiment.baselineRun.manifest.runId?'Canonical definition':'Leaky ReLU definition'):compositeExperiment?(result?.run.manifest.runId===compositeExperiment.baselineRun.manifest.runId?'Canonical definition':result?.run.manifest.runId===compositeExperiment.initializedRun.manifest.runId?'Composite · initialized':'Composite · trained A/B'):undefined,
       document: documentText, busy, ready, status:evidenceRun?'Read-only admitted evidence · no execution requested':status, error, execution: evidenceRun?undefined:forwardDriver.active?forwardDriver:undefined,
-      outputPair:interventionExperiment?{before:interventionExperiment.baselineRun,after:interventionExperiment.interventionRun}:variantExperiment?{before:variantExperiment.baselineRun,after:variantExperiment.variantRun}:undefined,
-      comparisonLabels:ablation?['Baseline','Head output zeroed']:patch?['Baseline','Donor patched']:variantExperiment?['Canonical ReLU','Leaky ReLU']:undefined,
+      outputPair:interventionExperiment?{before:interventionExperiment.baselineRun,after:interventionExperiment.interventionRun}:variantExperiment?{before:variantExperiment.baselineRun,after:variantExperiment.variantRun}:compositeExperiment?{before:compositeExperiment.baselineRun,after:compositeExperiment.trainedRun}:undefined,
+      comparisonLabels:ablation?['Baseline','Head output zeroed']:patch?['Baseline','Donor patched']:variantExperiment?['Canonical ReLU','Leaky ReLU']:compositeExperiment?['Canonical W x','Composite W x + s B(Ax)']:undefined,
       intervention:ablation?{snapshot:ablation.startingSnapshotId,arm:result?.run.manifest.runId===ablation.baselineRun.manifest.runId?'Baseline':'Head output zeroed',summary:`layer ${ablation.selection.layer} / head ${ablation.selection.head} · all positions, aggregated output → zero → concat`}:patch?{snapshot:patch.startingSnapshotId,arm:result?.run.manifest.runId===patch.baselineRun.manifest.runId?'Baseline':result?.run.manifest.runId===patch.donorRun.manifest.runId?'Donor':'Donor patched',summary:`target p${patch.declaration.target.token}/L${patch.declaration.target.layer}/h${patch.declaration.target.head} ← donor p${patch.declaration.donor.token}/L${patch.declaration.donor.layer}/h${patch.declaration.donor.head} · exact observed vector → concat`,receipt:{policy:`${patch.comparison.policy.id}@${patch.comparison.policy.version}`,donor:patch.receipt.donorVector,original:patch.receipt.originalTargetVector,replacement:patch.receipt.effectiveReplacement,noOp:patch.receipt.noOp}}:undefined,
       patchDonor:{head:donorHead,token:donorToken},
-      comparison: interventionPair ?? variantPair ?? (readyComparison && forwardDriver.progress?.training?.readyOutputs ? {
+      comparison: interventionPair ?? variantPair ?? compositePair ?? (readyComparison && forwardDriver.progress?.training?.readyOutputs ? {
         before:forwardReadModel(forwardDriver.progress.training.readyOutputs.before,forwardDriver.progress.training.readyOutputs.starting),
         after:forwardReadModel(forwardDriver.progress.training.readyOutputs.after,sourceSnapshot(forwardDriver.progress.training.candidateId!))} : undefined),
       learning, experimentId: evidenceRun?'':spatialExperimentId, liveStep: liveTrainingStep,evidenceWorld:evidenceRun?{label:evidenceRun.integration,replay:spatialEvidenceReplay}:undefined,
@@ -902,10 +906,19 @@ function syncSpatialSelection(): void {
 function bind(): void {
   sharedInspector.sync(archive.evidence,result?.run.manifest.runId,!busy&&!forwardDriver.active,async()=>execute('predict'),(runId,replay)=>{spatialEvidenceRunId=runId;spatialEvidenceReplay=replay;clearWorldSelection();attract=false;clearDisplayedInspection();spatialPresenter.invalidate();render();},runId=>spatialEvidenceUnavailable(archive.evidence.get(runId)));
   const selectedVariant=[...archive.modelVariantExperiments.values()].find(experiment=>[experiment.baselineRun.manifest.runId,experiment.variantRun.manifest.runId].includes(result?.run.manifest.runId??''));
-  if(!attract&&result&&!selectedVariant&&result.run.manifest.model.id==='microgpt'){
+  const selectedComposite=[...archive.compositeVariantExperiments.values()].find(experiment=>[experiment.baselineRun.manifest.runId,experiment.initializedRun.manifest.runId,experiment.trainedRun.manifest.runId].includes(result?.run.manifest.runId??''));
+  if(!attract&&result&&!selectedVariant&&!selectedComposite&&result.run.manifest.model.id==='microgpt'){
     const button=document.createElement('button');button.id='open-activation-variant';button.textContent='Open Leaky ReLU variant';button.disabled=busy||forwardDriver.active;
-    (mount.querySelector('.spatial-header')??mount.querySelector('.source-toolbar')??mount).append(button);
+    const compositeButton=document.createElement('button');compositeButton.id='open-composite-variant';compositeButton.textContent='Train composite A/B variant';compositeButton.disabled=busy||forwardDriver.active;
+    (mount.querySelector('.spatial-header')??mount.querySelector('.source-toolbar')??mount).append(button,compositeButton);
     button.addEventListener('click',()=>void openActivationVariant());
+    compositeButton.addEventListener('click',()=>void openCompositeVariant());
+  }
+  if(selectedComposite){
+    const w=selectedComposite.witness,container=document.createElement('section');container.className='intervention-banner';container.dataset.testid='composite-variant-receipt';
+    container.innerHTML=`<strong>COMPOSITE MODEL VARIANT · ${escapeHtml(selectedComposite.targetDefinition.id)}@${escapeHtml(selectedComposite.targetDefinition.version)}</strong><p>Base checkpoint <code>${escapeHtml(selectedComposite.source.checkpointId)}</code> · rank ${selectedComposite.declaration.bottleneckWidth} · fixed s ${selectedComposite.declaration.scale}. Inherited parameters, including W, are frozen; only <code>${selectedComposite.declaration.trainableParameterOrder.map(escapeHtml).join('</code>, <code>')}</code> are optimizer members.</p><p>Identity initialization <strong>exact</strong>: B = 0, adapter = 0, composite = W x, downstream = canonical. Trained state <code>${escapeHtml(selectedComposite.trainedState.id)}</code> · Adam step ${selectedComposite.trainedState.state.optimizer.step} · exact save/resume <strong>${w.resume.exactStateEquality&&w.resume.exactPredictionEquality?'PASS':'FAIL'}</strong>.</p><p data-testid="composite-arithmetic">Output ${w.output}: ${w.arithmetic.base} + ${w.arithmetic.scale} × ${w.arithmetic.bax} = ${w.arithmetic.composite}. B update Δ ${w.backward.bUpdate.delta}; later A update Δ ${w.backward.aUpdate.delta}.</p><p>Comparison <strong>${selectedComposite.trainedComparison.policy.id}@${selectedComposite.trainedComparison.policy.version}</strong> · <code>mlpDown/output ↔ mlpCompositeDown/output</code> · variant-only A/B/scaled internals.</p><button id="composite-current">Return to accepted canonical model</button>`;
+    const anchor=mount.querySelector('.spatial-status')??mount.querySelector('.source-toolbar')??mount.firstElementChild;anchor?.insertAdjacentElement('afterend',container);
+    container.querySelector('#composite-current')?.addEventListener('click',()=>{if(liveRunId)selectRun(liveRunId);spatialPresenter.kind='mlpRelu';spatialPresenter.parameter=undefined;status='Returned to accepted canonical model · composite evidence retained read-only';render();});
   }
   if(selectedVariant){
     const w=selectedVariant.witness,container=document.createElement('section');container.className='intervention-banner';container.dataset.testid='variant-receipt';
@@ -2643,5 +2656,35 @@ async function openActivationVariant(): Promise<void> {
   }catch(failure){
     if(currentOperation!==operation)return;
     error=failure instanceof Error?failure.message:String(failure);status='Activation variant failed';
+  }finally{if(currentOperation===operation){activeIntervention=undefined;busy=false;render();}}
+}
+
+async function openCompositeVariant(): Promise<void> {
+  if (forwardDriver.active) { error='Finish or cancel the active execution before creating a composite model variant.';render();return; }
+  if (busy || !result) return;
+  if (evidenceBytes >= SESSION_BUDGET) { error='Session evidence limit reached (64 MiB estimate). Clear session before creating another variant.';render();return; }
+  const source=result;
+  if(source.run.manifest.model.id!=='microgpt'||source.run.manifest.runtimeRevision!==RUNTIME_REVISION){error='Select a compatible canonical MicroGPT run before creating the composite variant.';render();return;}
+  const snapshot=sourceSnapshot(source.run.manifest.startingSnapshotId??'');
+  if(!snapshot){error='The selected canonical source snapshot is unavailable.';render();return;}
+  clearDisplayedInspection();const currentOperation=++operation;activeIntervention=currentOperation;
+  busy=true;error='';status='Initializing A/B, training the registered composite branch, and proving exact resume…';render();
+  try{
+    const experiment:CompositeVariantExperiment=await inspector.compositeVariant({snapshot,inputIds:source.tokenIds,targetIds:source.targetIds});
+    if(currentOperation!==operation)return;
+    await archive.addRun(experiment.baselineRun);
+    await archive.addCompositeVariantExperiment(experiment);
+    if(currentOperation!==operation)return;
+    evidenceBytes+=new TextEncoder().encode(JSON.stringify(experiment)).byteLength;
+    activeIntervention=undefined;comparisonRunId=experiment.baselineRun.manifest.runId;busy=false;
+    selectRun(experiment.trainedRun.manifest.runId);
+    selectedToken=experiment.witness.token;selectedKind='mlpCompositeDown';
+    spatialSelection.query=experiment.witness.token;spatialSelection.layer=experiment.witness.layer;spatialSelection.feature=experiment.witness.output;
+    spatialPresenter.learningStage=undefined;spatialPresenter.kind='mlpCompositeDown';spatialPresenter.parameter=undefined;spatialPresenter.lens=true;spatialPresenter.focusSelection();
+    status='Composite A/B variant trained · exact resume PASS · matched-variant@1 · accepted canonical state unchanged';
+    render();
+  }catch(failure){
+    if(currentOperation!==operation)return;
+    error=failure instanceof Error?failure.message:String(failure);status='Composite variant failed';
   }finally{if(currentOperation===operation){activeIntervention=undefined;busy=false;render();}}
 }

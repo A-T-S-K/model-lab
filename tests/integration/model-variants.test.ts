@@ -32,7 +32,7 @@ async function source() { return archiveSnapshot(state()); }
 async function witness() { const snapshot = await source(); return { snapshot, experiment: await runActivationVariant({ snapshot, inputIds: fixture.tokenIds, targetIds: fixture.targetIds }) }; }
 
 test('canonical and Leaky ReLU definitions are unique reviewed registrations with one explicit replacement', () => {
-  assert.equal(modelDefinitions.list().length, 2);
+  assert.equal(modelDefinitions.list().length, 3);
   const canonical = modelDefinitions.require(CANONICAL_MICROGPT_DEFINITION);
   const variant = modelDefinitions.require(LEAKY_RELU_MICROGPT_DEFINITION);
   assert.equal(canonical.activation.operation, 'relu'); assert.equal(canonical.activation.semanticKind, 'mlpRelu');
@@ -40,7 +40,7 @@ test('canonical and Leaky ReLU definitions are unique reviewed registrations wit
   assert.equal(variant.activation.negativeSlope, LEAKY_RELU_NEGATIVE_SLOPE);
   assert.equal(variant.activation.derivativeAtZero, LEAKY_RELU_NEGATIVE_SLOPE);
   assert.deepEqual(variant.base, CANONICAL_MICROGPT_DEFINITION);
-  assert.deepEqual(variant.replacement, { sourceSemanticKind: 'mlpRelu', targetSemanticKind: 'mlpLeakyRelu', declaration: 'Replace canonical MLP ReLU with Leaky ReLU' });
+  assert.deepEqual(variant.replacement, { kind: 'activation', sourceSemanticKind: 'mlpRelu', targetSemanticKind: 'mlpLeakyRelu', declaration: 'Replace canonical MLP ReLU with Leaky ReLU' });
   assert.equal(variant.comparison?.pointMappings.filter(point => point.relationship === 'replaced').length, 1);
   assert.throws(() => modelDefinitions.require({ id: 'unknown', version: '1' }), /Unknown model definition/);
 });
@@ -143,7 +143,7 @@ test('variant preflight refuses identity, state, mapping, precision, and declara
   for (const slope of [0, NaN, Infinity]) {
     assert.throws(() => new ModelDefinitionRegistry().register(contribution({ activation: { ...valid.activation, negativeSlope: slope } })), /Invalid Leaky ReLU/);
   }
-  assert.throws(() => new ModelDefinitionRegistry().register(contribution({ replacement: { ...valid.replacement!, targetSemanticKind: 'undeclaredNode' } })), /replacement and activation/);
+  assert.throws(() => new ModelDefinitionRegistry().register(contribution({ replacement: { ...valid.replacement!, targetSemanticKind: 'undeclaredNode' as never } })), /replacement and activation/);
 });
 
 test('archive keeps variant admission separate and canonical snapshot/prediction immutable', async () => {

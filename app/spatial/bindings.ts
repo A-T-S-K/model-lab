@@ -2,6 +2,7 @@ import { forwardReadModel, type ForwardModel } from "./forward.js";
 import { evidenceWorldIntegration } from './integrations.js';
 import type { RecordedRun } from "../../trace/types.js";
 import type { ArchivedSnapshot } from "../../archive/session.js";
+import type { ArchivedCompositeVariantState } from "../../experiments/composite-variant-state.js";
 import type { EvidenceEnvelope, EvidenceRun } from "../../trace/evidence.js";
 import type { SourceBinding } from "../presentation/source-binding.js";
 import { qkGeometry } from "./geometry.js";
@@ -30,7 +31,7 @@ function readModel(forward:ForwardModel,source:SourceBinding,selection:MicrogptS
       scores:valid?get("attentionLogits",selection.query,head):undefined,weights:valid?get("attentionProbabilities",selection.query,head):undefined})),lens,
     geometry:lens?.availability==="AVAILABLE"&&lens.q&&lens.k?qkGeometry(lens.q,lens.k):undefined,projection};
 }
-export function spatialReadModel(run:RecordedRun,snapshot:ArchivedSnapshot|undefined,source:SourceBinding,selection:MicrogptSelection){return readModel(forwardReadModel(run,snapshot),source,selection);}
+export function spatialReadModel(run:RecordedRun,snapshot:ArchivedSnapshot|undefined,source:SourceBinding,selection:MicrogptSelection,variantState?:ArchivedCompositeVariantState){return readModel(forwardReadModel(run,snapshot,variantState),source,selection);}
 export function spatialEvidenceReadModel(run:EvidenceRun,envelope:EvidenceEnvelope,selection:WorldSelection,microgptSelection:MicrogptSelection,replay=false):AnySpatialReadModel{
   const integration=evidenceWorldIntegration(run.integration);if(!integration)throw Error('No continuous-world integration registered for this evidence');
   const composition=integration.compose(run,envelope,selection,replay);if(composition.kind==='registered')return composition.model;

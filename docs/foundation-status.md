@@ -18,8 +18,9 @@ grouped-axis/shape-only/opaque evidence fallback, and native Pythia's collapsed
 six-block/selected-layer world. **M2 is COMPLETE — scoped engineering qualification**
 after the integrated interaction/change-surface review; generation/cache, variants,
 model variants, later M3 experiment recipes and later failure/retention proof portions
-remain pending. M3-A qualifies the registered runtime-intervention slice, and M3-B1
-qualifies the simple Leaky ReLU model-definition replacement slice of FP-06. See
+remain pending. M3-A qualifies the registered runtime-intervention slice; M3-B1 and
+M3-B2 together engineering-qualify FP-06's executable activation and composite
+parameterized replacement scope. See
 [authority](README.md).
 
 The [repaired first-M1 qualification](reviews/M1-repair-qualification.md) retains its
@@ -50,7 +51,7 @@ Each row is a status pointer, not a reduced acceptance definition.
 | FP-03 | [Native Pythia execution, selected internals, generation and disconnected replay](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 native live/disconnected portion REQUALIFIED and M2-D native continuous-world/selected-layer/disconnected replay portion QUALIFIED; broader generation/cache proof pending |
 | FP-04 | [MLP/SGD plus grouped query/KV-axis numerical fixture](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 numeric MLP/SGD/state and grouped-axis witnesses, M2-B numeric MLP shared-world path and M2-C grouped-axis world path QUALIFIED; full foundation/M5 disposition pending |
 | FP-05 | [Shape-only, unknown and opaque states](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 fixture semantics and M2-C truthful shared-world structural/opaque/unsupported fallback QUALIFIED; full foundation/M5 disposition pending |
-| FP-06 | [Actual activation and composite parameterized replacement](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M3-B1 registered Leaky ReLU definition, explicit checkpoint initialization, real forward/backward, shared world/source and matched-variant comparison QUALIFIED; composite parameterized M3-B2 branch and independent M5 disposition pending |
+| FP-06 | [Actual activation and composite parameterized replacement](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | ENGINEERING-QUALIFIED within FP-06 implementation scope: M3-B1 registered Leaky ReLU plus M3-B2 real `W x + s B(Ax)` definition, parameter/state/optimizer/resume, semantic/source and matched-variant proof passed; independent M5/foundation disposition pending |
 | FP-07 | [Head ablation and donor activation patch](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M3-A registered head-ablation and real donor-patch recipe/receipt/lifecycle slice QUALIFIED; full FP portfolio and independent M5 disposition pending |
 | FP-08 | [Matched data substitution and defense control](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | NOT_RUN |
 | FP-09 | [Repeated invocations and bounded generation/cache correctness](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | NOT_RUN |
@@ -73,7 +74,7 @@ and [native acceptance](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#4
 | M0 | [freeze invariants and the migration map, not untested APIs](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m0-freeze-invariants-and-the-migration-map-not-untested-apis) | PREPARATION COMPLETE; slice report migration map |
 | M1 | [contracts, codecs, and dual producers early](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m1-contracts-codecs-and-dual-producers-early) | COMPLETE — scoped engineering qualification; no M2/M5 or full FP acceptance |
 | M2 | [topology, world, and interaction separation](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m2-topology-world-and-interaction-separation) | COMPLETE — scoped engineering qualification; canonical/multilayer MicroGPT, numeric MLP/SGD, grouped-axis/shape-only/opaque fallback, native Pythia and integrated interaction/change-surface qualification passed; no M3, M5 or full FP acceptance |
-| M3 | [variants and experiments](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m3-variants-and-experiments) | IN PROGRESS — M3-A interventions and M3-B1 simple activation model variant qualified; composite parameterized replacement, data/security recipes and correlation remain pending |
+| M3 | [variants and experiments](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m3-variants-and-experiments) | IN PROGRESS — M3-A interventions and M3-B1/B2 activation plus composite parameterized model replacements qualified; M3-C data/security recipes, correlation and integrated M3 qualification remain pending |
 | M4 | [durable payloads and failure boundaries](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m4-durable-payloads-and-failure-boundaries) | NOT_RUN |
 | M5 | [independent foundation review](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m5-independent-foundation-review) | NOT_RUN |
 | M6 | [full user testing, workshop, station, release](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m6-full-user-testing-workshop-station-release) | NOT_RUN |
@@ -545,3 +546,44 @@ details are in the
 This qualifies only the simple activation-replacement portion of FP-06. It does not
 complete FP-06, M3 or foundation acceptance. M3-B2's composite parameterized branch
 `W x + s B(Ax)` and its parameter/optimizer/state contract remain the next dependency.
+
+## M3-B2 composite parameterized-variant increment
+
+M3 remains **IN PROGRESS**. The second FP-06 slice registers
+`microgpt.composite-mlp@1` directly on canonical MicroGPT and replaces the MLP down
+region with the real readable branch `W x + 0.5 B(Ax)`. Canonical ReLU remains in
+place. Rank is 2; A is deterministically nonzero, B starts at exact zero, all inherited
+parameters are frozen, only A/B are trainable, and scale is a fixed definition
+constant.
+
+The separate inert-data `microgpt.composite-variant-state@1` codec binds the exact
+definition, immutable canonical base checkpoint, initialization/schema/axes, A/B
+values, frozen/trainable policy, A/B-only Adam moments/configuration, binary64 policy
+and continuation cursor/RNG state. The canonical format-1 snapshot validator is
+unchanged and refuses variant state. Canonical optimizer moments are not reused.
+
+Identity-preserving initialization proves exact zero adapter contribution and exact
+canonical downstream equality. Real step 1 updates B while A's gradient is correctly
+zero; real step 2 produces a nonzero A gradient/update. Uninterrupted two-step training
+and save/decode/validate/restore between steps produce the same exact state hash and
+prediction. The canonical source remains byte-identical.
+
+The shared world exposes base W, A, B, fixed scale, scaled adapter and additive merge,
+with exact dot products/source/parameter ownership. Strict `compareRuns` still refuses
+different definitions. `matched-variant@1` maps canonical `mlpDown` to composite output
+and names branch internals as variant-only rather than fake missing counterparts.
+
+Qualified runtime is
+`sha256:64213684aa0176ddd8dfdca3c3e25ababcd068a9a322170921a7318fe1c18e33`.
+All 191 unit/integration cases completed with 186 passes and five optional native
+fixture skips; portable and byte-exact canonical references, typecheck, example and a
+fresh protected build passed. The focused B2 browser route, retained M3-A/B1 routes and
+affected canonical spatial/learning routes passed on the exact candidate. Durable
+identities, arithmetic/update/resume witnesses, refusal controls, visual evidence and
+unrun scope are in the
+[M3-B2 parameterized-variant qualification](reviews/M3-B2-parameterized-variant-qualification.md).
+
+M3-B1 plus M3-B2 engineering-qualify FP-06's executable implementation proof. This is
+not M3 completion, independent M5 review or foundation acceptance. The next dependency
+is M3-C data/security experiment recipes and correlation, followed by integrated M3
+qualification.

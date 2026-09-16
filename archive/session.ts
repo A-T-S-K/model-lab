@@ -8,6 +8,7 @@ import type { InterventionExperiment } from '../experiments/intervention.js';
 import { interventionRecipes } from '../experiments/recipes.js';
 import { compareMatchedInterventionArms } from '../trace/compare.js';
 import { validateActivationVariantExperiment, type ActivationVariantExperiment } from '../experiments/model-variant.js';
+import { validateCompositeVariantExperiment, type CompositeVariantExperiment } from '../experiments/composite-model-variant.js';
 
 export { archiveSnapshot, snapshotId, validateTrainingSnapshot, canonicalBytes } from './snapshot.js';
 export type { ArchivedSnapshot } from './snapshot.js';
@@ -37,11 +38,13 @@ export class SessionArchive {
   readonly #learningExperiments = new Map<string, LearningExperiment>();
   readonly #interventionExperiments = new Map<string, InterventionExperiment>();
   readonly #modelVariantExperiments = new Map<string, ActivationVariantExperiment>();
+  readonly #compositeVariantExperiments = new Map<string, CompositeVariantExperiment>();
   readonly snapshots: ReadonlyMap<string, ArchivedSnapshot> = new ArchiveView(this.#snapshots);
   readonly runs: ReadonlyMap<string, RecordedRun> = new ArchiveView(this.#runs);
   readonly learningExperiments: ReadonlyMap<string, LearningExperiment> = new ArchiveView(this.#learningExperiments);
   readonly interventionExperiments: ReadonlyMap<string, InterventionExperiment> = new ArchiveView(this.#interventionExperiments);
   readonly modelVariantExperiments: ReadonlyMap<string, ActivationVariantExperiment> = new ArchiveView(this.#modelVariantExperiments);
+  readonly compositeVariantExperiments: ReadonlyMap<string, CompositeVariantExperiment> = new ArchiveView(this.#compositeVariantExperiments);
 
   async addSnapshot(record: ArchivedSnapshot): Promise<void> {
     const copy = await archiveSnapshot(record.state);
@@ -132,5 +135,23 @@ export class SessionArchive {
     // not enter the legacy run codec or claim a legacy training snapshot resume.
     this.#runs.set(copy.variantRun.manifest.runId, copy.variantRun);
     this.#modelVariantExperiments.set(copy.id, copy);
+  }
+
+  async addCompositeVariantExperiment(experiment: CompositeVariantExperiment): Promise<void> {
+    const copy = immutableCopy(experiment); canonicalBytes(copy);
+    const snapshot = this.#snapshots.get(copy.source.snapshotId);
+    if (!snapshot) throw new Error('Composite model-variant experiment references a missing source snapshot');
+    await validateCompositeVariantExperiment(copy, snapshot);
+    const existingBaseline = this.#runs.get(copy.baselineRun.manifest.runId);
+    if (!existingBaseline || !exactData(existingBaseline, copy.baselineRun))
+      throw new Error('Composite model-variant baseline must be admitted as canonical evidence first');
+    for (const run of [copy.initializedRun, copy.trainedRun]) {
+      const existingRun = this.#runs.get(run.manifest.runId);
+      if (existingRun && !exactData(existingRun, run)) throw new Error('Composite variant run ID already has different immutable evidence');
+      this.#runs.set(run.manifest.runId, run);
+    }
+    const existing = this.#compositeVariantExperiments.get(copy.id);
+    if (existing && !exactData(existing, copy)) throw new Error('Composite model-variant experiment ID already has different immutable evidence');
+    this.#compositeVariantExperiments.set(copy.id, copy);
   }
 }
