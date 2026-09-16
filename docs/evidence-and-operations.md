@@ -48,7 +48,19 @@ identify storage bytes plus decoding metadata and do not replace run, request or
 identity. Large admitted envelopes are not retained as hidden duplicate number arrays;
 only bounded registered codec metadata remains. The historical `model-lab-json-v1`
 serializer/parser still operates on original envelopes. Portable export of payload-backed
-retained sessions remains M4-B2 work.
+retained sessions uses a separate deterministic binary container with fixed magic/version,
+a bounded canonical manifest and sorted length-delimited raw payload entries.
+
+Portable archive v1 retains snapshots, legacy runs, registered experiment receipts and
+standalone shared evidence while excluding worker, UI and pending-operation state.
+Payload-backed entries carry separate original-envelope, portable-entry, payload and
+whole-archive identities. Import loads bytes into isolated payload storage, reconstructs
+a fresh `SessionArchive` through build-time integration/recipe/model registries, checks
+complete references, and only then returns it for historical-view replacement. The
+retained validator requires exactly one numerical storage path for every available point;
+registered codecs can validate large evidence through bounded slices. Import never
+executes source references, restores the live worker, contacts a native endpoint or
+adopts a snapshot as accepted state.
 
 A first-class `LearningExperiment` links exact starting/resulting snapshots, separate before/training/after semantic runs, observed gradient anchors, and the actual Adam update. The current `run` is the **after** prediction for display compatibility. Backward inspection explicitly targets the training run, whose scalar values and adjoints were frozen before Adam mutation. Both snapshots and all three runs remain independently inspectable.
 

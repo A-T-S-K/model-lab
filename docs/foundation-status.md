@@ -63,8 +63,8 @@ Each row is a status pointer, not a reduced acceptance definition.
 | FP-07 | [Head ablation and donor activation patch](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M3-A registered head-ablation and real donor-patch recipe/receipt/lifecycle slice QUALIFIED; full FP portfolio and independent M5 disposition pending |
 | FP-08 | [Matched data substitution and defense control](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | ENGINEERING-QUALIFIED within M3-C implementation scope: registered clean/treatment/defended matched training, exact lineage, retained triggered/control/clean evidence, deterministic allowlist policy records and explicit tamper-resistant external correlation passed; independent M5/foundation disposition pending |
 | FP-09 | [Repeated invocations and bounded generation/cache correctness](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | ENGINEERING-QUALIFIED for `pythia-14m-cpu-f32-eager-uncached-generation-v2`: prompt/generated occurrence, position, step, request and cancellation-epoch identities are separate; full-prefix `use_cache=False` execution, full-support argmax, invalidation, stale refusal and replay passed. No cache path is advertised and no cached/uncached equivalence claim is made; a future cached profile requires separate qualification and M5 review. |
-| FP-10 | [Legacy replay, export/import and representation-aware comparison](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 legacy and new-codec replay/state portions QUALIFIED; M4-B1 original evidence identity plus bounded byte-backed retention/disconnected read portion ENGINEERING-QUALIFIED; portable whole-session export/import and broader comparison/durability pending |
-| FP-11 | [Async, retention, transport and inert-import failure controls](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 affected receipt/stale/import/transport controls REQUALIFIED; M4-B1 payload integrity, tamper, missing-byte, bounded-fetch and hidden-duplicate controls ENGINEERING-QUALIFIED; broader retention/transport/reconciliation failures pending |
+| FP-10 | [Legacy replay, export/import and representation-aware comparison](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | ENGINEERING-QUALIFIED within implemented scope: M1 legacy/new-codec replay, M4-B1 bounded byte-backed retention, and M4-B2 deterministic portable whole-session export/import preserve record, evidence and payload identities plus qualified comparisons/refusals; independent M5 review and later durability policy remain pending |
+| FP-11 | [Async, retention, transport and inert-import failure controls](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 affected receipt/stale/import/transport controls REQUALIFIED; M4-B1 payload integrity/bounded-fetch controls and M4-B2 bounded inert parsing, registered validation, tamper refusal and atomic staged publication ENGINEERING-QUALIFIED; retention/work limits and remote transport reconciliation remain pending |
 | FP-12 | [Shared visual/explanation routes and extension change surface](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 same-inspector/source/fallback and integrated M2-A through M2-E world/interaction/change-surface work QUALIFIED; independent M5 review pending |
 
 Native Pythia is a required real second transformer executing through the shared
@@ -738,3 +738,38 @@ This qualifies bounded payload-storage support for FP-10 and the affected payloa
 integrity/bounded-fetch controls for FP-11. It does not complete either proof or M4. The
 next dependency is M4-B2 portable session archive export/import; retention policy and
 remote mutation reconciliation remain separate later M4 work.
+
+## M4-B2 portable whole-session archive increment
+
+M4 remains **IN PROGRESS**. Portable archive v1 uses fixed `MLARCHV1` magic, an explicit
+version, a bounded deterministic JSON manifest, a declared payload count, and sorted
+length-delimited uncompressed payload bytes. SHA-256 identifies the complete archive
+bytes but does not authenticate authorship. Map/object insertion order, active UI
+selection and wall-clock time do not affect export bytes.
+
+Import first parses and validates into an isolated `SessionArchive`: payload bytes,
+snapshots, directly admitted legacy runs, learning experiments, interventions,
+definition-aware model variants, data experiments and standalone shared evidence all use
+their existing registered validators. Payload-backed evidence additionally uses a strict
+retained-run validator and a registered-codec retained boundary. The Pythia generation
+codec rescans the full 50,304-logit support through slices of at most 256 values before
+accepting argmax/top-k/probability receipts. Imported source/module/URL/command strings
+remain inert metadata; no worker, native endpoint, network request, dynamic import or
+accepted-state adoption occurs.
+
+The final mixed witness contains 10 snapshots, 71 runs, 13 learning experiments, both
+registered interventions, both registered model variants, the M3-C data experiment and
+the M4-A generation entry. Its 13,285,363 deterministic bytes have archive ID
+`sha256:7cef8902cfd6489fe482ee314d8251de4e6eb263e5506df001a76ab20a7d7373`;
+18 unique payloads occupy 438,272 bytes. After disconnected import, output index 50,303
+remained `-3.8919265270233154`, the qualified QKV slice remained exact, choices remained
+`[327, 253]`, and zero native requests occurred. A last-payload mutation refused without
+replacing valid imported history or changing live step 0. Exact architecture, budgets,
+commands, artifacts and limitations are in the
+[M4-B2 qualification](reviews/M4-B2-portable-archive-qualification.md).
+
+This completes the portable export/import portion of FP-10 and adds the implemented
+inert-import/tamper/atomic-publication portion of FP-11. It does not qualify general
+retention/eviction, renderer/work limits, pending/opaque behavior under retention,
+remote mutation idempotency or acknowledgement reconciliation. The next dependency is
+M4-C retention and work/render budgets; M4-D remains separate.
