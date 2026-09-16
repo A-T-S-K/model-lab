@@ -20,7 +20,9 @@ after the integrated interaction/change-surface review; generation/cache, varian
 model variants, later M3 experiment recipes and later failure/retention proof portions
 remain pending. M3-A qualifies the registered runtime-intervention slice; M3-B1 and
 M3-B2 together engineering-qualify FP-06's executable activation and composite
-parameterized replacement scope. See
+parameterized replacement scope. M3-C engineering-qualifies the bounded FP-08
+registered matched-data substitution, defense-control and external-correlation slice;
+integrated M3 qualification remains pending. See
 [authority](README.md).
 
 The [repaired first-M1 qualification](reviews/M1-repair-qualification.md) retains its
@@ -53,7 +55,7 @@ Each row is a status pointer, not a reduced acceptance definition.
 | FP-05 | [Shape-only, unknown and opaque states](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 fixture semantics and M2-C truthful shared-world structural/opaque/unsupported fallback QUALIFIED; full foundation/M5 disposition pending |
 | FP-06 | [Actual activation and composite parameterized replacement](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | ENGINEERING-QUALIFIED within FP-06 implementation scope: M3-B1 registered Leaky ReLU plus M3-B2 real `W x + s B(Ax)` definition, parameter/state/optimizer/resume, semantic/source and matched-variant proof passed; independent M5/foundation disposition pending |
 | FP-07 | [Head ablation and donor activation patch](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M3-A registered head-ablation and real donor-patch recipe/receipt/lifecycle slice QUALIFIED; full FP portfolio and independent M5 disposition pending |
-| FP-08 | [Matched data substitution and defense control](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | NOT_RUN |
+| FP-08 | [Matched data substitution and defense control](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | ENGINEERING-QUALIFIED within M3-C implementation scope: registered clean/treatment/defended matched training, exact lineage, retained triggered/control/clean evidence, deterministic allowlist policy records and explicit tamper-resistant external correlation passed; independent M5/foundation disposition pending |
 | FP-09 | [Repeated invocations and bounded generation/cache correctness](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | NOT_RUN |
 | FP-10 | [Legacy replay, export/import and representation-aware comparison](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 legacy and new-codec replay/state portions QUALIFIED; broader comparison/durability pending |
 | FP-11 | [Async, retention, transport and inert-import failure controls](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 affected receipt/stale/import/transport controls REQUALIFIED; broader M4 failures/retention pending |
@@ -74,7 +76,7 @@ and [native acceptance](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#4
 | M0 | [freeze invariants and the migration map, not untested APIs](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m0-freeze-invariants-and-the-migration-map-not-untested-apis) | PREPARATION COMPLETE; slice report migration map |
 | M1 | [contracts, codecs, and dual producers early](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m1-contracts-codecs-and-dual-producers-early) | COMPLETE — scoped engineering qualification; no M2/M5 or full FP acceptance |
 | M2 | [topology, world, and interaction separation](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m2-topology-world-and-interaction-separation) | COMPLETE — scoped engineering qualification; canonical/multilayer MicroGPT, numeric MLP/SGD, grouped-axis/shape-only/opaque fallback, native Pythia and integrated interaction/change-surface qualification passed; no M3, M5 or full FP acceptance |
-| M3 | [variants and experiments](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m3-variants-and-experiments) | IN PROGRESS — M3-A interventions and M3-B1/B2 activation plus composite parameterized model replacements qualified; M3-C data/security recipes, correlation and integrated M3 qualification remain pending |
+| M3 | [variants and experiments](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m3-variants-and-experiments) | IN PROGRESS — M3-A interventions, M3-B1/B2 activation plus composite parameterized replacements, and M3-C registered data/security experiment plus correlation are qualified; final integrated M3 qualification remains pending |
 | M4 | [durable payloads and failure boundaries](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m4-durable-payloads-and-failure-boundaries) | NOT_RUN |
 | M5 | [independent foundation review](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m5-independent-foundation-review) | NOT_RUN |
 | M6 | [full user testing, workshop, station, release](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m6-full-user-testing-workshop-station-release) | NOT_RUN |
@@ -587,3 +589,51 @@ M3-B1 plus M3-B2 engineering-qualify FP-06's executable implementation proof. Th
 not M3 completion, independent M5 review or foundation acceptance. The next dependency
 is M3-C data/security experiment recipes and correlation, followed by integrated M3
 qualification.
+
+## M3-C registered matched-data experiment increment
+
+M3 remains **IN PROGRESS**. The bounded FP-08 slice registers
+`microgpt.matched-data-substitution@1` separately from runtime interventions and model
+definitions. The existing authentic data-substitution trial remains the sole native
+training computation and now produces one common receipt over clean, treatment and
+defended arms. Every arm restores the exact same complete canonical snapshot, executes
+four ordered updates with the same Adam configuration, input transform and objective,
+and retains every before/training/backward/after run, learning experiment and start/end
+snapshot.
+
+Treatment changes only declared step 0 from `abca` to `abcc`. Defended proposals equal
+treatment proposals; `schedule-integrity-allowlist@1` normalizes the changed proposal
+back to the clean step document. `matched-training-arms@1` passed equal budget/order,
+source, configuration, continuation and lineage checks. Clean and defended final state
+were exactly equal; treatment was distinct. Strict `compareRuns` remains unchanged for
+same-input final-arm evaluations.
+
+Twelve immutable SHA-256 external context records cover experiment, arm, step, policy,
+proposed/expected/effective documents, decision, learning/run identities and start/end
+snapshots. The isolated correlation fixture and archive admission link those records to
+exact model evidence without representing policy as model execution or claiming
+causation. Identity tampering, hidden/missing/reordered work, undeclared documents,
+policy inconsistency, missing evaluation, failed/cancelled lifecycle and duplicate IDs
+are refused.
+
+The fixed witness retained triggered `abc`, controls `bca`/`cab`, and clean documents
+`abca`/`bcab`/`cabc`/`abab`. Observed triggered desired-token probabilities were
+`0.22836873846037267` clean, `0.28817107563175154` treatment and
+`0.22836873846037267` defended. Mean clean-task losses were
+`1.0539085273735747`, `1.0742336346831418` and `1.0539085273735747` respectively.
+These are neutral measurements; no attack or mitigation threshold is declared.
+
+Qualified runtime is
+`sha256:6b079bc9d22cc1b1607cdc821d8783a764551dbc8a6d6d611827598f951ed4a4`.
+All 196 unit/integration cases completed with 191 passes and five optional native
+fixture skips; portable and byte-exact canonical references, typecheck, example and a
+fresh protected build passed. Exact-candidate Playwright passed M3-C plus retained
+M3-A/B routes (5/5), and visual review covered 1920×1080 plus 1280×720/reduced motion.
+Durable identities, all lineage, metrics, refusals, intermediate failures and unrun
+scope are in the
+[M3-C data-experiment qualification](reviews/M3-C-data-experiment-qualification.md).
+
+This engineering-qualifies FP-08 only within the implemented bounded slice. It is not
+integrated M3 closure, independent M5 review or foundation acceptance. The next
+dependency is the separately authorized final integrated M3 qualification; no M4 work
+began here.
