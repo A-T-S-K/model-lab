@@ -66,7 +66,7 @@ and [native acceptance](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#4
 | --- | --- | --- |
 | M0 | [freeze invariants and the migration map, not untested APIs](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m0-freeze-invariants-and-the-migration-map-not-untested-apis) | PREPARATION COMPLETE; slice report migration map |
 | M1 | [contracts, codecs, and dual producers early](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m1-contracts-codecs-and-dual-producers-early) | COMPLETE — scoped engineering qualification; no M2/M5 or full FP acceptance |
-| M2 | [topology, world, and interaction separation](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m2-topology-world-and-interaction-separation) | NOT_RUN |
+| M2 | [topology, world, and interaction separation](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m2-topology-world-and-interaction-separation) | IN PROGRESS — M2-A canonical + multilayer MicroGPT shared-world increment qualified; later M2 witnesses pending |
 | M3 | [variants and experiments](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m3-variants-and-experiments) | NOT_RUN |
 | M4 | [durable payloads and failure boundaries](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m4-durable-payloads-and-failure-boundaries) | NOT_RUN |
 | M5 | [independent foundation review](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m5-independent-foundation-review) | NOT_RUN |
@@ -220,3 +220,41 @@ state, not an adopted candidate; noncanonical MicroGPT supports inference state 
 Pythia still refuses training/generation/cache. M2 and all later stages remain pending.
 The prepared kit, canonical mathematics/fixtures/oracle, previous evidence and the
 unrelated product review were preserved. The retired sample remains absent.
+
+## M2-A shared topology/world increment
+
+M2 is **IN PROGRESS**. The first bounded increment composes canonical MicroGPT and
+`microgpt-multilayer-v1` through one topology-driven continuous-world boundary while
+retaining the canonical curated layout and controls. Semantic addresses include model
+definition, node, port, run, invocation, phase and typed coordinates; dependency kinds
+separate activation, parameter and saved-residual relationships. The existing M1
+recordings remain unchanged. Multilayer parameter structure is supplied as a pinned
+source-derived integration mapping and is labeled separately from observed execution.
+
+The qualified multilayer route selected `layer.1.headOutput.head.2` at `position.5`
+and displayed the observed values `[-0.29465538815514963,
+0.016003910505710935]`. It navigated to the actual layer-1/head-2 attention
+probabilities, all six earlier causal K and V occurrences, the layer-0 MLP residual
+feeding layer 1, and `layer1.attn_wq` ownership. A second run cleared transient
+pin/lens/source state, switching definitions reset incompatible coordinates, and saved
+multilayer evidence reopened in the world without another noncanonical execution.
+Unsupported training, optimizer, mutation and scalar-continuation actions are absent
+from the read-only multilayer world.
+
+Application runtime is
+`sha256:3d43c3f024be211642430fbb061e0893750c55e929cb2f2d1ffb460e809c2459`.
+Qualification passed 147 unit/integration cases with three optional native-profile
+cases skipped, portable and byte-exact canonical reference checks, typecheck, example,
+and a fresh task-owned Vite build. Scoped Playwright passed the M2-A route plus the
+retained Wave 1A/Wave 1D routes (6 cases) and receipt/stale-selection regressions
+(5 cases). Full-size visual inspection covered canonical overview, canonical return,
+multilayer overview, the selected witness, dependency and parameter-owner views at
+1920×1080, plus saved replay at 1280×720 with reduced motion. The initial sandboxed
+unit run's two localhost `EPERM` failures passed unchanged when localhost binding was
+authorized; no assertion or fixture was weakened.
+
+This increment does not complete M2 or any full foundation proof. The numeric MLP,
+grouped/shape-only/opaque fallback, Pythia collapsed/selected-layer views, and the
+remaining integrated M2 interaction/change-surface work are still pending. M5,
+foundation acceptance, unfamiliar-user testing, workshop and release gates remain
+ungranted.
