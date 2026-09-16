@@ -26,8 +26,9 @@ registered matched-data substitution, defense-control and external-correlation s
 The final integrated archive/lifecycle/change-surface pass is complete, so **M3 is
 COMPLETE — scoped engineering qualification**. **M4 is IN PROGRESS**: M4-A adds and
 engineering-qualifies bounded native Pythia generation and the explicitly uncached
-FP-09 profile; portable archives, byte-backed payloads and remote reconciliation remain
-for M4-B. Independent M5/foundation disposition remains pending. See
+FP-09 profile; M4-B1 engineering-qualifies validated byte-backed numerical payload
+storage and bounded access. Portable archives, retention policy and remote reconciliation
+remain. Independent M5/foundation disposition remains pending. See
 [authority](README.md).
 
 The [repaired first-M1 qualification](reviews/M1-repair-qualification.md) retains its
@@ -62,8 +63,8 @@ Each row is a status pointer, not a reduced acceptance definition.
 | FP-07 | [Head ablation and donor activation patch](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M3-A registered head-ablation and real donor-patch recipe/receipt/lifecycle slice QUALIFIED; full FP portfolio and independent M5 disposition pending |
 | FP-08 | [Matched data substitution and defense control](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | ENGINEERING-QUALIFIED within M3-C implementation scope: registered clean/treatment/defended matched training, exact lineage, retained triggered/control/clean evidence, deterministic allowlist policy records and explicit tamper-resistant external correlation passed; independent M5/foundation disposition pending |
 | FP-09 | [Repeated invocations and bounded generation/cache correctness](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | ENGINEERING-QUALIFIED for `pythia-14m-cpu-f32-eager-uncached-generation-v2`: prompt/generated occurrence, position, step, request and cancellation-epoch identities are separate; full-prefix `use_cache=False` execution, full-support argmax, invalidation, stale refusal and replay passed. No cache path is advertised and no cached/uncached equivalence claim is made; a future cached profile requires separate qualification and M5 review. |
-| FP-10 | [Legacy replay, export/import and representation-aware comparison](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 legacy and new-codec replay/state portions QUALIFIED; broader comparison/durability pending |
-| FP-11 | [Async, retention, transport and inert-import failure controls](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 affected receipt/stale/import/transport controls REQUALIFIED; broader M4 failures/retention pending |
+| FP-10 | [Legacy replay, export/import and representation-aware comparison](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 legacy and new-codec replay/state portions QUALIFIED; M4-B1 original evidence identity plus bounded byte-backed retention/disconnected read portion ENGINEERING-QUALIFIED; portable whole-session export/import and broader comparison/durability pending |
+| FP-11 | [Async, retention, transport and inert-import failure controls](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 affected receipt/stale/import/transport controls REQUALIFIED; M4-B1 payload integrity, tamper, missing-byte, bounded-fetch and hidden-duplicate controls ENGINEERING-QUALIFIED; broader retention/transport/reconciliation failures pending |
 | FP-12 | [Shared visual/explanation routes and extension change surface](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 same-inspector/source/fallback and integrated M2-A through M2-E world/interaction/change-surface work QUALIFIED; independent M5 review pending |
 
 Native Pythia is a required real second transformer executing through the shared
@@ -82,7 +83,7 @@ and [native acceptance](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#4
 | M1 | [contracts, codecs, and dual producers early](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m1-contracts-codecs-and-dual-producers-early) | COMPLETE — scoped engineering qualification; no M2/M5 or full FP acceptance |
 | M2 | [topology, world, and interaction separation](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m2-topology-world-and-interaction-separation) | COMPLETE — scoped engineering qualification; canonical/multilayer MicroGPT, numeric MLP/SGD, grouped-axis/shape-only/opaque fallback, native Pythia and integrated interaction/change-surface qualification passed; no M3, M5 or full FP acceptance |
 | M3 | [variants and experiments](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m3-variants-and-experiments) | COMPLETE — scoped engineering qualification; registered interventions, actual activation/composite replacements, definition-aware variant state, matched data/security experiment, correlation and integrated lifecycle/change-surface qualification passed; no M4, M5 or full foundation acceptance |
-| M4 | [durable payloads and failure boundaries](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m4-durable-payloads-and-failure-boundaries) | IN PROGRESS — M4-A bounded native generation / FP-03 + FP-09 uncached slice engineering-qualified; M4-B portable archive, byte-backed payloads and remote reconciliation not begun |
+| M4 | [durable payloads and failure boundaries](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m4-durable-payloads-and-failure-boundaries) | IN PROGRESS — M4-A bounded native generation / FP-03 + FP-09 uncached slice and M4-B1 byte-backed numerical payload storage/bounded access engineering-qualified; portable archive, retention policy and remote reconciliation pending |
 | M5 | [independent foundation review](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m5-independent-foundation-review) | NOT_RUN |
 | M6 | [full user testing, workshop, station, release](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m6-full-user-testing-workshop-station-release) | NOT_RUN |
 
@@ -711,3 +712,29 @@ This engineering-qualifies the bounded-generation portion of FP-03 and FP-09 onl
 the explicit uncached profile. It does not complete M4, advertise a cache, claim
 cached-versus-uncached equivalence, or begin portable archives, byte-backed payloads or
 remote reconciliation. The next dependency is M4-B.
+
+## M4-B1 byte-backed numerical payload increment
+
+M4 remains **IN PROGRESS**. Registered evidence codecs still validate their existing
+producer envelopes before the generic store applies a model-independent policy: available
+points of at most 256 values remain inline, while larger points become immutable
+content-addressed bytes with explicit dtype, element encoding, little-endian byte order,
+row-major layout, element count and byte length. Float64, float32 and int32 exact round
+trips, negative zero, descriptor/byte integrity, deduplication, missing-payload refusal
+and strict slices of at most 256 values passed. Unavailable, shape-only and opaque points
+remain nonnumerical.
+
+The exact M4-A generation recording retained its original run/request/profile/runtime and
+envelope content identity. All three 50,304-logit occurrences are byte-backed; identical
+prefill and first-generation payload bytes deduplicate without merging their evidence
+occurrences. No retained run/codec metadata contains a numerical array longer than 256.
+Index 50,303 and selected QKV slices decode exactly, retained generation presentation uses
+its truthful top-k/omitted-mass receipt, and disconnected browser replay made zero native
+requests. Historical JSON evidence and canonical/M1-M3/M4-A regressions passed. Exact
+commands, payload identities, failures, visual artifacts and scope are in the
+[M4-B1 payload qualification](reviews/M4-B1-payload-qualification.md).
+
+This qualifies bounded payload-storage support for FP-10 and the affected payload
+integrity/bounded-fetch controls for FP-11. It does not complete either proof or M4. The
+next dependency is M4-B2 portable session archive export/import; retention policy and
+remote mutation reconciliation remain separate later M4 work.
