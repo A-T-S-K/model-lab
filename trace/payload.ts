@@ -117,6 +117,8 @@ export interface NumericalPayloadStorage {
   has(contentId: string): boolean;
   metadata(contentId: string): NumericalPayloadDescriptor;
   slice(descriptor: NumericalPayloadDescriptor, start: number, count: number): readonly number[];
+  /** Whole-payload defensive copy for archive serialization only. */
+  exportBytes(descriptor: NumericalPayloadDescriptor): Uint8Array;
 }
 
 /** In-memory content-addressed bytes. Backing buffers are copied on admission and never exposed. */
@@ -174,5 +176,12 @@ export class InMemoryNumericalPayloadStore implements NumericalPayloadStorage {
     const view = new DataView(payload.bytes.buffer, payload.bytes.byteOffset, payload.bytes.byteLength), result: number[] = [];
     for (let index = start; index < start + count; index++) result.push(decodeValue(descriptor, view, index));
     return Object.freeze(result);
+  }
+
+  exportBytes(value: NumericalPayloadDescriptor): Uint8Array {
+    const descriptor = validatePayloadDescriptor(value), payload = this.#payloads.get(descriptor.contentId);
+    requirePayload(payload, 'Missing numerical payload');
+    requirePayload(sameDescriptor(payload.descriptor, descriptor), 'Payload metadata mismatch');
+    return new Uint8Array(payload.bytes);
   }
 }

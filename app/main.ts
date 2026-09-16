@@ -63,6 +63,12 @@ import {
   type Artifact,
 } from "../trace/types.js";
 import { SessionArchive } from "../archive/session.js";
+import {
+  exportPortableArchive,
+  importPortableArchive,
+  PORTABLE_ARCHIVE_EXTENSION,
+  PORTABLE_ARCHIVE_LIMITS,
+} from "../archive/portable.js";
 import { InspectorWorkerClient } from "./worker/inspector-client.js";
 import { isHeadAblationExperiment } from "../experiments/ablation.js";
 import { isActivationPatchExperiment } from "../experiments/activation-patch.js";
@@ -106,6 +112,8 @@ const config = fixture.config;
 const client = new ModelWorkerClient();
 const inspector = new InspectorWorkerClient();
 let archive = new SessionArchive();
+let importedArchiveId = "";
+let portableArchiveMessage = "";
 const sharedInspector = new SharedInspector();
 let spatialEvidenceRunId = "";
 let spatialEvidenceReplay = false;
@@ -913,6 +921,9 @@ function syncSpatialSelection(): void {
 }
 function bind(): void {
   sharedInspector.sync(archive.evidence,result?.run.manifest.runId,!busy&&!forwardDriver.active,async()=>execute('predict'),(runId,replay)=>{spatialEvidenceRunId=runId;spatialEvidenceReplay=replay;clearWorldSelection();attract=false;clearDisplayedInspection();spatialPresenter.invalidate();render();},runId=>spatialEvidenceUnavailable(archive.evidence.get(runId)));
+  let portableHost=document.querySelector<HTMLElement>('#portable-archive-host');
+  if(spatialActive&&!kioskEnabled){if(!portableHost){portableHost=document.createElement('section');portableHost.id='portable-archive-host';document.body.append(portableHost);}portableHost.innerHTML=portableArchiveControls();}
+  else portableHost?.remove();
   const selectedVariant=[...archive.modelVariantExperiments.values()].filter(isActivationVariantExperiment).find(experiment=>[experiment.baselineRun.manifest.runId,experiment.variantRun.manifest.runId].includes(result?.run.manifest.runId??''));
   const selectedComposite=[...archive.modelVariantExperiments.values()].filter(isCompositeVariantExperiment).find(experiment=>[experiment.baselineRun.manifest.runId,experiment.initializedRun.manifest.runId,experiment.trainedRun.manifest.runId].includes(result?.run.manifest.runId??''));
   const selectedDataExperiment=activeDataExperimentId?archive.dataExperiments.get(activeDataExperimentId):undefined;
@@ -1385,6 +1396,8 @@ function bind(): void {
       comparisonRunId = (event.target as HTMLSelectElement).value;
       render();
     });
+  document.querySelector("#export-archive")?.addEventListener("click", () => void exportSessionArchive());
+  document.querySelector<HTMLInputElement>("#import-archive")?.addEventListener("change", (event) => void importSessionArchive(event));
   document
     .querySelector("#training-count")
     ?.addEventListener("change", (event) => {
@@ -1823,6 +1836,8 @@ async function reset(cancelled: boolean, clear = false): Promise<void> {
     selectedBackwardEdge = undefined;
     compactFanIn = false;
     archive = new SessionArchive();
+    importedArchiveId = "";
+    portableArchiveMessage = "";
     evidenceBytes = 0;
     trainingSummaries.length = 0;
     inspectionCache.clear();
@@ -2105,6 +2120,49 @@ function runLabel(run: RecordedRun): string {
           : "prediction";
   return `step ${step ?? "unavailable"} · ${role} · ${run.manifest.runId}`;
 }
+
+async function exportSessionArchive(): Promise<void> {
+  if (busy || forwardDriver.active || kioskEnabled) return;
+  busy = true; error = ""; status = "Serializing retained historical archive…"; render();
+  try {
+    const exported = await exportPortableArchive(archive);
+    const blobBytes = new Uint8Array(exported.bytes.length); blobBytes.set(exported.bytes);
+    const blob = new Blob([blobBytes], { type: "application/vnd.model-lab.archive" });
+    const url = URL.createObjectURL(blob), link = document.createElement("a");
+    link.href = url; link.download = `model-lab-${exported.archiveId.slice(7, 23)}${PORTABLE_ARCHIVE_EXTENSION}`;
+    link.click(); queueMicrotask(() => URL.revokeObjectURL(url));
+    status = `Portable archive exported · ${exported.archiveId} · ${exported.payloadCount} unique payloads · no execution`;
+    portableArchiveMessage = status;
+  } catch (failure) {
+    error = (failure instanceof Error ? failure.message : String(failure)).slice(0, 240);
+    status = "Archive export failed · history unchanged";
+    portableArchiveMessage = `${status}: ${error}`;
+  } finally { busy = false; render(); queueMicrotask(() => document.querySelector<HTMLButtonElement>("#export-archive")?.focus()); }
+}
+
+async function importSessionArchive(event: Event): Promise<void> {
+  if (busy || forwardDriver.active || kioskEnabled) return;
+  const input = event.target as HTMLInputElement, file = input.files?.[0]; if (!file) return;
+  if (file.size > PORTABLE_ARCHIVE_LIMITS.archiveBytes) { error = "Archive exceeds the 32 MiB import limit."; status = "Archive import refused · history unchanged"; portableArchiveMessage = `${status}: ${error}`; render(); queueMicrotask(() => document.querySelector<HTMLInputElement>("#import-archive")?.focus()); return; }
+  busy = true; error = ""; status = "Validating portable archive in isolated staging…"; render();
+  try {
+    const imported = await importPortableArchive(new Uint8Array(await file.arrayBuffer()));
+    archive = imported.archive; importedArchiveId = imported.archiveId; evidenceBytes = file.size;
+    selectedSnapshotId = ""; comparisonRunId = ""; learningExperimentId = ""; spatialExperimentId = ""; activeDataExperimentId = "";
+    inspectionCache.clear(); clearDisplayedInspection();
+    status = `Retained historical archive opened · ${imported.archiveId} · live accepted model unchanged · no executor or network request`;
+    portableArchiveMessage = status;
+  } catch (failure) {
+    error = (failure instanceof Error ? failure.message : String(failure)).slice(0, 240);
+    status = "Archive import refused · existing history and accepted model unchanged";
+    portableArchiveMessage = `${status}: ${error}`;
+  } finally { busy = false; render(); queueMicrotask(() => document.querySelector<HTMLInputElement>("#import-archive")?.focus()); }
+}
+
+function portableArchiveControls():string {
+  return `<details data-testid="portable-archive-controls" ${portableArchiveMessage ? "open" : ""}><summary>Portable historical archive</summary><p>Export/import preserves validated evidence and payloads only. Import replaces this historical view after complete validation; it does not restore or adopt a model state.</p><div class="controls"><button id="export-archive" ${busy || forwardDriver.active ? "disabled" : ""}>Export archive</button><label>Import one local archive<input id="import-archive" type="file" accept="${PORTABLE_ARCHIVE_EXTENSION}" ${busy || forwardDriver.active ? "disabled" : ""}></label></div>${portableArchiveMessage ? `<p role="status" data-testid="portable-archive-status">${escapeHtml(portableArchiveMessage)}</p>` : ""}${importedArchiveId ? `<p data-testid="imported-archive-status">Retained historical archive · ${escapeHtml(importedArchiveId)} · live accepted model unchanged</p>` : ""}</details>`;
+}
+
 function renderHistory(): string {
   const runs = [...archive.runs.values()];
   if (result && !archive.runs.has(result.run.manifest.runId))
@@ -2126,7 +2184,7 @@ function renderHistory(): string {
           selected?.id,
         )
       : undefined;
-  return `<section class="source-block history"><h2>Explore exact runs and checkpoints</h2>${result ? `<details data-testid="runtime-provenance"><summary>Exact runtime provenance · available offline</summary><p>This selected run was recorded by Model Lab runtime <code data-testid="runtime-revision">${escapeHtml(result.run.manifest.runtimeRevision)}</code>. Historical inspection requires a compatible runtime.</p></details>` : ""}<p data-testid="history-count">${archive.runs.size} runs · ${archive.snapshots.size} snapshots · ${archive.learningExperiments.size} learning experiments retained in this session. Estimated serialized evidence: ${(evidenceBytes / 1048576).toFixed(1)} MiB / 64 MiB.</p><div class="controls">
+  return `<section class="source-block history"><h2>Explore exact runs and checkpoints</h2>${result ? `<details data-testid="runtime-provenance"><summary>Exact runtime provenance · available offline</summary><p>This selected run was recorded by Model Lab runtime <code data-testid="runtime-revision">${escapeHtml(result.run.manifest.runtimeRevision)}</code>. Historical inspection requires a compatible runtime.</p></details>` : ""}<p data-testid="history-count">${archive.runs.size} runs · ${archive.snapshots.size} snapshots · ${archive.learningExperiments.size} learning experiments retained in this session. Estimated serialized evidence: ${(evidenceBytes / 1048576).toFixed(1)} MiB / 64 MiB.</p>${!kioskEnabled ? portableArchiveControls() : ""}<div class="controls">
     <label>Recorded run<select id="history-run" ${busy ? "disabled" : ""}>${options(result?.run.manifest.runId ?? "")}</select></label>
     <label>Reset destination<select id="snapshot-select"><option value="">Canonical initial model</option>${[...archive.snapshots.values()].map((snapshot) => `<option value="${snapshot.id}" ${snapshot.id === selectedSnapshotId ? "selected" : ""}>step ${snapshot.state.optimizer.step} · ${snapshot.id.slice(0, 23)}…</option>`).join("")}</select></label>
     <label>Compare from<select id="compare-run"><option value="">Choose an earlier run</option>${options(comparisonRunId)}</select></label></div>

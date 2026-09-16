@@ -1,4 +1,5 @@
 import { EvidenceStore } from '../trace/evidence.js';
+import { InMemoryNumericalPayloadStore, type NumericalPayloadStorage } from '../trace/payload.js';
 import { integrations } from '../trace/integrations.js';
 import { validateLegacyRun } from './legacy-run.js';
 import { immutableCopy, type RecordedRun } from '../trace/types.js';
@@ -34,7 +35,7 @@ class ArchiveView<K, V> implements ReadonlyMap<K, V> {
 
 /** Immutable browser-session history. Validate complete records before insertion. */
 export class SessionArchive {
-  readonly evidence = new EvidenceStore(integrations());
+  readonly evidence: EvidenceStore;
   readonly #snapshots = new Map<string, ArchivedSnapshot>();
   readonly #runs = new Map<string, RecordedRun>();
   readonly #learningExperiments = new Map<string, LearningExperiment>();
@@ -47,6 +48,10 @@ export class SessionArchive {
   readonly interventionExperiments: ReadonlyMap<string, InterventionExperiment> = new ArchiveView(this.#interventionExperiments);
   readonly modelVariantExperiments: ReadonlyMap<string, ModelVariantExperiment> = new ArchiveView(this.#modelVariantExperiments);
   readonly dataExperiments: ReadonlyMap<string, MatchedDataExperimentReceipt> = new ArchiveView(this.#dataExperiments);
+
+  constructor(payloads: NumericalPayloadStorage = new InMemoryNumericalPayloadStore()) {
+    this.evidence = new EvidenceStore(integrations(), payloads);
+  }
 
   async addSnapshot(record: ArchivedSnapshot): Promise<void> {
     const copy = await archiveSnapshot(record.state);

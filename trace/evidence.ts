@@ -1,7 +1,7 @@
 import { canonicalBytes } from '../archive/snapshot.js';
 import { immutableCopy } from './types.js';
 import { INLINE_VALUE_LIMIT, InMemoryNumericalPayloadStore, MAX_PAYLOAD_SLICE_VALUES, validatePayloadForPoint,
-  type NumericalPayloadDescriptor, type NumericalPayloadStorage } from './payload.js';
+  type NumericalDType, type NumericalPayloadDescriptor, type NumericalPayloadStorage } from './payload.js';
 
 export const MAX_RECORD_BYTES = 4_000_000;
 export const MAX_VALUES = 200_000;
@@ -65,14 +65,19 @@ export interface EvidenceCodec {
   decode(record: unknown): Promise<EvidenceRun>;
   /** Bounded, non-executable metadata retained when the original envelope contains payload-backed arrays. */
   retainMetadata?(record: unknown): unknown;
+  /** Validate inert retained evidence using only bounded numerical reads. */
+  validateRetained?(run: EvidenceRun, codecMetadata: unknown, access: RetainedEvidenceAccess): Promise<void> | void;
   compare?(before:unknown,after:unknown):{compatible:boolean;reasons:readonly string[]};
+}
+export interface RetainedEvidenceAccess {
+  slice(pointId: string, start: number, count: number): readonly number[];
 }
 export class IntegrationRegistry {
   #codecs = new Map<string, EvidenceCodec>();
   register(codec: EvidenceCodec): this { check(!this.#codecs.has(codec.id),'Duplicate codec'); this.#codecs.set(codec.id,codec); return this; }
   codec(id: string): EvidenceCodec { const codec=this.#codecs.get(id); check(codec,'Unregistered evidence codec'); return codec; }
 }
-export function validateRun(x: unknown): EvidenceRun {
+function validateRunStorage(x: unknown, retained: boolean, payloads?: NumericalPayloadStorage): EvidenceRun {
   const r=fields(x,['version','id','integration','definition','checkpoint','inputTransform','profile','runtime','request','execution','precision','input','points','limits']);
   check((r.version===1 && r.execution==='native') || (r.version===2 && ['native','structural-preview'].includes(String(r.execution))),'Unsupported evidence version or execution');
   for (const k of ['id','integration','definition','checkpoint','inputTransform','profile','runtime']) text(r[k],512);
@@ -89,7 +94,8 @@ export function validateRun(x: unknown): EvidenceRun {
   check(Array.isArray(r.limits)&&r.limits.length<=32&&r.limits.every(s=>typeof s==='string'&&s.length<=2048),'Capability limits');
   check(Array.isArray(r.points)&&r.points.length<=2048,'Point budget'); let total=0;const ids=new Set<string>();
   for(const value of r.points){
-    const p=fields(value,['id','node','port','invocation','phase','shape','axes','dtype','encoding','values','origin','availability','source','owners','dependencies','semantics','capabilities']);
+    const raw=object(value),hasPayload=Object.hasOwn(raw,'payload');
+    const p=fields(value,['id','node','port','invocation','phase','shape','axes','dtype','encoding','values','origin','availability',...(hasPayload?['payload']:[]),'source','owners','dependencies','semantics','capabilities']);
     for(const k of ['id','node','port','invocation','phase','availability','semantics'])text(p[k],2048);
     check(!ids.has(p.id as string),'Duplicate point reference');ids.add(p.id as string);
     check(['float64','float32','int32'].includes(String(p.dtype)) && p.encoding==='json-numbers-row-major','Unsupported dtype or decoding metadata');
@@ -99,9 +105,12 @@ export function validateRun(x: unknown): EvidenceRun {
     p.shape.forEach(n=>integer(n,MAX_VALUES));const size=p.shape.reduce((a:number,b:number)=>a*b,1);check(size<=MAX_VALUES,'Tensor budget');
     for(let i=0;i<p.axes.length;i++){const a=fields(p.axes[i],['role','space','size']);text(a.role);text(a.space);check(a.size===p.shape[i],'Axis extent mismatch');}
     if(p.availability==='available'){
-      check(Array.isArray(p.values)&&p.values.length===size,'Payload length mismatch');total+=size;check(total<=MAX_VALUES,'Run value budget');
-      check(p.values.every(n=>typeof n==='number'&&Number.isFinite(n)&&(p.dtype!=='int32'||Number.isInteger(n)&&n>=-(2**31)&&n<2**31)&&(p.dtype!=='float32'||Object.is(Math.fround(n),n))),'Payload dtype/value mismatch');
-    }else check(p.values===null,'Unavailable evidence must have null values');
+      const inline=Array.isArray(p.values);
+      check(retained ? inline!==hasPayload : inline&&!hasPayload, 'Available evidence must have exactly one qualified numerical storage path');
+      if(inline) { const values=p.values as unknown[];check(values.length===size&&values.every((n:unknown)=>typeof n==='number'&&Number.isFinite(n)&&(p.dtype!=='int32'||Number.isInteger(n)&&n>=-(2**31)&&n<2**31)&&(p.dtype!=='float32'||Object.is(Math.fround(n),n))),'Payload dtype/value mismatch'); }
+      else { check(p.values===null&&payloads,'Retained payload storage missing'); const descriptor=validatePayloadForPoint(p.payload,p.dtype as NumericalDType,p.shape as number[]); check(payloads.has(descriptor.contentId),'Missing numerical payload'); payloads.slice(descriptor,0,0); }
+      total+=size;check(total<=MAX_VALUES,'Run value budget');
+    }else check(p.values===null&&!hasPayload,'Unavailable evidence must have no numerical storage');
     if(r.execution==='structural-preview')check(p.availability==='shape_only'&&p.values===null,'Preview cannot contain numerical execution');
     const source=fields(p.source,['file','symbol','revision']);Object.values(source).forEach(v=>text(v,2048));
     for(const k of ['owners','dependencies','capabilities']){check(Array.isArray(p[k])&&(p[k] as unknown[]).length<=64,'Reference/capability budget');(p[k] as unknown[]).forEach(v=>text(v,1024));}
@@ -110,6 +119,8 @@ export function validateRun(x: unknown): EvidenceRun {
   for(const p of r.points)for(const d of p.dependencies)check(ids.has(d),'Missing dependency reference');
   return immutableCopy(r) as unknown as EvidenceRun;
 }
+export function validateRun(x: unknown): EvidenceRun { return validateRunStorage(x,false); }
+export function validateRetainedRun(x: unknown, payloads: NumericalPayloadStorage): EvidenceRun { return validateRunStorage(x,true,payloads); }
 function retainBoundedCodecMetadata(value:unknown):unknown{
   const copy=immutableCopy(value),json=JSON.stringify(copy);check(new TextEncoder().encode(json).length<=MAX_RETAINED_CODEC_METADATA_BYTES,'Retained codec metadata byte budget');
   const visit=(item:unknown,depth=0):void=>{check(depth<=32,'Retained codec metadata nesting budget');if(Array.isArray(item)){check(!(item.length>INLINE_VALUE_LIMIT&&item.every(value=>typeof value==='number')),'Retained codec metadata cannot duplicate a large numerical payload');item.forEach(value=>visit(value,depth+1));}else if(item&&typeof item==='object')Object.values(item).forEach(value=>visit(value,depth+1));};visit(copy);return copy;
@@ -141,6 +152,30 @@ export class EvidenceStore {
     check(current(),"Stale evidence admission");
     this.#runs.set(run.id,{run:retained,...(payloadBacked?{}:{envelope:copy}),metadata,contentId});return retained;
   }
+  async portableEntry(id:string):Promise<PortableRetainedEvidenceEntry>{
+    const entry=this.#runs.get(id);check(entry,'Missing run reference');check(!entry.envelope,'Inline evidence retains its original envelope');
+    const payload={version:1 as const,codec:entry.metadata.codec,run:entry.run,codecMetadata:entry.metadata.record,originalContentId:entry.contentId};
+    return immutableCopy({...payload,portableEntryId:await evidenceHash(payload)}) as PortableRetainedEvidenceEntry;
+  }
+  async admitPortable(value:unknown):Promise<EvidenceRun>{
+    const record=fields(value,['version','codec','run','codecMetadata','originalContentId','portableEntryId']);
+    check(record.version===1,'Unsupported portable evidence entry version');text(record.codec,256);
+    check(typeof record.originalContentId==='string'&&/^sha256:[0-9a-f]{64}$/.test(record.originalContentId),'Malformed original evidence content ID');
+    check(typeof record.portableEntryId==='string'&&/^sha256:[0-9a-f]{64}$/.test(record.portableEntryId),'Malformed portable evidence entry ID');
+    const payload={version:1 as const,codec:record.codec,run:record.run,codecMetadata:record.codecMetadata,originalContentId:record.originalContentId};
+    check(await evidenceHash(payload)===record.portableEntryId,'Portable evidence entry hash mismatch');
+    const run=validateRetainedRun(record.run,this.payloads),codec=this.registry.codec(String(record.codec));
+    check(codec.validateRetained,'Registered codec does not support portable retained evidence');
+    await codec.validateRetained(run,record.codecMetadata,{slice:(pointId,start,count)=>{
+      const point=run.points.find(candidate=>candidate.id===pointId);check(point,'Point not captured in retained run');
+      integer(start);integer(count,MAX_PAYLOAD_SLICE_VALUES);const length=pointElementCount(point);check(start+count<=length,'Slice out of bounds');
+      if(point.payload)return this.payloads.slice(point.payload,start,count);
+      check(point.values,'Point numerical storage missing');return Object.freeze(point.values.slice(start,start+count));
+    }});
+    const old=this.#runs.get(run.id);check(!old||old.contentId===record.originalContentId,'Conflicting immutable run identity');
+    const metadata=immutableCopy({version:1,codec:record.codec,record:record.codecMetadata}) as EvidenceEnvelope;
+    this.#runs.set(run.id,{run,metadata,contentId:String(record.originalContentId)});return run;
+  }
   get(id:string):EvidenceRun{const entry=this.#runs.get(id);check(entry,'Missing run reference');return entry.run;}
   contentId(id:string):string{this.get(id);return this.#runs.get(id)!.contentId;}
   compare(before:string,after:string):{compatible:boolean;reasons:readonly string[]}{
@@ -167,6 +202,14 @@ export class EvidenceStore {
     if(!p)return `Not captured in this run. Executor ${connected?'connected':'disconnected'}; no automatic execution.`;
     return action==='slice'&&p.availability!=='available'?`Numerical slice unavailable: ${p.availability}; no values substituted.`:p.capabilities.includes(action)?'available':`Unsupported ${action} at ${p.node}/${p.port}; executor ${connected?'connected':'disconnected'}.`;
   }
+}
+export interface PortableRetainedEvidenceEntry {
+  readonly version: 1;
+  readonly codec: string;
+  readonly run: EvidenceRun;
+  readonly codecMetadata: unknown;
+  readonly originalContentId: string;
+  readonly portableEntryId: string;
 }
 /** Explanation order over retained evidence; advancing never executes a model. */
 export class EvidencePlayer {

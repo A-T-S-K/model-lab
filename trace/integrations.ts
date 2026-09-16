@@ -1,7 +1,8 @@
 import { registerWitnessCodecs } from './witness-codecs.js';
 import { noncanonicalCodec } from './noncanonical.js';
 import { canonicalIdentity, compareRuns } from './compare.js';
-import { IntegrationRegistry, check, fields, object, validateRun, evidenceHash, type EvidenceRun, type EvidencePoint } from './evidence.js';
+import { IntegrationRegistry, check, fields, object, validateRun, evidenceHash,
+  type EvidenceRun, type EvidencePoint, type RetainedEvidenceAccess } from './evidence.js';
 import { validateLegacyRun } from '../archive/legacy-run.js';
 import type { ArchivedSnapshot } from '../archive/snapshot.js';
 import type { RecordedRun } from './types.js';
@@ -110,6 +111,78 @@ function validateGeneration(record:unknown):EvidenceRun{
   return run;
 }
 
+async function retainedDistribution(value:unknown,pointId:string,chosen:number,access:RetainedEvidenceAccess){
+  const distribution=fields(value,['support','top','omittedMass','selectedLogit','selectedProbability']);
+  check(distribution.support===50304,'Generation distribution support');
+  let maximum=-Infinity,actualChoice=0,actualChoiceValue=-Infinity;
+  const top:{index:number;logit:number}[]=[];
+  for(let start=0;start<50304;start+=256){
+    const values=access.slice(pointId,start,Math.min(256,50304-start));
+    values.forEach((logit,offset)=>{const index=start+offset;if(logit>maximum)maximum=logit;if(logit>actualChoiceValue){actualChoice=index;actualChoiceValue=logit;}
+      top.push({index,logit});top.sort((a,b)=>b.logit-a.logit||a.index-b.index);if(top.length>5)top.pop();});
+  }
+  check(actualChoice===chosen&&distribution.selectedLogit===actualChoiceValue,'Generation chosen index is not full-support argmax');
+  let denominator=0;for(let start=0;start<50304;start+=256)for(const logit of access.slice(pointId,start,Math.min(256,50304-start)))denominator+=Math.exp(logit-maximum);
+  check(Array.isArray(distribution.top)&&distribution.top.length===5,'Generation top-k summary');let shown=0;
+  distribution.top.forEach((value,index)=>{const row=fields(value,['index','logit','probability']),expected=top[index]!;
+    check(row.index===expected.index&&row.logit===expected.logit,'Generation top-k identity');const probability=Math.exp(expected.logit-maximum)/denominator;
+    check(typeof row.probability==='number'&&Math.abs(row.probability-probability)<=1e-12,'Generation top-k probability');shown+=Number(row.probability);});
+  const selected=Math.exp(actualChoiceValue-maximum)/denominator;
+  check(typeof distribution.selectedProbability==='number'&&Math.abs(distribution.selectedProbability-selected)<=1e-12,'Generation selected probability');
+  check(typeof distribution.omittedMass==='number'&&Math.abs(distribution.omittedMass-(1-shown))<=1e-12,'Generation omitted probability mass');
+}
+
+function retainedValues(access:RetainedEvidenceAccess,run:EvidenceRun,pointId:string):readonly number[]{
+  const point=run.points.find(candidate=>candidate.id===pointId);check(point,'Missing retained native point');
+  return access.slice(pointId,0,point.shape.reduce((product,size)=>product*size,1));
+}
+
+async function validateRetainedGeneration(run:EvidenceRun,metadata:unknown,access:RetainedEvidenceAccess):Promise<void>{
+  const envelope=fields(metadata,['kind','generation']);check(envelope.kind==='generation-v1','Generation record kind');
+  check(run.version===2&&run.request.version===3&&run.request.action==='generate','Generation run/request version');
+  validatePythiaBinding(run,generationProfile);const input=pythiaInput(run);
+  const configuration=fields(run.request.generation,['recipe','maxNewTokens']);check(configuration.recipe===generationProfile.generation.recipe,'Generation recipe request');
+  check(Number.isSafeInteger(configuration.maxNewTokens)&&Number(configuration.maxNewTokens)>=1&&Number(configuration.maxNewTokens)<=generationProfile.generation.maxNewTokens,'Generation requested-token bound');
+  const requested=Number(configuration.maxNewTokens);check(input.tokenIds.length<=generationProfile.generation.maxPromptTokens&&input.tokenIds.length+requested<=generationProfile.generation.maxTotalTokens,'Generation prefix/context bound');
+  const generation=fields(envelope.generation,['version','recipe','selectionPolicy','cache','cancellationEpoch','promptInvocation','invocations','generated','termination']);check(generation.version===1,'Generation receipt version');
+  const recipe=fields(generation.recipe,['identity','requested','effective']);check(recipe.identity===generationProfile.generation.recipe,'Generation recipe identity');
+  same(recipe.requested,{maxNewTokens:requested},'Generation requested configuration');same(recipe.effective,{maxNewTokens:requested,promptTokenLimit:4,totalTokenLimit:16,honorEos:false},'Generation effective configuration');
+  same(generation.selectionPolicy,{identity:generationProfile.generation.selectionPolicy,version:1,kind:'greedy-argmax',support:50304,stochastic:false},'Generation selection policy');
+  same(generation.cache,{capability:'unsupported',qualified:false,strategy:'full-prefix-reexecution',useCache:false,retainedState:false},'Generation uncached policy');
+  check(generation.cancellationEpoch===run.request.epoch&&generation.promptInvocation==='prefill:0','Generation cancellation/prompt identity');
+  check(Array.isArray(generation.invocations)&&generation.invocations.length===requested+1,'Generation invocation count');
+  const generated=fields(generation.generated,['tokenIds','tokenizerLabels','finalPrefixIds']);check(Array.isArray(generated.tokenIds)&&generated.tokenIds.length===requested,'Generated token IDs');check(Array.isArray(generated.tokenizerLabels)&&generated.tokenizerLabels.length===requested,'Generated token labels');const tokenizerLabels=generated.tokenizerLabels as unknown[];
+  const allPointIds=new Set<string>(),choices:number[]=[];
+  for(let index=0;index<generation.invocations.length;index++){
+    const value=generation.invocations[index],prompt=index===0,invocation=fields(value,prompt?['identity','kind','generatedStep','effectivePrefixIds','finalModelPosition','pointIds','dependsOnChoice']:['identity','kind','generatedStep','effectivePrefixIds','finalModelPosition','pointIds','dependsOnChoice','choice']);
+    const identity=prompt?'prefill:0':`generation:${index}`,phase=prompt?'prompt-prefill':`generation-step-${index}`;
+    check(invocation.identity===identity&&invocation.kind===(prompt?'prompt':'generated')&&invocation.generatedStep===index,'Generation invocation/step identity');check(invocation.identity!==`epoch:${run.request.epoch}`,'Cancellation epoch used as invocation identity');
+    const expectedPrefix=[...input.tokenIds,...choices];same(invocation.effectivePrefixIds,expectedPrefix,'Generation effective prefix lineage');check(invocation.finalModelPosition===expectedPrefix.length-1,'Generation model position');
+    const tokenDependencies=prompt?[]:index===1?['prefill:0/tokens']:['prefill:0/tokens',`generation:${index-1}/choice`];check(invocation.dependsOnChoice===(index<=1?null:`generation:${index-1}/choice`),'Generation previous-choice dependency');
+    const basePointIds=pythiaBaseIds.map(id=>`${identity}/${id}`),expectedPointIds=prompt?basePointIds:[...basePointIds,`${identity}/choice`];same(invocation.pointIds,expectedPointIds,'Generation invocation point coverage');
+    for(const id of pythiaBaseIds){const pointId=`${identity}/${id}`,point=run.points.find(candidate=>candidate.id===pointId);check(point&&!allPointIds.has(pointId),'Missing/repeated generation point');allPointIds.add(pointId);validatePythiaPoint(point,id,identity,identity,phase,expectedPrefix.length,tokenDependencies);if(id==='tokens')same(retainedValues(access,run,pointId),expectedPrefix,'Generation native prefix evidence');}
+    if(prompt)continue;
+    const choice=fields(invocation.choice,['selectionPolicy','sourceLogitsOccurrence','chosenOutputIndex','tokenizerLabelAvailable','tokenizerLabel','generatedPosition','stopReason','distribution']);check(choice.selectionPolicy===generationProfile.generation.selectionPolicy&&choice.sourceLogitsOccurrence===`${identity}/logits`,'Generation logits/selection separation');
+    check(Number.isSafeInteger(choice.chosenOutputIndex)&&Number(choice.chosenOutputIndex)>=0&&Number(choice.chosenOutputIndex)<50304,'Generation chosen output index');const chosen=Number(choice.chosenOutputIndex);
+    check(choice.generatedPosition===expectedPrefix.length&&choice.stopReason===(index===requested?'max_new_tokens':null),'Generation position/stop reason');const label=tokenizerLabels[index-1];check(choice.tokenizerLabel===label&&choice.tokenizerLabelAvailable===(label!==null),'Generation tokenizer label declaration');
+    if(chosen>=m2Profile.tokenizerSize)check(label===null,'Fabricated tokenizer label for unmapped output');else check(typeof label==='string'&&label.length>0&&label.length<=256,'Mapped tokenizer label');
+    await retainedDistribution(choice.distribution,String(choice.sourceLogitsOccurrence),chosen,access);
+    const choicePointId=`${identity}/choice`,choicePoint=run.points.find(point=>point.id===choicePointId);check(choicePoint&&!allPointIds.has(choicePointId),'Missing/repeated choice evidence');allPointIds.add(choicePointId);
+    check(choicePoint.invocation===identity&&choicePoint.phase===`selection-step-${index}`&&choicePoint.node==='generation-policy.argmax'&&choicePoint.port==='decision','Generation choice semantic identity');
+    check(choicePoint.origin==='derived'&&choicePoint.availability==='available'&&choicePoint.dtype==='int32'&&choicePoint.shape.length===0&&retainedValues(access,run,choicePointId)[0]===chosen,'Generation choice evidence');
+    same(choicePoint.dependencies,[`${identity}/logits`],'Generation choice dependency');check(choicePoint.source.revision===generationProfile.adapterSourceRevision,'Generation policy source identity');choices.push(chosen);
+  }
+  check(allPointIds.size===run.points.length,'Unknown or cross-invocation generation point');same(generated.tokenIds,choices,'Generated sequence/choices');same(generated.finalPrefixIds,[...input.tokenIds,...choices],'Generated final prefix');same(generation.termination,{reason:'max_new_tokens',generatedTokens:requested},'Generation termination');
+}
+
+function validateRetainedPrediction(run:EvidenceRun,metadata:unknown,access:RetainedEvidenceAccess):void{
+  const envelope=fields(metadata,['kind']);check(envelope.kind==='prediction-v1','Prediction retained metadata kind');
+  const profile=[generationProfile,m2Profile,legacyProfile].find(value=>value.runtime===run.runtime);check(profile,'Unqualified native runtime');
+  check(run.version===1&&run.request.version===1&&run.request.action==='predict','Native prediction version/action');validatePythiaBinding(run,profile);const input=pythiaInput(run);
+  check(run.points.length===pythiaBaseIds.length,'Native prediction capture coverage');for(const id of pythiaBaseIds){const point=run.points.find(value=>value.id===id);check(point,'Missing native prediction point');validatePythiaPoint(point,id,'','prefill:0','inference',input.tokenIds.length);}
+  same(retainedValues(access,run,'tokens'),input.tokenIds,'Native token evidence mismatch');
+}
+
 /** Compatibility metadata is derived; original run, snapshot and their IDs are retained. */
 export async function readLegacyEvidence(record: unknown): Promise<EvidenceRun> {
   const data=fields(record,['run','snapshot']);
@@ -138,5 +211,7 @@ export function integrations():IntegrationRegistry {
     return object(record).kind==='generation-v1'?validateGeneration(record):validatePrediction(record);
   },retainMetadata(record){
     const value=object(record);return value.kind==='generation-v1'?{kind:'generation-v1',generation:value.generation}:{kind:'prediction-v1'};
+  },async validateRetained(run,metadata,access){
+    if(object(metadata).kind==='generation-v1')await validateRetainedGeneration(run,metadata,access);else validateRetainedPrediction(run,metadata,access);
   }});
 }
