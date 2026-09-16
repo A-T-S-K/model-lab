@@ -15,7 +15,8 @@ operation fallback are qualified for M1. Saved new-model and Pythia evidence reo
 without executor activity; canonical operation required no bridge. M2 world/topology
 integration now includes canonical/multilayer MicroGPT, the numeric MLP/SGD witness,
 grouped-axis/shape-only/opaque evidence fallback, and native Pythia's collapsed
-six-block/selected-layer world; generation/cache, variants,
+six-block/selected-layer world. **M2 is COMPLETE — scoped engineering qualification**
+after the integrated interaction/change-surface review; generation/cache, variants,
 experiments and later failure/retention proof portions remain pending. See
 [authority](README.md).
 
@@ -43,7 +44,7 @@ Each row is a status pointer, not a reduced acceptance definition.
 | Proof | Witness / definition | Status |
 | --- | --- | --- |
 | FP-01 | [Canonical preservation through new contracts](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 portion REQUALIFIED; full FP unaccepted; witness report |
-| FP-02 | [Noncanonical multi-layer tiny transformer](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 native multilayer execution/inspector/replay and M2-A world structure QUALIFIED; remaining M2 interaction/change-surface qualification pending |
+| FP-02 | [Noncanonical multi-layer tiny transformer](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 native multilayer execution/inspector/replay plus M2-A world structure and M2-E integrated interaction qualification QUALIFIED; full foundation/M5 disposition pending |
 | FP-03 | [Native Pythia execution, selected internals, generation and disconnected replay](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 native live/disconnected portion REQUALIFIED and M2-D native continuous-world/selected-layer/disconnected replay portion QUALIFIED; broader generation/cache proof pending |
 | FP-04 | [MLP/SGD plus grouped query/KV-axis numerical fixture](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 numeric MLP/SGD/state and grouped-axis witnesses, M2-B numeric MLP shared-world path and M2-C grouped-axis world path QUALIFIED; full foundation/M5 disposition pending |
 | FP-05 | [Shape-only, unknown and opaque states](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 fixture semantics and M2-C truthful shared-world structural/opaque/unsupported fallback QUALIFIED; full foundation/M5 disposition pending |
@@ -53,7 +54,7 @@ Each row is a status pointer, not a reduced acceptance definition.
 | FP-09 | [Repeated invocations and bounded generation/cache correctness](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | NOT_RUN |
 | FP-10 | [Legacy replay, export/import and representation-aware comparison](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 legacy and new-codec replay/state portions QUALIFIED; broader comparison/durability pending |
 | FP-11 | [Async, retention, transport and inert-import failure controls](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 affected receipt/stale/import/transport controls REQUALIFIED; broader M4 failures/retention pending |
-| FP-12 | [Shared visual/explanation routes and extension change surface](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 same-inspector/source/fallback and M2-A/M2-B/M2-C/M2-D world change surfaces QUALIFIED; remaining integrated M2 interaction/change-surface qualification and M5 review pending |
+| FP-12 | [Shared visual/explanation routes and extension change surface](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 same-inspector/source/fallback and integrated M2-A through M2-E world/interaction/change-surface work QUALIFIED; independent M5 review pending |
 
 Native Pythia is a required real second transformer executing through the shared
 request/evidence path, with pinned native comparison, useful internal evidence and
@@ -69,7 +70,7 @@ and [native acceptance](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#4
 | --- | --- | --- |
 | M0 | [freeze invariants and the migration map, not untested APIs](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m0-freeze-invariants-and-the-migration-map-not-untested-apis) | PREPARATION COMPLETE; slice report migration map |
 | M1 | [contracts, codecs, and dual producers early](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m1-contracts-codecs-and-dual-producers-early) | COMPLETE — scoped engineering qualification; no M2/M5 or full FP acceptance |
-| M2 | [topology, world, and interaction separation](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m2-topology-world-and-interaction-separation) | IN PROGRESS — M2-A canonical/multilayer MicroGPT, M2-B numeric MLP/SGD, M2-C grouped-axis/shape-only/opaque fallback and M2-D native Pythia world increments qualified; remaining integrated M2 interaction/change-surface qualification pending |
+| M2 | [topology, world, and interaction separation](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m2-topology-world-and-interaction-separation) | COMPLETE — scoped engineering qualification; canonical/multilayer MicroGPT, numeric MLP/SGD, grouped-axis/shape-only/opaque fallback, native Pythia and integrated interaction/change-surface qualification passed; no M3, M5 or full FP acceptance |
 | M3 | [variants and experiments](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m3-variants-and-experiments) | NOT_RUN |
 | M4 | [durable payloads and failure boundaries](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m4-durable-payloads-and-failure-boundaries) | NOT_RUN |
 | M5 | [independent foundation review](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m5-independent-foundation-review) | NOT_RUN |
@@ -432,3 +433,40 @@ acceptance, installation isolation, benchmarks, soaks and the broad historical b
 catalog were intentionally not run for this bounded slice. The next dependency is the
 remaining integrated M2 interaction/change-surface qualification; M3–M6, unfamiliar-user
 testing, workshop, station and release gates remain ungranted.
+
+## M2-E integrated interaction and change-surface qualification
+
+M2 is **COMPLETE — scoped engineering qualification**. The integrated route exercised
+canonical MicroGPT → multilayer MicroGPT → numeric MLP → grouped → shape-only → opaque
+→ Pythia → canonical → MLP replay → Pythia replay → multilayer replay. Typed selection,
+source, lens, coordinate, output-index and replay state cleared at incompatible
+boundaries. A real accepted canonical update and its selected experiment survived the
+alternate-world tour unchanged. Opening another world is now refused while canonical
+paced execution is active; MLP Home now returns to its model-local input selection and
+restores keyboard focus; full public/session reset explicitly clears alternate-world
+run, replay and semantic-selection state.
+
+Fresh source review found model IDs only at integration registration, executors,
+integration codecs/profiles and integration-owned presentations/tests. Evidence store,
+player, archive and session coordination contain no M2 model-ID behavior. M2-A created
+the shared topology boundary; M2-B made the one substantive shared contract correction
+for a non-transformer presentation; M2-C then added its fallback with four small shared
+call-site changes, and M2-D added Pythia through registration/specialization without a
+new app/session/store/navigation implementation. Native MicroGPT, PyTorch MLP and Hugging
+Face Pythia mechanisms remain ordinary readable model code, not a universal interpreter.
+
+The qualified application runtime is
+`sha256:2d6aded839c393c78e21f48b80c4d8bda553ad12092f3aa196e7bd5843d69b0f`.
+The pinned Pythia runtime remains
+`sha256:290becead8351ebb54ab765c1f49091e3837209fb183909e457f6240687cd298`.
+All 165 unit/integration cases passed with fresh MLP/grouped and Pythia recordings,
+along with strict portable and byte-exact canonical references, typecheck, example,
+fresh protected Vite build, native qualifications, transport/output guards, 13 focused
+canonical/M2 browser routes and two exhibit reset/expiry routes. The durable command,
+failure, visual, accessibility and unrun record is the
+[M2 integration qualification](reviews/M2-integration-qualification.md).
+
+This closure is only the topology/world/interaction M2 gate. FP-03 generation/cache,
+FP-06–FP-09, broader M4 guarantees, M5 independent foundation acceptance and M6
+unfamiliar-user/workshop/station/release acceptance remain ungranted. The next stage
+dependency is M3; it was not begun here.
