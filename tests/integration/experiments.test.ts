@@ -40,20 +40,28 @@ test('data substitution retains matched continuation and authentic triggered/con
   const options: PoisoningOptions = { id: 'small-research', schedule: ['abca', 'bcab', 'cabc', 'abab'],
     substitutions: [{ step: 0, original: 'abca', replacement: 'abcc' }], triggeredPrefix: 'abc', controlPrefixes: ['bca', 'cab'],
     desiredToken: 'c', cleanDocuments: ['abca', 'bcab', 'cabc', 'abab'] };
-  const { report, archive } = await runPoisoningTrial(snapshot, options);
+  const { report, experiment, archive } = await runPoisoningTrial(snapshot, options);
   const repeat = await runPoisoningTrial(snapshot, options);
   assert.deepEqual(report, repeat.report);
-  assert.equal(report.updatesPerArm, 4); assert.equal(archive.learningExperiments.size, 8);
+  assert.deepEqual(experiment, repeat.experiment);
+  assert.equal(report.updatesPerArm, 4); assert.equal(archive.learningExperiments.size, 12);
+  assert.equal(archive.dataExperiments.get(options.id)?.receiptId, experiment.receiptId);
   assert.equal(report.startingSnapshotId, snapshot.id);
   const clean = archive.snapshots.get(report.cleanFinalSnapshotId)!.state;
   const substituted = archive.snapshots.get(report.substitutedFinalSnapshotId)!.state;
-  for (const key of ['step', 'learningRate', 'beta1', 'beta2', 'epsilon', 'numSteps', 'datasetCursor', 'rngState'] as const) assert.equal(clean.optimizer[key], substituted.optimizer[key]);
+  const defended = archive.snapshots.get(report.defendedFinalSnapshotId)!.state;
+  for (const key of ['step', 'learningRate', 'beta1', 'beta2', 'epsilon', 'numSteps', 'datasetCursor', 'rngState'] as const) {
+    assert.equal(clean.optimizer[key], substituted.optimizer[key]); assert.equal(clean.optimizer[key], defended.optimizer[key]);
+  }
   assert.equal(clean.optimizer.step, snapshot.state.optimizer.step + 4);
-  assert.deepEqual(clean.parameterOrder, substituted.parameterOrder);
+  assert.deepEqual(clean.parameterOrder, substituted.parameterOrder); assert.deepEqual(clean.parameterOrder, defended.parameterOrder);
   assert.notEqual(report.cleanFinalSnapshotId, report.substitutedFinalSnapshotId);
+  assert.equal(report.cleanFinalSnapshotId, report.defendedFinalSnapshotId);
   for (const evaluation of [report.triggered, ...report.controls]) {
-    assert.equal(evaluation.comparison.compatible, true);
+    assert.equal(evaluation.comparison.compatible, true); assert.equal(evaluation.defendedComparison.compatible, true);
     assert.equal(evaluation.delta, evaluation.substitutedArmProbability - evaluation.cleanArmProbability);
+    assert.equal(evaluation.defendedDelta, evaluation.defendedArmProbability - evaluation.cleanArmProbability);
+    assert.equal(evaluation.defendedArmProbability, evaluation.cleanArmProbability);
     const run = archive.runs.get(evaluation.substitutedRunId)!;
     const last = run.artifacts.filter(artifact => artifact.kind === 'probabilities').at(-1)!;
     assert.equal(evaluation.substitutedArmProbability, last.values![fixture.config.vocabulary.indexOf(options.desiredToken)]);

@@ -9,6 +9,7 @@ import { interventionRecipes } from '../experiments/recipes.js';
 import { compareMatchedInterventionArms } from '../trace/compare.js';
 import { validateActivationVariantExperiment, type ActivationVariantExperiment } from '../experiments/model-variant.js';
 import { validateCompositeVariantExperiment, type CompositeVariantExperiment } from '../experiments/composite-model-variant.js';
+import { dataExperimentRecipes, type MatchedDataExperimentReceipt } from '../experiments/data-experiment.js';
 
 export { archiveSnapshot, snapshotId, validateTrainingSnapshot, canonicalBytes } from './snapshot.js';
 export type { ArchivedSnapshot } from './snapshot.js';
@@ -39,12 +40,14 @@ export class SessionArchive {
   readonly #interventionExperiments = new Map<string, InterventionExperiment>();
   readonly #modelVariantExperiments = new Map<string, ActivationVariantExperiment>();
   readonly #compositeVariantExperiments = new Map<string, CompositeVariantExperiment>();
+  readonly #dataExperiments = new Map<string, MatchedDataExperimentReceipt>();
   readonly snapshots: ReadonlyMap<string, ArchivedSnapshot> = new ArchiveView(this.#snapshots);
   readonly runs: ReadonlyMap<string, RecordedRun> = new ArchiveView(this.#runs);
   readonly learningExperiments: ReadonlyMap<string, LearningExperiment> = new ArchiveView(this.#learningExperiments);
   readonly interventionExperiments: ReadonlyMap<string, InterventionExperiment> = new ArchiveView(this.#interventionExperiments);
   readonly modelVariantExperiments: ReadonlyMap<string, ActivationVariantExperiment> = new ArchiveView(this.#modelVariantExperiments);
   readonly compositeVariantExperiments: ReadonlyMap<string, CompositeVariantExperiment> = new ArchiveView(this.#compositeVariantExperiments);
+  readonly dataExperiments: ReadonlyMap<string, MatchedDataExperimentReceipt> = new ArchiveView(this.#dataExperiments);
 
   async addSnapshot(record: ArchivedSnapshot): Promise<void> {
     const copy = await archiveSnapshot(record.state);
@@ -153,5 +156,36 @@ export class SessionArchive {
     const existing = this.#compositeVariantExperiments.get(copy.id);
     if (existing && !exactData(existing, copy)) throw new Error('Composite model-variant experiment ID already has different immutable evidence');
     this.#compositeVariantExperiments.set(copy.id, copy);
+  }
+
+  async addDataExperiment(experiment: MatchedDataExperimentReceipt): Promise<void> {
+    const copy = immutableCopy(experiment); canonicalBytes(copy);
+    if (typeof copy.id !== 'string' || !copy.id) throw new Error('Invalid data-experiment ID');
+    const existing = this.#dataExperiments.get(copy.id);
+    if (existing) {
+      if (!exactData(existing, copy)) throw new Error('Data-experiment ID already has different immutable evidence');
+      return;
+    }
+    const recipe = dataExperimentRecipes.require(copy.recipe);
+    const snapshot = this.#snapshots.get(copy.source?.snapshotId ?? '');
+    if (!snapshot) throw new Error('Data experiment references a missing source snapshot');
+    if (await snapshotId(snapshot.state) !== snapshot.id || copy.source.checkpointId !== snapshot.id)
+      throw new Error('Data experiment source snapshot or checkpoint mismatch');
+    if (copy.lifecycle.status !== 'succeeded' || !['clean', 'treatment', 'defended'].every(arm =>
+      copy.arms[arm as keyof typeof copy.arms]?.status === 'succeeded'))
+      throw new Error('Failed or cancelled data-experiment arms cannot be admitted as successful');
+    for (const arm of ['clean', 'treatment', 'defended'] as const) {
+      for (const step of copy.arms[arm].steps) {
+        const learning = this.#learningExperiments.get(step.learningExperimentId);
+        if (!learning || learning.startingSnapshotId !== step.startSnapshotId || learning.resultingSnapshotId !== step.endSnapshotId ||
+            learning.beforeRunId !== step.beforeRunId || learning.trainingRunId !== step.trainingRunId || learning.afterRunId !== step.afterRunId)
+          throw new Error('Data experiment references missing or mismatched learning evidence');
+        if (!this.#snapshots.has(step.startSnapshotId) || !this.#snapshots.has(step.endSnapshotId) ||
+            !this.#runs.has(step.beforeRunId) || !this.#runs.has(step.trainingRunId) || !this.#runs.has(step.afterRunId))
+          throw new Error('Data experiment references missing snapshots or runs');
+      }
+    }
+    await recipe.validateReceipt(copy, { snapshot, snapshots: this.snapshots, runs: this.runs, learningExperiments: this.learningExperiments });
+    this.#dataExperiments.set(copy.id, copy);
   }
 }

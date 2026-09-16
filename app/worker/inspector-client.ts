@@ -1,9 +1,12 @@
-import type { HistoricalRequest, AblationRequest, ActivationPatchRequest, ActivationVariantRequest, CompositeVariantRequest, WorkerResponse } from './protocol.js';
+import type { HistoricalRequest, AblationRequest, ActivationPatchRequest, ActivationVariantRequest, CompositeVariantRequest, DataExperimentRequest, WorkerResponse } from './protocol.js';
 import type { InspectionResult } from '../../inspect/types.js';
 import type { HeadAblationExperiment } from '../../experiments/ablation.js';
 import type { ActivationPatchExperiment } from '../../experiments/activation-patch.js';
 import type { ActivationVariantExperiment } from '../../experiments/model-variant.js';
 import type { CompositeVariantExperiment } from '../../experiments/composite-model-variant.js';
+import type { ArchivedSnapshot, LearningExperiment } from '../../archive/session.js';
+import type { RecordedRun } from '../../trace/types.js';
+import type { MatchedDataExperimentReceipt } from '../../experiments/data-experiment.js';
 
 /** Cancellation terminates disposable historical work; it never resets the live model. */
 export class InspectorWorkerClient {
@@ -37,7 +40,14 @@ export class InspectorWorkerClient {
     if (response.status !== 'compositeVariant') throw new Error('Invalid composite-variant response');
     return response.experiment;
   }
-  private request(request: Omit<HistoricalRequest, 'sessionId' | 'generationId' | 'runId'> | Omit<AblationRequest, 'sessionId' | 'generationId' | 'runId'> | Omit<ActivationPatchRequest, 'sessionId' | 'generationId' | 'runId'> | Omit<ActivationVariantRequest, 'sessionId' | 'generationId' | 'runId'> | Omit<CompositeVariantRequest, 'sessionId' | 'generationId' | 'runId'>): Promise<WorkerResponse> {
+  async dataExperiment(request: Omit<DataExperimentRequest, 'command' | 'sessionId' | 'generationId' | 'runId'>): Promise<{
+    experiment: MatchedDataExperimentReceipt; snapshots: ArchivedSnapshot[]; runs: RecordedRun[]; learningExperiments: LearningExperiment[];
+  }> {
+    const response = await this.request({ ...request, command: 'dataExperiment' });
+    if (response.status !== 'dataExperiment') throw new Error('Invalid data-experiment response');
+    return response;
+  }
+  private request(request: Omit<HistoricalRequest, 'sessionId' | 'generationId' | 'runId'> | Omit<AblationRequest, 'sessionId' | 'generationId' | 'runId'> | Omit<ActivationPatchRequest, 'sessionId' | 'generationId' | 'runId'> | Omit<ActivationVariantRequest, 'sessionId' | 'generationId' | 'runId'> | Omit<CompositeVariantRequest, 'sessionId' | 'generationId' | 'runId'> | Omit<DataExperimentRequest, 'sessionId' | 'generationId' | 'runId'>): Promise<WorkerResponse> {
     if (!this.worker) {
       const worker = new Worker(new URL('./inspector-worker.ts', import.meta.url), { type: 'module' });
       this.worker = worker;
@@ -45,7 +55,7 @@ export class InspectorWorkerClient {
         if (worker !== this.worker || data.sessionId !== this.sessionId || data.generationId !== this.generation) return;
         const pending = this.pending.get(data.runId); if (!pending) return;
         this.pending.delete(data.runId);
-        if (data.status === 'inspection' || data.status === 'ablation' || data.status === 'activationPatch' || data.status === 'activationVariant' || data.status === 'compositeVariant') pending.resolve(data);
+        if (data.status === 'inspection' || data.status === 'ablation' || data.status === 'activationPatch' || data.status === 'activationVariant' || data.status === 'compositeVariant' || data.status === 'dataExperiment') pending.resolve(data);
         else pending.reject(new Error(data.status === 'error' ? data.error : 'Invalid inspector response'));
       };
       worker.onerror = event => { if (worker === this.worker) { for (const item of this.pending.values()) item.reject(new Error(event.message)); this.pending.clear(); } };

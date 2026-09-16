@@ -8,6 +8,8 @@ import type { HeadAblationExperiment } from '../../experiments/ablation.js';
 import type { ActivationPatchExperiment } from '../../experiments/activation-patch.js';
 import type { ActivationVariantExperiment } from '../../experiments/model-variant.js';
 import type { CompositeVariantExperiment } from '../../experiments/composite-model-variant.js';
+import type { MatchedDataExperimentReceipt } from '../../experiments/data-experiment.js';
+import type { PoisoningOptions } from '../../experiments/poisoning.js';
 
 export interface RequestTag { sessionId: string; runId: string; generationId: number; intent?: import("../../trace/evidence.js").ExecutionRequest }
 export type WorkerRequest = RequestTag & (
@@ -56,6 +58,8 @@ export type WorkerResponse = RequestTag & (
   { status: 'activationPatch'; experiment: ActivationPatchExperiment } |
   { status: 'activationVariant'; experiment: ActivationVariantExperiment } |
   { status: 'compositeVariant'; experiment: CompositeVariantExperiment } |
+  { status: 'dataExperiment'; experiment: MatchedDataExperimentReceipt; snapshots: ArchivedSnapshot[];
+    runs: RecordedRun[]; learningExperiments: LearningExperiment[] } |
   { status: 'cancelled' } |
   { status: 'error'; error: string }
 );
@@ -79,4 +83,7 @@ export interface ActivationVariantRequest extends RequestTag {
 }
 export interface CompositeVariantRequest extends RequestTag {
   command: 'compositeVariant'; snapshot: ArchivedSnapshot; inputIds: number[]; targetIds: number[];
+}
+export interface DataExperimentRequest extends RequestTag {
+  command: 'dataExperiment'; snapshot: ArchivedSnapshot; design: PoisoningOptions;
 }

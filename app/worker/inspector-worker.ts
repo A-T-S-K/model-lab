@@ -1,11 +1,13 @@
 import { inspectHistorical } from './inspector.js';
-import type { HistoricalRequest, AblationRequest, ActivationPatchRequest, ActivationVariantRequest, CompositeVariantRequest, WorkerResponse } from './protocol.js';
+import type { HistoricalRequest, AblationRequest, ActivationPatchRequest, ActivationVariantRequest, CompositeVariantRequest, DataExperimentRequest, WorkerResponse } from './protocol.js';
 import { HEAD_ABLATION_RECIPE, isHeadAblationExperiment } from '../../experiments/ablation.js';
 import { ACTIVATION_PATCH_RECIPE, headOutputOccurrence, isActivationPatchExperiment } from '../../experiments/activation-patch.js';
 import { interventionRecipes } from '../../experiments/recipes.js';
 import { runActivationVariant } from '../../experiments/model-variant.js';
 import { runCompositeVariant } from '../../experiments/composite-model-variant.js';
-const scope = globalThis as unknown as { onmessage: (event: MessageEvent<HistoricalRequest | AblationRequest | ActivationPatchRequest | ActivationVariantRequest | CompositeVariantRequest>) => void; postMessage(response: WorkerResponse): void };
+import { dataExperimentRecipes } from '../../experiments/data-experiment.js';
+import { MATCHED_DATA_SUBSTITUTION_RECIPE, type MatchedDataSubstitutionResult } from '../../experiments/matched-data-substitution.js';
+const scope = globalThis as unknown as { onmessage: (event: MessageEvent<HistoricalRequest | AblationRequest | ActivationPatchRequest | ActivationVariantRequest | CompositeVariantRequest | DataExperimentRequest>) => void; postMessage(response: WorkerResponse): void };
 scope.onmessage = event => {
   const request = event.data;
   const tag = { sessionId: request.sessionId, runId: request.runId, generationId: request.generationId };
@@ -30,6 +32,11 @@ scope.onmessage = event => {
         : request.command === 'compositeVariant'
           ? runCompositeVariant({ snapshot: request.snapshot, inputIds: request.inputIds, targetIds: request.targetIds, tag })
             .then(experiment => ({ ...tag, status: 'compositeVariant' as const, experiment }))
+          : request.command === 'dataExperiment'
+            ? (dataExperimentRecipes.require(MATCHED_DATA_SUBSTITUTION_RECIPE).execute({ snapshot: request.snapshot,
+              design: request.design, tag }) as Promise<MatchedDataSubstitutionResult>).then(({ experiment, archive }) => ({ ...tag,
+                status: 'dataExperiment' as const, experiment, snapshots: [...archive.snapshots.values()],
+                runs: [...archive.runs.values()], learningExperiments: [...archive.learningExperiments.values()] }))
         : inspectHistorical(request).then(inspection => ({ ...tag, status: 'inspection' as const, inspection }));
   void execution.then(response => scope.postMessage(response))
     .catch(error => scope.postMessage({ ...tag, status: 'error', error: error instanceof Error ? error.message : String(error) }));

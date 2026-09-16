@@ -68,6 +68,8 @@ import { isHeadAblationExperiment } from "../experiments/ablation.js";
 import { isActivationPatchExperiment } from "../experiments/activation-patch.js";
 import type { ActivationVariantExperiment } from "../experiments/model-variant.js";
 import type { CompositeVariantExperiment } from "../experiments/composite-model-variant.js";
+import type { MatchedDataExperimentReceipt } from "../experiments/data-experiment.js";
+import "../experiments/matched-data-substitution.js";
 import type {
   InspectionResult,
   InspectionTarget,
@@ -94,6 +96,7 @@ const worldSelection: WorldSelection = {node:'',port:'',phase:'',coordinates:{}}
 function clearWorldSelection(){Object.assign(worldSelection,{node:'',port:'',phase:'',coordinates:{}});}
 const spatialPresenter = new SpatialPresenter(spatialSelection);
 let spatialExperimentId = "";
+let activeDataExperimentId = "";
 const config = fixture.config;
 const client = new ModelWorkerClient();
 const inspector = new InspectorWorkerClient();
@@ -907,12 +910,26 @@ function bind(): void {
   sharedInspector.sync(archive.evidence,result?.run.manifest.runId,!busy&&!forwardDriver.active,async()=>execute('predict'),(runId,replay)=>{spatialEvidenceRunId=runId;spatialEvidenceReplay=replay;clearWorldSelection();attract=false;clearDisplayedInspection();spatialPresenter.invalidate();render();},runId=>spatialEvidenceUnavailable(archive.evidence.get(runId)));
   const selectedVariant=[...archive.modelVariantExperiments.values()].find(experiment=>[experiment.baselineRun.manifest.runId,experiment.variantRun.manifest.runId].includes(result?.run.manifest.runId??''));
   const selectedComposite=[...archive.compositeVariantExperiments.values()].find(experiment=>[experiment.baselineRun.manifest.runId,experiment.initializedRun.manifest.runId,experiment.trainedRun.manifest.runId].includes(result?.run.manifest.runId??''));
-  if(!attract&&result&&!selectedVariant&&!selectedComposite&&result.run.manifest.model.id==='microgpt'){
+  const selectedDataExperiment=activeDataExperimentId?archive.dataExperiments.get(activeDataExperimentId):undefined;
+  if(!attract&&result&&!selectedVariant&&!selectedComposite&&!selectedDataExperiment&&result.run.manifest.model.id==='microgpt'){
     const button=document.createElement('button');button.id='open-activation-variant';button.textContent='Open Leaky ReLU variant';button.disabled=busy||forwardDriver.active;
     const compositeButton=document.createElement('button');compositeButton.id='open-composite-variant';compositeButton.textContent='Train composite A/B variant';compositeButton.disabled=busy||forwardDriver.active;
-    (mount.querySelector('.spatial-header')??mount.querySelector('.source-toolbar')??mount).append(button,compositeButton);
+    const dataButton=document.createElement('button');dataButton.id='open-data-experiment';dataButton.textContent='Run matched data experiment';dataButton.disabled=busy||forwardDriver.active;
+    (mount.querySelector('.spatial-header')??mount.querySelector('.source-toolbar')??mount).append(button,compositeButton,dataButton);
     button.addEventListener('click',()=>void openActivationVariant());
     compositeButton.addEventListener('click',()=>void openCompositeVariant());
+    dataButton.addEventListener('click',()=>void openDataExperiment());
+  }
+  if(selectedDataExperiment){
+    const e=selectedDataExperiment,substitution=e.design.substitutions[0],step=substitution?.step??0;
+    const clean=e.arms.clean.steps[step]!,treatment=e.arms.treatment.steps[step]!,defended=e.arms.defended.steps[step]!;
+    const probabilityRows=[e.evaluations.triggered,...e.evaluations.controls].map(item=>`<tr><th>${escapeHtml(item.kind==='triggered'?'Triggered · '+item.input:'Control · '+item.input)}</th><td>${item.arms.clean.probability}</td><td>${item.arms.treatment.probability}</td><td>${item.arms.defended.probability}</td></tr>`).join('');
+    const lineageRows=(['clean','treatment','defended'] as const).flatMap(arm=>e.arms[arm].steps.map(item=>`<tr><th>${arm} · ${item.step}</th><td>${escapeHtml(item.proposedDocument)} → ${escapeHtml(item.effectiveDocument)}</td><td><button data-data-model-run="${escapeHtml(item.trainingRunId)}">${escapeHtml(item.trainingRunId)}</button><br><code>${escapeHtml(item.startSnapshotId)}</code> → <code>${escapeHtml(item.endSnapshotId)}</code></td><td><code>${escapeHtml(item.policyRecordId)}</code></td></tr>`)).join('');
+    const container=document.createElement('section');container.className='intervention-banner data-experiment-receipt';container.dataset.testid='data-experiment-receipt';
+    container.innerHTML=`<strong>REGISTERED DATA EXPERIMENT · ${escapeHtml(e.recipe.id)}@${e.recipe.version}</strong><p>Common complete start <code>${escapeHtml(e.source.snapshotId)}</code> · ${e.design.cleanSchedule.length} ordered updates per arm · <strong>${e.matching.policy.id}@${e.matching.policy.version} ${e.matching.compatible?'PASS':'REFUSED'}</strong>.</p><div class="data-arm-grid"><article data-testid="data-step-clean"><h3>Clean</h3><p>proposed <code>${escapeHtml(clean.proposedDocument)}</code><br>effective <code>${escapeHtml(clean.effectiveDocument)}</code><br>${escapeHtml(clean.decision)}</p></article><article data-testid="data-step-treatment"><h3>Treatment · undefended</h3><p>proposed <code>${escapeHtml(treatment.proposedDocument)}</code><br>effective <code>${escapeHtml(treatment.effectiveDocument)}</code><br>${escapeHtml(treatment.decision)} · ${escapeHtml(substitution?.id??'')}</p></article><article data-testid="data-step-defended"><h3>Defended</h3><p>proposed <code>${escapeHtml(defended.proposedDocument)}</code><br>allowlist expected <code>${escapeHtml(defended.expectedDocument)}</code><br>effective <code>${escapeHtml(defended.effectiveDocument)}</code> · ${escapeHtml(defended.decision)}</p></article></div><div class="data-evidence-split"><article><h3>MODEL EVIDENCE</h3><p>Training runs, complete snapshots, observed probabilities and losses. The model consumed only each effective document.</p><table><thead><tr><th>Evaluation</th><th>Clean</th><th>Treatment</th><th>Defended</th></tr></thead><tbody>${probabilityRows}<tr><th>Mean clean-task loss</th><td>${e.metrics.observed.cleanTaskMeanLoss.clean}</td><td>${e.metrics.observed.cleanTaskMeanLoss.treatment}</td><td>${e.metrics.observed.cleanTaskMeanLoss.defended}</td></tr></tbody></table><p>Derived triggered deltas · treatment − clean ${e.metrics.derived.triggeredTreatmentMinusClean} · defended − clean ${e.metrics.derived.triggeredDefendedMinusClean} · defended − treatment ${e.metrics.derived.triggeredDefendedMinusTreatment}. No categorical efficacy threshold is declared.</p></article><article data-testid="external-policy-context"><h3>EXTERNAL CONTEXT</h3><p><strong>${escapeHtml(e.design.defensePolicy.id)}@${e.design.defensePolicy.version}</strong> records proposed, expected, effective and decision fields outside neural execution. Explicit identity links correlate each decision to one learning experiment and training run; correlation is not causation.</p><p>Substitution-step links:<br>clean <code>${escapeHtml(clean.policyRecordId)}</code> ↔ <code>${escapeHtml(clean.trainingRunId)}</code><br>treatment <code>${escapeHtml(treatment.policyRecordId)}</code> ↔ <code>${escapeHtml(treatment.trainingRunId)}</code><br>defended <code>${escapeHtml(defended.policyRecordId)}</code> ↔ <code>${escapeHtml(defended.trainingRunId)}</code></p></article></div><details data-testid="data-lineage"><summary>All step lineage · proposed → policy → effective → model evidence</summary><table><thead><tr><th>Arm / step</th><th>Data decision</th><th>Model run and snapshots</th><th>External record</th></tr></thead><tbody>${lineageRows}</tbody></table></details><p>Receipt <code>${escapeHtml(e.receiptId)}</code> · clean final <code>${escapeHtml(e.arms.clean.finalSnapshotId)}</code> · treatment final <code>${escapeHtml(e.arms.treatment.finalSnapshotId)}</code> · defended final <code>${escapeHtml(e.arms.defended.finalSnapshotId)}</code>.</p><button id="data-current">Return to accepted canonical model</button>`;
+    const anchor=mount.querySelector('.spatial-status')??mount.querySelector('.source-toolbar')??mount.firstElementChild;anchor?.insertAdjacentElement('afterend',container);
+    container.querySelectorAll<HTMLButtonElement>('[data-data-model-run]').forEach(button=>button.addEventListener('click',()=>{selectRun(button.dataset.dataModelRun!);status='Inspecting retained model evidence correlated from an external policy record';render();}));
+    container.querySelector('#data-current')?.addEventListener('click',()=>{activeDataExperimentId='';if(liveRunId)selectRun(liveRunId);status='Returned to accepted canonical model · data experiment retained read-only';render();});
   }
   if(selectedComposite){
     const w=selectedComposite.witness,container=document.createElement('section');container.className='intervention-banner';container.dataset.testid='composite-variant-receipt';
@@ -1783,7 +1800,7 @@ async function reset(cancelled: boolean, clear = false): Promise<void> {
   const acceptedAtCancellation = cancelled ? lastAcceptedResult : undefined;
   if (clear) {
     spatialEvidenceRunId = ""; spatialEvidenceReplay = false; clearWorldSelection();
-    spatialExperimentId = ""; spatialPresenter.resetVisitor();
+    spatialExperimentId = ""; activeDataExperimentId = ""; spatialPresenter.resetVisitor();
     beforeForward = undefined; beforeForwardLocation = undefined; beforeForwardExperiment = "";
     inspectedExecutionRevision = undefined; readyComparison = true; clearDisplayedInspection();
     lastActivity = Date.now();
@@ -2686,5 +2703,36 @@ async function openCompositeVariant(): Promise<void> {
   }catch(failure){
     if(currentOperation!==operation)return;
     error=failure instanceof Error?failure.message:String(failure);status='Composite variant failed';
+  }finally{if(currentOperation===operation){activeIntervention=undefined;busy=false;render();}}
+}
+
+async function openDataExperiment(): Promise<void> {
+  if (forwardDriver.active) { error='Finish or cancel the active execution before running a data experiment.';render();return; }
+  if (busy || !result || !liveRunId) return;
+  if (evidenceBytes >= SESSION_BUDGET) { error='Session evidence limit reached (64 MiB estimate). Clear session before running another data experiment.';render();return; }
+  const acceptedRun=archive.runs.get(liveRunId)??result.run;
+  if(acceptedRun.manifest.model.id!=='microgpt'||acceptedRun.manifest.runtimeRevision!==RUNTIME_REVISION){error='The accepted state is not a compatible canonical MicroGPT run.';render();return;}
+  const snapshot=sourceSnapshot(acceptedRun.manifest.startingSnapshotId??'');
+  if(!snapshot){error='The accepted canonical source snapshot is unavailable.';render();return;}
+  const design={id:'m3-c-matched-data',schedule:['abca','bcab','cabc','abab'],
+    substitutions:[{step:0,original:'abca',replacement:'abcc'}],triggeredPrefix:'abc',controlPrefixes:['bca','cab'],
+    desiredToken:'c',cleanDocuments:['abca','bcab','cabc','abab']} as const;
+  clearDisplayedInspection();const currentOperation=++operation;activeIntervention=currentOperation;
+  busy=true;error='';status='Running clean, treatment, and defended matched training arms…';render();
+  try{
+    const completed=await inspector.dataExperiment({snapshot,design});
+    if(currentOperation!==operation)return;
+    for(const item of completed.snapshots)await archive.addSnapshot(item);
+    for(const run of completed.runs)await archive.addRun(run);
+    for(const learning of completed.learningExperiments)await archive.addLearningExperiment(learning);
+    await archive.addDataExperiment(completed.experiment);
+    if(currentOperation!==operation)return;
+    evidenceBytes+=new TextEncoder().encode(JSON.stringify(completed)).byteLength;
+    activeDataExperimentId=completed.experiment.id;activeIntervention=undefined;busy=false;
+    selectRun(completed.experiment.evaluations.triggered.arms.treatment.runId);
+    status='Matched data experiment complete · three equal budgets · accepted canonical state unchanged';render();
+  }catch(failure){
+    if(currentOperation!==operation)return;
+    error=failure instanceof Error?failure.message:String(failure);status='Data experiment failed';
   }finally{if(currentOperation===operation){activeIntervention=undefined;busy=false;render();}}
 }
