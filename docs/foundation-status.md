@@ -27,8 +27,10 @@ The final integrated archive/lifecycle/change-surface pass is complete, so **M3 
 COMPLETE — scoped engineering qualification**. **M4 is IN PROGRESS**: M4-A adds and
 engineering-qualifies bounded native Pythia generation and the explicitly uncached
 FP-09 profile; M4-B1 engineering-qualifies validated byte-backed numerical payload
-storage and bounded access. Portable archives, retention policy and remote reconciliation
-remain. Independent M5/foundation disposition remains pending. See
+storage and bounded access; M4-B2 engineering-qualifies deterministic portable whole-
+session archives; M4-C1 engineering-qualifies exact retained-footprint accounting,
+pre-execution backpressure and bounded ephemeral-cache lifecycle. Renderer/work limits
+and remote reconciliation remain. Independent M5/foundation disposition remains pending. See
 [authority](README.md).
 
 The [repaired first-M1 qualification](reviews/M1-repair-qualification.md) retains its
@@ -64,7 +66,7 @@ Each row is a status pointer, not a reduced acceptance definition.
 | FP-08 | [Matched data substitution and defense control](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | ENGINEERING-QUALIFIED within M3-C implementation scope: registered clean/treatment/defended matched training, exact lineage, retained triggered/control/clean evidence, deterministic allowlist policy records and explicit tamper-resistant external correlation passed; independent M5/foundation disposition pending |
 | FP-09 | [Repeated invocations and bounded generation/cache correctness](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | ENGINEERING-QUALIFIED for `pythia-14m-cpu-f32-eager-uncached-generation-v2`: prompt/generated occurrence, position, step, request and cancellation-epoch identities are separate; full-prefix `use_cache=False` execution, full-support argmax, invalidation, stale refusal and replay passed. No cache path is advertised and no cached/uncached equivalence claim is made; a future cached profile requires separate qualification and M5 review. |
 | FP-10 | [Legacy replay, export/import and representation-aware comparison](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | ENGINEERING-QUALIFIED within implemented scope: M1 legacy/new-codec replay, M4-B1 bounded byte-backed retention, and M4-B2 deterministic portable whole-session export/import preserve record, evidence and payload identities plus qualified comparisons/refusals; independent M5 review and later durability policy remain pending |
-| FP-11 | [Async, retention, transport and inert-import failure controls](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 affected receipt/stale/import/transport controls REQUALIFIED; M4-B1 payload integrity/bounded-fetch controls and M4-B2 bounded inert parsing, registered validation, tamper refusal and atomic staged publication ENGINEERING-QUALIFIED; retention/work limits and remote transport reconciliation remain pending |
+| FP-11 | [Async, retention, transport and inert-import failure controls](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 affected receipt/stale/import/transport controls REQUALIFIED; M4-B1 payload integrity/bounded-fetch controls, M4-B2 bounded inert parsing/validation/tamper/atomic publication, and M4-C1 exact durable accounting, pre-execution reservations, stale/cancellation refusal and bounded ephemeral-cache lifecycle ENGINEERING-QUALIFIED; renderer/work limits and remote transport reconciliation remain pending |
 | FP-12 | [Shared visual/explanation routes and extension change surface](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 same-inspector/source/fallback and integrated M2-A through M2-E world/interaction/change-surface work QUALIFIED; independent M5 review pending |
 
 Native Pythia is a required real second transformer executing through the shared
@@ -83,7 +85,7 @@ and [native acceptance](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#4
 | M1 | [contracts, codecs, and dual producers early](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m1-contracts-codecs-and-dual-producers-early) | COMPLETE — scoped engineering qualification; no M2/M5 or full FP acceptance |
 | M2 | [topology, world, and interaction separation](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m2-topology-world-and-interaction-separation) | COMPLETE — scoped engineering qualification; canonical/multilayer MicroGPT, numeric MLP/SGD, grouped-axis/shape-only/opaque fallback, native Pythia and integrated interaction/change-surface qualification passed; no M3, M5 or full FP acceptance |
 | M3 | [variants and experiments](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m3-variants-and-experiments) | COMPLETE — scoped engineering qualification; registered interventions, actual activation/composite replacements, definition-aware variant state, matched data/security experiment, correlation and integrated lifecycle/change-surface qualification passed; no M4, M5 or full foundation acceptance |
-| M4 | [durable payloads and failure boundaries](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m4-durable-payloads-and-failure-boundaries) | IN PROGRESS — M4-A bounded native generation / FP-03 + FP-09 uncached slice and M4-B1 byte-backed numerical payload storage/bounded access engineering-qualified; portable archive, retention policy and remote reconciliation pending |
+| M4 | [durable payloads and failure boundaries](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m4-durable-payloads-and-failure-boundaries) | IN PROGRESS — M4-A bounded native generation / FP-03 + FP-09 uncached slice, M4-B1 byte-backed numerical payload storage/bounded access, M4-B2 portable archives and M4-C1 bounded retention/backpressure/cache lifecycle engineering-qualified; M4-C2 renderer/work limits and M4-D remote reconciliation pending |
 | M5 | [independent foundation review](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m5-independent-foundation-review) | NOT_RUN |
 | M6 | [full user testing, workshop, station, release](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m6-full-user-testing-workshop-station-release) | NOT_RUN |
 
@@ -773,3 +775,35 @@ inert-import/tamper/atomic-publication portion of FP-11. It does not qualify gen
 retention/eviction, renderer/work limits, pending/opaque behavior under retention,
 remote mutation idempotency or acknowledgement reconciliation. The next dependency is
 M4-C retention and work/render budgets; M4-D remains separate.
+
+## M4-C1 bounded session-retention increment
+
+M4 remains **IN PROGRESS**. Durable retained history now uses the exact portable-v1
+framing plan for archive bytes, manifest bytes/data nodes, unique payload entries/bytes
+and record counts. Session-scoped conservative reservations are checked before canonical,
+native/shared and registered experiment execution. Candidate archive mutations stage over
+immutable payload layers and publish atomically; cancellation, Clear Session, archive
+replacement and stale completions invalidate their reservations. Admitted durable records
+and referenced payloads are never silently evicted.
+
+Train-many reserves and retains each completed update, stopping before the next worker
+request when capacity cannot fit. A valid 15,246,474-byte / 751,779-node near-limit
+archive remained inspectable/exportable; retained Pythia evidence reopened exactly, a
+new native Generate refused before transport with zero native requests, and Clear Session
+restored a normal canonical Predict. The qualified M4-B2 archive still measures and
+re-exports as the identical 13,285,363 bytes / 18 payloads / archive ID
+`sha256:7cef8902cfd6489fe482ee314d8251de4e6eb263e5506df001a76ab20a7d7373`.
+
+Derived/recomputed inspection detail is a separate deterministic 8-entry / 8 MiB LRU
+with 2 MiB entry reservations and inspectable eviction count. Training summaries retain
+only the latest 500 rows with truthful total/discarded counts. Cache pressure, navigation
+and export do not charge or alter durable history. Exact architecture, bound derivations,
+commands, artifacts and limitations are in the
+[M4-C1 qualification](reviews/M4-C1-retention-qualification.md).
+
+This adds the implemented bounded-retention, backpressure, cancellation/stale-reservation
+and cache-lifecycle portion of FP-11 without changing FP-10, FP-03 or FP-09. It does not
+qualify renderer pagination/windowing, generic scene/work limits, final pending/opaque/
+budget-exceeded presentation or remote reconciliation. The next dependency is **M4-C2
+renderer/work limits and pending/opaque/budget-exceeded presentation**; M4-D remains
+separate.
