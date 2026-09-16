@@ -33,5 +33,5 @@ export function microgptWorldDescriptor(config:MicrogptTopologyConfig):WorldDesc
   for(const kind of ["logits","probabilities"])
     nodes.push({id:`model.${kind}`,operation:kind,port:"output",coordinates:{scope:"model"},parameter:parameterFor(kind)});
   return {integration:config.integration,modelDefinition:config.modelDefinition,label:config.label,nodes,
-    layout:config.nLayer===1&&config.nHead===2&&config.nEmbd===8?"microgpt-canonical-curated":"microgpt-repeated-blocks"};
+    presentation:config.nLayer===1&&config.nHead===2&&config.nEmbd===8?"microgpt-canonical-curated":"microgpt-repeated-blocks"};
 }

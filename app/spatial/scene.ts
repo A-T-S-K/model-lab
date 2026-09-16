@@ -16,7 +16,7 @@ export const stations:Station[]=[
 const bankX:Record<string,number>={wte:150,wpe:315,"layer0.attn_wq":850,"layer0.attn_wk":1040,"layer0.attn_wv":1230,"layer0.attn_wo":2070,"layer0.mlp_fc1":2740,"layer0.mlp_fc2":3210,lm_head:3860};
 export function stationFor(kind:string,head=0):Station {return stations.find(s=>s.kind===kind&&(s.head===undefined||s.head===head))??{kind,x:bankX[kind]??0,y:965,width:150,height:120};}
 export function stationForWorld(f:ForwardModel,kind:string,head=0,layer=0):Station {
-  if(f.descriptor.layout==="microgpt-canonical-curated")return stationFor(kind,head);
+  if(f.descriptor.presentation==="microgpt-canonical-curated")return stationFor(kind,head);
   const base=850+layer*2500,row=220+head*270;
   const headX:Record<string,number>={q:280,k:410,v:540,attentionLogits:700,attentionProbabilities:850,headOutput:1000};
   if(headX[kind]!==undefined)return {kind,layer,head,x:base+headX[kind],y:row,width:95,height:145};
@@ -29,7 +29,7 @@ export function reticle(x:number,y:number,w:number,h:number) {return `<path clas
 const compact:Record<string,string>={tokenEmbedding:"TE",positionEmbedding:"PE",embeddingSum:"+",embeddingNorm:"RN",preAttentionNorm:"RN",q:"Q",k:"K",v:"V",attentionLogits:"s",attentionProbabilities:"α",headOutput:"Σ",attentionOutput:"∥",attentionProjection:"WO",attentionResidual:"+",preMlpNorm:"RN",mlpUp:"32",mlpRelu:"ReLU",mlpDown:"8",mlpResidual:"+",logits:"z",probabilities:"Tokens"};
 const title:Record<string,string>={tokenEmbedding:"Token",positionEmbedding:"Position",embeddingSum:"Add",embeddingNorm:"RMSNorm",preAttentionNorm:"Pre-attn",q:"Q",k:"K",v:"V",attentionLogits:"Scores",attentionProbabilities:"Softmax",headOutput:"Σ αV",attentionOutput:"Concat",attentionProjection:"WO",attentionResidual:"Residual",preMlpNorm:"Pre-MLP",mlpUp:"Expand · 32",mlpRelu:"ReLU · 32",mlpDown:"Contract · 8",mlpResidual:"Residual",logits:"Logits",probabilities:"Probability"};
 export function sceneSvg(f:ForwardModel,selected:Address,key:number,parameter:string|undefined,labels:string[],query=selected.token,comparison?:{before:ForwardModel;after:ForwardModel},learningMarkup?:string,execution?:ForwardProgress,element=0) {
-  if(f.descriptor.layout==="microgpt-repeated-blocks")return repeatedSceneSvg(f,selected,key,parameter,labels,query);
+  if(f.descriptor.presentation==="microgpt-repeated-blocks")return repeatedSceneSvg(f,selected,key,parameter,labels,query);
   const head=selected.head??(["q","k","v"].includes(selected.kind)?Math.floor(element/f.width):0);
   const valuesFor=(s:Station,source=f)=>{
     const values=source.values({kind:s.kind,token:s.kind==="k"||s.kind==="v"?key:query,...(headKinds.has(s.kind)?{head:s.head}: {})});

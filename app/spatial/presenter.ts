@@ -7,7 +7,7 @@ import type { ForwardBoundary } from '../../model/microgpt.js';
 import { ExplanationPlayback } from "./playback.js";
 import { learningScene, learningInspector, parameterLabel, learningStations } from "./learning-view.js";
 import type { LearningModel, LearningStage, ParameterPin } from "./learning.js";
-import type { SpatialReadModel, SpatialSelection } from "./bindings.js";
+import { isRegisteredWorld, type AnySpatialReadModel, type MicrogptSelection, type SpatialReadModel } from "./bindings.js";
 import { SpatialCamera, HOME, type CameraBox } from "./camera.js";
 import { headKinds, operations, parameterOwners, type Address } from "./forward.js";
 import { layerKinds } from "./microgpt-topology.js";
@@ -15,13 +15,13 @@ import { sceneSvg, stationFor, stationForWorld } from "./scene.js";
 import { forwardInspector, addressLabel } from "./inspector.js";
 import { escapeHtml as esc } from "../views/evidence.js";
 export const waypoints=["tokenEmbedding","positionEmbedding","embeddingSum","embeddingNorm","preAttentionNorm","q","k","v","attentionLogits","attentionProbabilities","headOutput","attentionOutput","attentionProjection","attentionResidual","preMlpNorm","mlpUp","mlpRelu","mlpDown","mlpResidual","logits","probabilities"];
-interface Location {selection:SpatialSelection;kind:string;element:number;parameter?:string;row:number;column:number;lens:boolean;learningStage?:LearningStage;box:CameraBox}
+interface Location {selection:MicrogptSelection;kind:string;element:number;parameter?:string;row:number;column:number;lens:boolean;learningStage?:LearningStage;box:CameraBox}
 export interface PresentationState {idleResetEnabled?:boolean;idleResetSeconds?:number;retention?:{bytes:number;runs:number;snapshots:number;experiments:number};attract?:boolean;exhibit?:boolean;ablationPending?:boolean;inspectedArm?:string;intervention?:{head:number;snapshot:string;arm:string};comparison?:{before:ForwardModel;after:ForwardModel}; outputPair?:OutputPair; comparisonLabels?:[string,string]; execution?:ForwardDriver;document:string;busy:boolean;ready:boolean;status:string;error:string;scalar:string; learning?:LearningModel; experiments?:{id:string;step:number}[]; experimentId?:string; liveStep?:number; canLearn?:boolean; evidenceWorld?:{label:string;replay:boolean}}
 export class SpatialPresenter {
   construction=false;
   operatorControls=false;
   private shortStop=-1;
-  private shortSelection?:SpatialSelection;
+  private shortSelection?:MicrogptSelection;
   private shortMessage="";
   private shortDetour=false;
   resetVisitor(){
@@ -43,7 +43,7 @@ export class SpatialPresenter {
   private guideApply=()=>{};
   readonly playback=new ExplanationPlayback(()=>this.redraw(),()=>this.guideApply(),2200,()=>this.emphasize());
   private emphasize(){const root=document.querySelector<HTMLElement>(".spatial-shell");if(root)root.dataset.explanationPhase=String(this.playback.phase);}
-  private boundSelection?:SpatialSelection;
+  private boundSelection?:MicrogptSelection;
   private boundPin?:ParameterPin;
   private state?:PresentationState;
   private phase?:(phase:string)=>void;
@@ -52,17 +52,22 @@ export class SpatialPresenter {
   private worldDefinition="";
   private routeChoice:'forward'|'learning'='forward';
   /** A new model definition or run clears semantic/history state before any DOM is composed. */
-  bindWorld(model:SpatialReadModel,preserveMappedState=false):boolean {
-    const identity=`${model.forward.descriptor.modelDefinition}/${model.forward.runId}`;
+  bindWorld(model:AnySpatialReadModel,preserveMappedState=false):boolean {
+    const descriptor=isRegisteredWorld(model)?model.world.descriptor:model.forward.descriptor;
+    const runId=isRegisteredWorld(model)?model.world.run:model.forward.runId;
+    const identity=`${descriptor.modelDefinition}/${runId}`;
     if(identity===this.worldIdentity)return false;
-    const sameDefinition=this.worldDefinition===model.forward.descriptor.modelDefinition;
-    this.worldDefinition=model.forward.descriptor.modelDefinition;
+    const sameDefinition=this.worldDefinition===descriptor.modelDefinition;
+    this.worldDefinition=descriptor.modelDefinition;
     if(sameDefinition&&preserveMappedState){this.worldIdentity=identity;return false;}
     this.worldIdentity=identity;this.invalidate();this.history=[];this.parameter=undefined;this.learningStage=undefined;this.lens=false;this.row=0;this.column=0;
+    if(isRegisteredWorld(model)){
+      this.camera.move({...model.presentation.viewport},false);return true;
+    }
     if(!sameDefinition||this.selection.layer>=model.forward.layers||this.selection.head>=model.forward.heads||this.selection.query>=model.forward.input.length||this.selection.key>=model.forward.input.length||this.selection.feature>=model.width)
       Object.assign(this.selection,{layer:0,query:Math.max(0,model.forward.input.length-1),key:0,head:0,feature:0});
     this.kind='attentionLogits';this.element=0;this.pin={name:'wte',row:0,column:0};
-    this.camera.move(model.forward.descriptor.layout==='microgpt-canonical-curated'?{...HOME}:{x:0,y:0,width:1250+model.forward.layers*2500,height:Math.max(1500,420+model.forward.heads*270)},false);
+    this.camera.move(model.forward.descriptor.presentation==='microgpt-canonical-curated'?{...HOME}:{x:0,y:0,width:1250+model.forward.layers*2500,height:Math.max(1500,420+model.forward.heads*270)},false);
     return true;
   }
   interrupt(preserveFrame=false){if(this.shortStop>=0)this.shortDetour=true;this.playback.pause(true);this.camera.stop();if(!preserveFrame)this.pendingBox=undefined;this.detour=this.guided;
@@ -137,7 +142,7 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
   row=0;column=0;lens=false;step=0;guided=false;detour=false;
   private history:Location[]=[];
   private pendingBox?:CameraBox;
-  constructor(readonly selection:SpatialSelection){
+  constructor(readonly selection:MicrogptSelection){
     document.addEventListener('visibilitychange',()=>{if(document.hidden){this.interrupt();this.redraw();}});
     matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change',()=>{this.camera.stop();});
   }
@@ -155,7 +160,8 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
     if(address.layer!==undefined)this.selection.layer=address.layer;
     this.element=address.kind==="attentionLogits"?this.selection.key:["q","k","v"].includes(address.kind)?this.selection.head*this.headWidth+this.selection.feature:0;this.lens=true;this.detour=this.guided&&!guided;this.frame();
   }
-  render(m:SpatialReadModel|undefined,state:PresentationState) {
+  render(m:AnySpatialReadModel|undefined,state:PresentationState) {
+    if(m&&isRegisteredWorld(m))return m.presentation.render({status:state.status,error:state.error,replay:Boolean(state.evidenceWorld?.replay)});
     this.model=m;this.state=state;
     const p=this.playback;
     if(p.source && (state.busy||!m||!m.valid|| (p.route==='forward'?m.source.sourceRunId!==p.source:!state.learning?.available||state.learning.experiment.id!==p.source)))this.invalidate();
@@ -172,18 +178,19 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
       <nav ${state.execution||state.intervention||state.evidenceWorld?'hidden':''} class="learning-toolbar" aria-label="Learning transition"><strong>Live model step <span data-testid="spatial-live-step">${state.liveStep??0}</span></strong><span>Pinned ${esc(parameterLabel(this.pin))}</span><button id="learning-owner">Owner</button><label>Transition<select id="spatial-experiment"><option value="">Choose completed transition</option>${state.experiments?.map(e=>`<option value="${esc(e.id)}" ${e.id===state.experimentId?"selected":""}>Update ${e.step}</option>`).join("")??""}</select></label><button data-learning-phase="before">Before</button><button data-learning-phase="training">Training</button><button data-learning-phase="after">After</button><button ${state.intervention?'':'id="spatial-current"'}>Return to current model</button><button data-learning-stage="gradient">Contributions</button><button data-learning-stage="adam">Adam</button><button data-learning-stage="compare">Compare</button></nav>
       ${state.intervention?`<details class="comparison-playback"><summary>Explanation playback · completed evidence</summary>${this.controls()}</details>`:this.controls()}${state.intervention?`<div class="intervention-banner" data-testid="spatial-intervention">READ-ONLY · ${esc(state.intervention.arm)} · layer 0 / head ${state.intervention.head} · all positions, aggregated output → zero → concat. Same checkpoint <code title="${esc(state.intervention.snapshot)}">${esc(state.intervention.snapshot.slice(0,19))}…</code>. Q/K/V, scores, weights and the other head are preserved. The intervention site need not be the first numerical difference.</div>`:""}${pair?`<div class="decision-summary">${state.inspectedArm?`<small data-testid="inspected-arm">Inspecting ${esc(state.inspectedArm)}${state.comparison?" · paired map enabled":""}</small>`:""}${outputSummary(pair,s.query,labels)}<nav>${state.intervention?`<span>Accepted model step ${state.liveStep??0}</span><button id="spatial-current">Return to current model</button>`:""}<button data-compare-arm="before">Inspect ${labels[0].toLowerCase()}</button><button data-compare-arm="after">Inspect ${labels[1].toLowerCase()}</button><button data-compare-arm="pair">Shared-scale comparison</button></nav></div>`:""}<div class="world-workspace ${this.lens?"has-lens":""}"><div class="world-pane ${sceneOpen?"has-construction":""}">${sceneSvg(m.forward,a,s.key,this.learningStage?this.pin.name:this.parameter,m.labels,s.query,state.comparison??(this.learningStage==="compare"&&state.learning?.available?state.learning.comparison:undefined),state.execution?.progress?.training ? liveLearningScene(state.execution.progress.training,this.pin) : learningScene(state.learning,this.learningStage,this.pin),state.execution?.progress,this.element)}<div class="camera-controls"><button id="zoom-in" aria-label="Zoom in">+</button><button id="zoom-out" aria-label="Zoom out">−</button><button data-pan="-1,0" aria-label="Pan left">←</button><button data-pan="1,0" aria-label="Pan right">→</button><button data-pan="0,-1" aria-label="Pan up">↑</button><button data-pan="0,1" aria-label="Pan down">↓</button></div>
       <div class="selection-card"><small>SELECTED WORLD OBJECT</small><strong data-testid="selected-world-object">${esc(label)}</strong><span>layer ${a.layer??'model'} · position ${a.token} · query ${s.query} / key ${s.key} · head ${s.head}</span><span>${state.comparison?`${labels[0]}: neutral. ${labels[1]}: cyan. Shared scale per pair.`:this.learningStage==="compare"?"Before: neutral. After: cyan. Shared scale per pair.":"Signed strips: independent scales. Q/K lens: shared scale."}</span><div class="selection-actions"><button id="open-spatial-detail">Values / arithmetic / source</button><button id="scene-construction">${this.construction?"Close scene math":"Scene math"}</button></div>${this.kind==="headOutput"&&!state.evidenceWorld?`<button id="spatial-ablate" ${state.execution||state.busy?"disabled":""}>Test without this head</button><small class="head-action-scope">${state.execution?"Finish/cancel execution or accept/discard candidate first.":`Selected checkpoint ${esc((m.source.sourceSnapshotId??"unavailable").slice(0,19))}… · all positions, after aggregation / before concat.`}</small>`:""}${!m.valid?'<p role="alert">Selection unavailable in this run. Choose valid indices; prior evidence is not rebound.</p>':""}</div>
-      <svg class="world-minimap" viewBox="0 0 ${m.forward.descriptor.layout==='microgpt-canonical-curated'?4500:1250+m.forward.layers*2500} ${m.forward.descriptor.layout==='microgpt-canonical-curated'?1700:Math.max(1500,420+m.forward.heads*270)}" aria-label="Same world camera footprint"><path d="M100 600 H${m.forward.descriptor.layout==='microgpt-canonical-curated'?4300:1050+m.forward.layers*2500}"/>${operations.map((o)=>{const t=stationForWorld(m.forward,o.kind,s.head,s.layer);return `<rect x="${t.x}" y="${t.y}" width="100" height="160" class="${o.kind===this.kind?"selected":""}"/>`;}).join("")}<rect id="camera-footprint"/></svg>${sceneOpen?sceneConstruction(m,a,this.element,state.execution?.progress):""}</div>
+      <svg class="world-minimap" viewBox="0 0 ${m.forward.descriptor.presentation==='microgpt-canonical-curated'?4500:1250+m.forward.layers*2500} ${m.forward.descriptor.presentation==='microgpt-canonical-curated'?1700:Math.max(1500,420+m.forward.heads*270)}" aria-label="Same world camera footprint"><path d="M100 600 H${m.forward.descriptor.presentation==='microgpt-canonical-curated'?4300:1050+m.forward.layers*2500}"/>${operations.map((o)=>{const t=stationForWorld(m.forward,o.kind,s.head,s.layer);return `<rect x="${t.x}" y="${t.y}" width="100" height="160" class="${o.kind===this.kind?"selected":""}"/>`;}).join("")}<rect id="camera-footprint"/></svg>${sceneOpen?sceneConstruction(m,a,this.element,state.execution?.progress):""}</div>
       <svg class="context-tether" aria-hidden="true"><path id="context-tether-path"/></svg><aside class="context-lens" ${this.lens?"":"hidden"} data-selection="${esc(JSON.stringify([this.kind,a.token,a.head,this.parameter,this.learningStage,state.experimentId,m.source.sourceRunId]))}" aria-label="Contextual arithmetic lens">${this.learningStage&&state.execution?.progress?.training?liveLearningInspector(state.execution.progress.training,this.pin,state.scalar):this.learningStage?learningInspector(state.learning,this.learningStage,this.pin,a,state.scalar,this.expanded):forwardInspector(m,a,this.element,this.parameter,this.row,this.column,state.scalar,state.execution?.progress,sceneOpen).replace('<details open><summary>Calculation and complete values</summary>',`${state.comparison?componentComparison(state.comparison,a,labels):""}<details open><summary>Calculation and complete values</summary>`)}</aside></div>
 `:`<section class="spatial-empty"><h1>One model, a complete forward computation</h1><p>Enter a, b or c, then Predict. Explore its actual operations and their sources.</p></section>`}</div>`;
   }
-  bind(m:SpatialReadModel|undefined,changed:()=>void,render:()=>void,phase?:(phase:string)=>void) {
+  bind(m:AnySpatialReadModel|undefined,changed:()=>void,render:()=>void,phase?:(phase:string)=>void) {
+    if(m&&isRegisteredWorld(m)){m.presentation.bind(changed,render);return;}
     this.redraw=render;this.phase=phase;this.guideApply=()=>{this.guide();changed();};
     if(m)this.headWidth=m.width;
     const root=document.querySelector<HTMLElement>(".spatial-shell")!;
     this.emphasize();
     if(this.playback.source&&!this.playback.exploring&&m){
       const headSelector=['q','k','v'].includes(this.kind)||headKinds.has(this.kind)?`[data-world-head="${this.selection.head}"]`:'';
-      const layerSelector=m.forward.descriptor.layout==='microgpt-repeated-blocks'&&layerKinds.has(this.kind)?`[data-world-layer="${this.selection.layer}"]`:'';
+      const layerSelector=m.forward.descriptor.presentation==='microgpt-repeated-blocks'&&layerKinds.has(this.kind)?`[data-world-layer="${this.selection.layer}"]`:'';
       const active=this.learningStage?root.querySelector(`svg [data-learning-stage="${this.learningStage==='compare'?'checkpoint':this.learningStage}"]`):root.querySelector(`[data-world-kind="${this.kind}"]${layerSelector}${headSelector}`);
       active?.classList.add('explanation-active');
       if(!this.learningStage)for(const d of m.forward.upstream(this.address()))root.querySelectorAll(`[data-world-kind="${d.address.kind}"],[data-world-parameter="${d.address.kind}"]`).forEach(el=>el.classList.add('explanation-input'));

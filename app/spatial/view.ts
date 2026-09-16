@@ -1,4 +1,4 @@
-import type { SpatialReadModel, SpatialSelection } from "./bindings.js";
+import type { SpatialReadModel } from "./bindings.js";
 import { escapeHtml as esc } from "../views/evidence.js";
 import { sourceView } from "../source/catalog.js";
 const num = (n: number | undefined) => n === undefined ? "unavailable" : n.toPrecision(9);

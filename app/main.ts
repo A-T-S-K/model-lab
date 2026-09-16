@@ -5,7 +5,8 @@ import { forwardReadModel } from './spatial/forward.js';
 import "./style.css";
 import { ForwardDriver } from "./worker/forward-driver.js";
 import "./spatial/style.css";
-import { spatialEvidenceReadModel, spatialEvidenceUnavailable, spatialReadModel, type SpatialSelection } from "./spatial/bindings.js";
+import { spatialEvidenceReadModel, spatialEvidenceUnavailable, spatialReadModel, type MicrogptSelection } from "./spatial/bindings.js";
+import type { WorldSelection } from './spatial/topology.js';
 import { learningReadModel, resolveParameter, type LearningStage } from "./spatial/learning.js";
 import { SpatialPresenter } from "./spatial/presenter.js";
 import { exhibitTiming, exhibitState } from "./presentation/exhibit-state.js";
@@ -84,7 +85,8 @@ import {
 
 const spatialEnabled = new URLSearchParams(location.search).get("presentation") === "spatial";
 let spatialActive = spatialEnabled;
-const spatialSelection: SpatialSelection = { layer: 0, query: 4, key: 0, head: 0, feature: 0 };
+const spatialSelection: MicrogptSelection = { layer: 0, query: 4, key: 0, head: 0, feature: 0 };
+const worldSelection: WorldSelection = {node:'',port:'',phase:'',coordinates:{}};
 const spatialPresenter = new SpatialPresenter(spatialSelection);
 let spatialExperimentId = "";
 const config = fixture.config;
@@ -565,7 +567,7 @@ function render(): void {
     const displayed = attract && exhibitEntry ? attractReplay?.result : result;
     const source = displayed && sourceBinding(displayed.run, config.vocabulary, sourceSnapshot(displayed.run.manifest.startingSnapshotId??"")?.state.optimizer.step??displayed.trainingStep, liveRunId, documentText, "SPATIAL ATTENTION");
     const evidenceRun=spatialEvidenceRunId?archive.evidence.get(spatialEvidenceRunId):undefined;
-    const makeModel=()=>evidenceRun?spatialEvidenceReadModel(evidenceRun,archive.evidence.envelope(evidenceRun.id),spatialSelection,spatialEvidenceReplay):displayed&&source?spatialReadModel(displayed.run,sourceSnapshot(source.sourceSnapshotId??"")??displayed.snapshots.find(s=>s.id===source.sourceSnapshotId),source,spatialSelection):undefined;
+    const makeModel=()=>evidenceRun?spatialEvidenceReadModel(evidenceRun,archive.evidence.envelope(evidenceRun.id),worldSelection,spatialSelection,spatialEvidenceReplay):displayed&&source?spatialReadModel(displayed.run,sourceSnapshot(source.sourceSnapshotId??"")??displayed.snapshots.find(s=>s.id===source.sourceSnapshotId),source,spatialSelection):undefined;
     let model=makeModel();if(model&&spatialPresenter.bindWorld(model,!evidenceRun))model=makeModel();
     const learning = evidenceRun?undefined:spatialLearningModel();
     const ablation=evidenceRun?undefined:[...archive.interventionExperiments.values()].find(e=>e.baselineRun.manifest.runId===result?.run.manifest.runId||e.interventionRun.manifest.runId===result?.run.manifest.runId);

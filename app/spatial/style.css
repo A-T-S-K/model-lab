@@ -258,3 +258,23 @@ body.spatial-mode #exhibit-warning { left:15%; right:15%; top:8px; font-size:16p
 body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font-size:16px; }
 .selection-actions { display:flex; gap:6px; }
 .selection-actions button { min-width:0; }
+
+/* M2-B registered numeric MLP presentation: same shell, model-owned compact geometry. */
+.mlp-capabilities { display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; padding:7px 14px; border-bottom:1px solid #3b454d; background:#111820; }
+.mlp-capabilities strong { color:#f0d395; font-family:PlexMono,monospace; font-size:11px; letter-spacing:.08em; }
+.mlp-capabilities span { color:#d9e1e6; }
+.mlp-world .mlp-node rect { fill:#18232b; stroke:#7a8791; stroke-width:2; }
+.mlp-world .mlp-node[aria-pressed="true"] rect { stroke:#f0d395; stroke-width:5; }
+.mlp-world .mlp-value { fill:#62c7e8; font-family:PlexMono,monospace; font-size:18px; }
+.mlp-world path.target { stroke:#b79cff; stroke-dasharray:8 7; }
+.mlp-world path.parameter { stroke:#f0d395; stroke-dasharray:5 6; }
+.mlp-world path.gradient { stroke:#dc7c7c; }
+.mlp-world path.optimizer_update { stroke:#58b98c; stroke-width:4; }
+.mlp-world path.parameter_state { stroke:#a7b2bc; stroke-dasharray:3 5; }
+.mlp-sgd { border:1px solid #58b98c; padding:10px; margin:14px 0; background:#101a17; }
+.mlp-sgd h3 { color:#8dd9ad; margin-top:0; }
+.mlp-sgd>div { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px 14px; font-family:PlexMono,monospace; }
+.mlp-shell .context-lens pre { white-space:pre-wrap; overflow:auto; padding:10px; background:#0d1318; color:#d9e1e6; }
+.mlp-lens [data-testid$="-choices"] { display:flex; flex-wrap:wrap; gap:6px; }
+.mlp-lens [data-testid$="-choices"] button { text-align:left; }
+@media(max-width:850px){.mlp-sgd>div{grid-template-columns:1fr}.mlp-capabilities{font-size:12px}}

@@ -11,7 +11,7 @@ import {ModelSession} from '../../app/worker/controller.js';
 const request={version:1 as const,integration:NONCANONICAL,profile:'microgpt-multilayer-f64-v1',sessionId:'m2-a',requestId:'topology',epoch:0,action:'predict',input:'wxyz!'};
 
 test('M2-A full semantic identity is unique across model, run, layer, node, port and typed coordinates',async()=>{
-  const envelope=await executeNoncanonical(request),store=new EvidenceStore(integrations()),run=await store.admit(envelope,request),f=evidenceWorldIntegration(run.integration)!.compose(run,envelope);
+  const envelope=await executeNoncanonical(request),store=new EvidenceStore(integrations()),run=await store.admit(envelope,request),composition=evidenceWorldIntegration(run.integration)!.compose(run,envelope,{node:'',port:'',phase:'',coordinates:{}},false);assert.equal(composition.kind,'microgpt');if(composition.kind!=='microgpt')return;const f=composition.forward;
   const a={kind:'headOutput',token:5,layer:0,head:2},b={...a,layer:1};
   assert.notEqual(f.semanticId(a),f.semanticId(b));
   assert.deepEqual(f.semanticAddress(b),{modelDefinition:run.definition,node:'layer.1.headOutput.head.2',port:'output',run:run.id,invocation:'prefill:0',phase:'inference',coordinates:{position:5,layer:1,head:2}});
@@ -19,7 +19,7 @@ test('M2-A full semantic identity is unique across model, run, layer, node, port
 });
 
 test('M2-A layer 1/head 2/position 5 binds real values, causal K/V, prior residual and layer-specific owner',async()=>{
-  const envelope=await executeNoncanonical(request),store=new EvidenceStore(integrations()),run=await store.admit(envelope,request),f=evidenceWorldIntegration(run.integration)!.compose(run,envelope);
+  const envelope=await executeNoncanonical(request),store=new EvidenceStore(integrations()),run=await store.admit(envelope,request),composition=evidenceWorldIntegration(run.integration)!.compose(run,envelope,{node:'',port:'',phase:'',coordinates:{}},false);assert.equal(composition.kind,'microgpt');if(composition.kind!=='microgpt')return;const f=composition.forward;
   const selected={kind:'headOutput',token:5,layer:1,head:2},point=store.point(run.id,pointId('headOutput',5,1,2));
   assert.deepEqual(f.values(selected),point.values);
   assert.deepEqual(f.explain(selected,0).artifact?.id,point.id);
@@ -38,10 +38,11 @@ test('M2-A layer 1/head 2/position 5 binds real values, causal K/V, prior residu
 test('M2-A rejects invalid coordinates instead of rebinding and disconnected replay composes identically',async()=>{
   const envelope=await executeNoncanonical(request),store=new EvidenceStore(integrations()),run=await store.admit(envelope,request);
   const source={layer:1,query:5,key:0,head:2,feature:1};
-  assert.equal(spatialEvidenceReadModel(run,envelope,source).valid,true);
-  for(const selection of [{...source,layer:2},{...source,head:3},{...source,query:6},{...source,key:6},{...source,feature:2}])assert.equal(spatialEvidenceReadModel(run,envelope,selection).valid,false);
+  const generic={node:'',port:'',phase:'',coordinates:{}};
+  assert.equal(spatialEvidenceReadModel(run,envelope,generic,source).valid,true);
+  for(const selection of [{...source,layer:2},{...source,head:3},{...source,query:6},{...source,key:6},{...source,feature:2}])assert.equal(spatialEvidenceReadModel(run,envelope,generic,selection).valid,false);
   const replayStore=new EvidenceStore(integrations()),replayed=await replayStore.admit(parseEvidence(serializeEvidence(envelope))),replayEnvelope=replayStore.envelope(replayed.id);
-  const live=spatialEvidenceReadModel(run,envelope,source),replay=spatialEvidenceReadModel(replayed,replayEnvelope,source,true);
+  const live=spatialEvidenceReadModel(run,envelope,generic,source),replay=spatialEvidenceReadModel(replayed,replayEnvelope,generic,source,true);assert('forward' in live&&'forward' in replay);
   assert.deepEqual(replay.forward.values({kind:'headOutput',token:5,layer:1,head:2}),live.forward.values({kind:'headOutput',token:5,layer:1,head:2}));
   assert.equal(replay.source.relationship,'REPLAY');
 });

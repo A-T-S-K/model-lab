@@ -5,10 +5,11 @@ import type { ArchivedSnapshot } from "../../archive/session.js";
 import type { EvidenceEnvelope, EvidenceRun } from "../../trace/evidence.js";
 import type { SourceBinding } from "../presentation/source-binding.js";
 import { qkGeometry } from "./geometry.js";
+import type {RegisteredWorldModel,WorldSelection} from './topology.js';
 
 /** Typed integration coordinates; execution epochs and scalar handles never enter this selection. */
-export interface SpatialSelection { layer:number; query:number; key:number; head:number; feature:number }
-function readModel(forward:ForwardModel,source:SourceBinding,selection:SpatialSelection){
+export interface MicrogptSelection { layer:number; query:number; key:number; head:number; feature:number }
+function readModel(forward:ForwardModel,source:SourceBinding,selection:MicrogptSelection){
   const input=forward.input,vocabulary=forward.vocabulary,width=forward.width;
   const valid=[selection.query,selection.key].every(i=>Number.isInteger(i)&&i>=0&&i<input.length)&&
     Number.isInteger(selection.layer)&&selection.layer>=0&&selection.layer<forward.layers&&Number.isInteger(selection.head)&&selection.head>=0&&selection.head<forward.heads&&
@@ -29,12 +30,15 @@ function readModel(forward:ForwardModel,source:SourceBinding,selection:SpatialSe
       scores:valid?get("attentionLogits",selection.query,head):undefined,weights:valid?get("attentionProbabilities",selection.query,head):undefined})),lens,
     geometry:lens?.availability==="AVAILABLE"&&lens.q&&lens.k?qkGeometry(lens.q,lens.k):undefined,projection};
 }
-export function spatialReadModel(run:RecordedRun,snapshot:ArchivedSnapshot|undefined,source:SourceBinding,selection:SpatialSelection){return readModel(forwardReadModel(run,snapshot),source,selection);}
-export function spatialEvidenceReadModel(run:EvidenceRun,envelope:EvidenceEnvelope,selection:SpatialSelection,replay=false){
+export function spatialReadModel(run:RecordedRun,snapshot:ArchivedSnapshot|undefined,source:SourceBinding,selection:MicrogptSelection){return readModel(forwardReadModel(run,snapshot),source,selection);}
+export function spatialEvidenceReadModel(run:EvidenceRun,envelope:EvidenceEnvelope,selection:WorldSelection,microgptSelection:MicrogptSelection,replay=false):AnySpatialReadModel{
   const integration=evidenceWorldIntegration(run.integration);if(!integration)throw Error('No continuous-world integration registered for this evidence');
-  const forward=integration.compose(run,envelope),input='text' in run.input?run.input.text:JSON.stringify(run.input.values);
+  const composition=integration.compose(run,envelope,selection,replay);if(composition.kind==='registered')return composition.model;
+  const forward=composition.forward,input='text' in run.input?run.input.text:JSON.stringify(run.input.values);
   const source:SourceBinding={sourceRunId:run.id,sourceSnapshotId:run.checkpoint,capturedDocument:input,origin:"OBSERVED",verification:"NONE",relationship:replay?"REPLAY":"HISTORICAL",phase:"SPATIAL EVIDENCE",availability:"AVAILABLE"};
-  return readModel(forward,source,selection);
+  return readModel(forward,source,microgptSelection);
 }
-export function spatialEvidenceUnavailable(run:EvidenceRun):string|undefined{return evidenceWorldIntegration(run.integration)?undefined:'This integration has no qualified continuous-world composition in M2-A.';}
+export function spatialEvidenceUnavailable(run:EvidenceRun):string|undefined{return evidenceWorldIntegration(run.integration)?undefined:'This integration has no qualified continuous-world composition.';}
 export type SpatialReadModel=ReturnType<typeof readModel>;
+export type AnySpatialReadModel=SpatialReadModel|RegisteredWorldModel;
+export function isRegisteredWorld(model:AnySpatialReadModel):model is RegisteredWorldModel{return 'presentation' in model;}
