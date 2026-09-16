@@ -66,6 +66,7 @@ import { SessionArchive } from "../archive/session.js";
 import { InspectorWorkerClient } from "./worker/inspector-client.js";
 import { isHeadAblationExperiment } from "../experiments/ablation.js";
 import { isActivationPatchExperiment } from "../experiments/activation-patch.js";
+import type { ActivationVariantExperiment } from "../experiments/model-variant.js";
 import type {
   InspectionResult,
   InspectionTarget,
@@ -577,19 +578,21 @@ function render(): void {
     const ablation=interventionExperiment&&isHeadAblationExperiment(interventionExperiment)?interventionExperiment:undefined;
     const patch=interventionExperiment&&isActivationPatchExperiment(interventionExperiment)?interventionExperiment:undefined;
     const interventionPair=interventionExperiment?{before:forwardReadModel(interventionExperiment.baselineRun,sourceSnapshot(interventionExperiment.startingSnapshotId)),after:forwardReadModel(interventionExperiment.interventionRun,sourceSnapshot(interventionExperiment.startingSnapshotId))}:undefined;
+    const variantExperiment=evidenceRun?undefined:[...archive.modelVariantExperiments.values()].find(experiment=>[experiment.baselineRun.manifest.runId,experiment.variantRun.manifest.runId].includes(result?.run.manifest.runId??''));
+    const variantPair=variantExperiment?{before:forwardReadModel(variantExperiment.baselineRun,sourceSnapshot(variantExperiment.source.snapshotId)),after:forwardReadModel(variantExperiment.variantRun,sourceSnapshot(variantExperiment.source.snapshotId))}:undefined;
     const donorToken=spatialSelection.query===0?Math.min(1,Math.max(0,(Array.isArray(result?.run.manifest.input)?result.run.manifest.input.length:1)-1)):0;
     const donorHead=(spatialSelection.head+1)%config.nHead;
     mount.innerHTML = spatialPresenter.render(model, {
       attract: !evidenceRun&&attract&&exhibitEntry, exhibit: !evidenceRun&&exhibitEntry, idleResetEnabled:kioskEnabled, idleResetSeconds:exhibitConfiguration.resetAfterMs/1000,
       retention:{bytes:evidenceBytes,runs:archive.runs.size,snapshots:archive.snapshots.size,experiments:archive.learningExperiments.size},
       interventionPending: activeIntervention!==undefined,
-      inspectedArm:forwardDriver.progress?.training?.readyOutputs?(result?.run.manifest.runId===forwardDriver.progress.training.readyOutputs.before.manifest.runId?'Current · accepted checkpoint':'Candidate · provisional checkpoint'):interventionExperiment?(result?.run.manifest.runId===interventionExperiment.baselineRun.manifest.runId?'Baseline':result?.run.manifest.runId===interventionExperiment.donorRun?.manifest.runId?'Donor':'Intervention'):undefined,
+      inspectedArm:forwardDriver.progress?.training?.readyOutputs?(result?.run.manifest.runId===forwardDriver.progress.training.readyOutputs.before.manifest.runId?'Current · accepted checkpoint':'Candidate · provisional checkpoint'):interventionExperiment?(result?.run.manifest.runId===interventionExperiment.baselineRun.manifest.runId?'Baseline':result?.run.manifest.runId===interventionExperiment.donorRun?.manifest.runId?'Donor':'Intervention'):variantExperiment?(result?.run.manifest.runId===variantExperiment.baselineRun.manifest.runId?'Canonical definition':'Leaky ReLU definition'):undefined,
       document: documentText, busy, ready, status:evidenceRun?'Read-only admitted evidence · no execution requested':status, error, execution: evidenceRun?undefined:forwardDriver.active?forwardDriver:undefined,
-      outputPair:interventionExperiment?{before:interventionExperiment.baselineRun,after:interventionExperiment.interventionRun}:undefined,
-      comparisonLabels:ablation?['Baseline','Head output zeroed']:patch?['Baseline','Donor patched']:undefined,
+      outputPair:interventionExperiment?{before:interventionExperiment.baselineRun,after:interventionExperiment.interventionRun}:variantExperiment?{before:variantExperiment.baselineRun,after:variantExperiment.variantRun}:undefined,
+      comparisonLabels:ablation?['Baseline','Head output zeroed']:patch?['Baseline','Donor patched']:variantExperiment?['Canonical ReLU','Leaky ReLU']:undefined,
       intervention:ablation?{snapshot:ablation.startingSnapshotId,arm:result?.run.manifest.runId===ablation.baselineRun.manifest.runId?'Baseline':'Head output zeroed',summary:`layer ${ablation.selection.layer} / head ${ablation.selection.head} · all positions, aggregated output → zero → concat`}:patch?{snapshot:patch.startingSnapshotId,arm:result?.run.manifest.runId===patch.baselineRun.manifest.runId?'Baseline':result?.run.manifest.runId===patch.donorRun.manifest.runId?'Donor':'Donor patched',summary:`target p${patch.declaration.target.token}/L${patch.declaration.target.layer}/h${patch.declaration.target.head} ← donor p${patch.declaration.donor.token}/L${patch.declaration.donor.layer}/h${patch.declaration.donor.head} · exact observed vector → concat`,receipt:{policy:`${patch.comparison.policy.id}@${patch.comparison.policy.version}`,donor:patch.receipt.donorVector,original:patch.receipt.originalTargetVector,replacement:patch.receipt.effectiveReplacement,noOp:patch.receipt.noOp}}:undefined,
       patchDonor:{head:donorHead,token:donorToken},
-      comparison: interventionPair ?? (readyComparison && forwardDriver.progress?.training?.readyOutputs ? {
+      comparison: interventionPair ?? variantPair ?? (readyComparison && forwardDriver.progress?.training?.readyOutputs ? {
         before:forwardReadModel(forwardDriver.progress.training.readyOutputs.before,forwardDriver.progress.training.readyOutputs.starting),
         after:forwardReadModel(forwardDriver.progress.training.readyOutputs.after,sourceSnapshot(forwardDriver.progress.training.candidateId!))} : undefined),
       learning, experimentId: evidenceRun?'':spatialExperimentId, liveStep: liveTrainingStep,evidenceWorld:evidenceRun?{label:evidenceRun.integration,replay:spatialEvidenceReplay}:undefined,
@@ -898,6 +901,18 @@ function syncSpatialSelection(): void {
 }
 function bind(): void {
   sharedInspector.sync(archive.evidence,result?.run.manifest.runId,!busy&&!forwardDriver.active,async()=>execute('predict'),(runId,replay)=>{spatialEvidenceRunId=runId;spatialEvidenceReplay=replay;clearWorldSelection();attract=false;clearDisplayedInspection();spatialPresenter.invalidate();render();},runId=>spatialEvidenceUnavailable(archive.evidence.get(runId)));
+  const selectedVariant=[...archive.modelVariantExperiments.values()].find(experiment=>[experiment.baselineRun.manifest.runId,experiment.variantRun.manifest.runId].includes(result?.run.manifest.runId??''));
+  if(!attract&&result&&!selectedVariant&&result.run.manifest.model.id==='microgpt'){
+    const button=document.createElement('button');button.id='open-activation-variant';button.textContent='Open Leaky ReLU variant';button.disabled=busy||forwardDriver.active;
+    (mount.querySelector('.spatial-header')??mount.querySelector('.source-toolbar')??mount).append(button);
+    button.addEventListener('click',()=>void openActivationVariant());
+  }
+  if(selectedVariant){
+    const w=selectedVariant.witness,container=document.createElement('section');container.className='intervention-banner';container.dataset.testid='variant-receipt';
+    container.innerHTML=`<strong>MODEL DEFINITION VARIANT · ${escapeHtml(selectedVariant.targetDefinition.id)}@${escapeHtml(selectedVariant.targetDefinition.version)}</strong><p>Canonical checkpoint <code>${escapeHtml(selectedVariant.source.checkpointId)}</code> → explicit initialization <code>${escapeHtml(selectedVariant.initialization.id)}</code>. Parameter initialization only; no exact training-resume claim.</p><p>Leaky ReLU slope ${w.negative.localDerivative}; zero derivative convention ${selectedVariant.declaration.zeroDerivative}. Positive witness ${w.positive.input} → ${w.positive.variant}. Negative witness ${w.negative.input} → ${w.negative.variant}; canonical ${w.negative.canonical}. Real backward contribution ${w.negative.contribution}.</p><p>Comparison <strong>${selectedVariant.comparison.policy.id}@${selectedVariant.comparison.policy.version}</strong> · explicit <code>mlpRelu/output ↔ mlpLeakyRelu/output</code>.</p><button id="variant-current">Return to accepted canonical model</button>`;
+    const anchor=mount.querySelector('.spatial-status')??mount.querySelector('.source-toolbar')??mount.firstElementChild;anchor?.insertAdjacentElement('afterend',container);
+    container.querySelector('#variant-current')?.addEventListener('click',()=>{if(liveRunId)selectRun(liveRunId);spatialPresenter.kind='mlpRelu';status='Returned to accepted canonical model · variant evidence retained read-only';render();});
+  }
   if (!attract) {
     if (!spatialActive) {
       const entry = '<button id="presentation-toggle" class="classic-toggle">Spatial presentation · controlled learning</button>';
@@ -2599,4 +2614,34 @@ async function patchHeadOutput(): Promise<void> {
   } finally {
     if (currentOperation === operation) { activeIntervention=undefined; busy = false; render(); }
   }
+}
+
+async function openActivationVariant(): Promise<void> {
+  if (forwardDriver.active) { error='Finish or cancel the active execution before creating a model variant.';render();return; }
+  if (busy || !result) return;
+  if (evidenceBytes >= SESSION_BUDGET) { error='Session evidence limit reached (64 MiB estimate). Clear session before creating another variant.';render();return; }
+  const source=result;
+  if(source.run.manifest.model.id!=='microgpt'||source.run.manifest.runtimeRevision!==RUNTIME_REVISION){error='Select a compatible canonical MicroGPT run before creating the variant.';render();return;}
+  const snapshot=sourceSnapshot(source.run.manifest.startingSnapshotId??'');
+  if(!snapshot){error='The selected canonical source snapshot is unavailable.';render();return;}
+  clearDisplayedInspection();const currentOperation=++operation;activeIntervention=currentOperation;
+  busy=true;error='';status='Initializing and executing the registered Leaky ReLU model definition…';render();
+  try{
+    const experiment:ActivationVariantExperiment=await inspector.activationVariant({snapshot,inputIds:source.tokenIds,targetIds:source.targetIds});
+    if(currentOperation!==operation)return;
+    await archive.addRun(experiment.baselineRun);
+    await archive.addModelVariantExperiment(experiment);
+    if(currentOperation!==operation)return;
+    evidenceBytes+=new TextEncoder().encode(JSON.stringify(experiment)).byteLength;
+    activeIntervention=undefined;comparisonRunId=experiment.baselineRun.manifest.runId;busy=false;
+    selectRun(experiment.variantRun.manifest.runId);
+    selectedToken=experiment.witness.token;selectedKind='mlpLeakyRelu';
+    spatialSelection.query=experiment.witness.token;spatialSelection.layer=experiment.witness.layer;
+    spatialPresenter.learningStage=undefined;spatialPresenter.kind='mlpLeakyRelu';spatialPresenter.parameter=undefined;spatialPresenter.lens=true;spatialPresenter.focusSelection();
+    status=`Leaky ReLU model variant complete · matched-variant@1 · accepted canonical state unchanged`;
+    render();
+  }catch(failure){
+    if(currentOperation!==operation)return;
+    error=failure instanceof Error?failure.message:String(failure);status='Activation variant failed';
+  }finally{if(currentOperation===operation){activeIntervention=undefined;busy=false;render();}}
 }

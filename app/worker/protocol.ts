@@ -6,6 +6,7 @@ import type { ArchivedSnapshot, LearningExperiment } from '../../archive/session
 import type { InspectionTarget, InspectionResult } from '../../inspect/types.js';
 import type { HeadAblationExperiment } from '../../experiments/ablation.js';
 import type { ActivationPatchExperiment } from '../../experiments/activation-patch.js';
+import type { ActivationVariantExperiment } from '../../experiments/model-variant.js';
 
 export interface RequestTag { sessionId: string; runId: string; generationId: number; intent?: import("../../trace/evidence.js").ExecutionRequest }
 export type WorkerRequest = RequestTag & (
@@ -52,6 +53,7 @@ export type WorkerResponse = RequestTag & (
   { status: 'inspection'; inspection: InspectionResult } |
   { status: 'ablation'; experiment: HeadAblationExperiment } |
   { status: 'activationPatch'; experiment: ActivationPatchExperiment } |
+  { status: 'activationVariant'; experiment: ActivationVariantExperiment } |
   { status: 'cancelled' } |
   { status: 'error'; error: string }
 );
@@ -69,4 +71,7 @@ export interface ActivationPatchRequest extends RequestTag {
   command: 'activationPatch'; snapshot: ArchivedSnapshot; inputIds: number[]; targetIds: number[];
   donor: { token: number; layer: number; head: number };
   target: { token: number; layer: number; head: number };
+}
+export interface ActivationVariantRequest extends RequestTag {
+  command: 'activationVariant'; snapshot: ArchivedSnapshot; inputIds: number[]; targetIds: number[];
 }

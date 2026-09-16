@@ -6,7 +6,7 @@ import type { ConceptRef, Provenance } from '../trace/types.js';
 export interface ParameterRef { index: number; name: string; row: number; column: number }
 export interface ScalarNode {
   id: number; operation: string; value: number; gradient?: number;
-  parameter?: ParameterRef; constant?: string; exponent?: number;
+  parameter?: ParameterRef; constant?: string; exponent?: number; negativeSlope?: number;
 }
 export interface ScalarEdge {
   id: number; child: number; parent: number; inputIndex: number;

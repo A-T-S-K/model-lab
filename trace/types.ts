@@ -62,6 +62,8 @@ export interface RunManifest {
   /** Exact production source identity; scalar node IDs are local to this runtime and run. */
   readonly runtimeRevision: string;
   readonly intervention?: JsonValue;
+  /** Explicit cross-definition initialization; absent for canonical execution. */
+  readonly modelInitialization?: JsonValue;
 }
 
 export interface ConceptRef {

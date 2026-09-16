@@ -1,5 +1,6 @@
 import { sum, Value } from './value.js';
 import { type Model } from './state.js';
+import { canonicalMicrogptDefinition, type ModelDefinitionContribution } from './definitions.js';
 
 import { observeVector, observeScalar, structure, type Observer, type StructuralObservation } from './observation.js';
 export type { Observation, StructuralObservation, Observer } from './observation.js';
@@ -48,7 +49,8 @@ export type HeadOutputIntervention = HeadAblation | HeadActivationPatch;
 
 export interface ForwardBoundary { kind: string; token: number; layer?: number; head?: number }
 /** Metadata only. Mirrors the declared token → layer → head traversal; performs no math. */
-export function forwardBoundaries(model: { config: Pick<Model['config'], 'nLayer' | 'nHead'> }, tokenIds: readonly number[]): ForwardBoundary[] {
+export function forwardBoundaries(model: { config: Pick<Model['config'], 'nLayer' | 'nHead'> }, tokenIds: readonly number[],
+  definition: ModelDefinitionContribution = canonicalMicrogptDefinition): ForwardBoundary[] {
   const boundaries: ForwardBoundary[] = [];
   for (let token = 0; token < tokenIds.length; token++) {
     for (const kind of ['tokenEmbedding','positionEmbedding','embeddingSum','embeddingNorm']) boundaries.push({kind, token});
@@ -56,7 +58,7 @@ export function forwardBoundaries(model: { config: Pick<Model['config'], 'nLayer
       for (const kind of ['preAttentionNorm','q','k','v']) boundaries.push({kind, token, layer});
       for (let head = 0; head < model.config.nHead; head++)
         for (const kind of ['attentionLogits','attentionProbabilities','headOutput']) boundaries.push({kind, token, layer, head});
-      for (const kind of ['attentionOutput','attentionProjection','attentionResidual','preMlpNorm','mlpUp','mlpRelu','mlpDown','mlpResidual']) boundaries.push({kind, token, layer});
+      for (const kind of ['attentionOutput','attentionProjection','attentionResidual','preMlpNorm','mlpUp',definition.activation.semanticKind,'mlpDown','mlpResidual']) boundaries.push({kind, token, layer});
     }
     for (const kind of ['logits','probabilities']) boundaries.push({kind, token});
   }
@@ -72,6 +74,19 @@ export function forward(model: Model, tokenIds: readonly number[], observer?: Ob
 
 /** Sequential causal attention keeps earlier K/V Values connected to the training graph. */
 export function* forwardSequence(model: Model, tokenIds: readonly number[], observer?: Observer, intervention?: HeadOutputIntervention): Generator<ForwardBoundary, SequenceResult> {
+  return yield* forwardSequenceForDefinition(canonicalMicrogptDefinition, model, tokenIds, observer, intervention);
+}
+
+/** Execute a reviewed model definition while preserving the readable native forward. */
+export function forwardForDefinition(definition: ModelDefinitionContribution, model: Model, tokenIds: readonly number[], observer?: Observer): SequenceResult {
+  const sequence = forwardSequenceForDefinition(definition, model, tokenIds, observer);
+  let step = sequence.next();
+  while (!step.done) step = sequence.next();
+  return step.value;
+}
+
+export function* forwardSequenceForDefinition(definition: ModelDefinitionContribution, model: Model, tokenIds: readonly number[], observer?: Observer,
+  intervention?: HeadOutputIntervention): Generator<ForwardBoundary, SequenceResult> {
   const { nLayer, nEmbd, nHead, blockSize, vocabulary } = model.config;
   const patch = intervention && 'kind' in intervention ? intervention : undefined;
   const ablation = intervention && !('kind' in intervention) ? intervention : undefined;
@@ -181,9 +196,9 @@ export function* forwardSequence(model: Model, tokenIds: readonly number[], obse
       x = linear(x, weights('mlp_fc1'));
       observe('mlpUp', x, layer);
       yield { kind: 'mlpUp', token, layer };
-      x = x.map(value => value.relu());
-      observe('mlpRelu', x, layer);
-      yield { kind: 'mlpRelu', token, layer };
+      x = x.map(value => definition.activation.apply(value));
+      observe(definition.activation.semanticKind, x, layer);
+      yield { kind: definition.activation.semanticKind, token, layer };
       x = linear(x, weights('mlp_fc2'));
       observe('mlpDown', x, layer);
       yield { kind: 'mlpDown', token, layer };
@@ -211,9 +226,22 @@ export function predict(model: Model, tokenIds: readonly number[], observer?: Ob
   return { logits: result.logits.map(row => row.map(value => value.data)), probabilities: result.probabilities.map(row => row.map(value => value.data)) };
 }
 
+export function predictForDefinition(definition: ModelDefinitionContribution, model: Model, tokenIds: readonly number[], observer?: Observer): { logits: number[][]; probabilities: number[][] } {
+  const result = forwardForDefinition(definition, model, tokenIds, observer);
+  return { logits: result.logits.map(row => row.map(value => value.data)), probabilities: result.probabilities.map(row => row.map(value => value.data)) };
+}
+
 export function loss(model: Model, inputIds: readonly number[], targetIds: readonly number[], observer?: Observer): SequenceResult & { mean: Value; perPosition: Value[] } {
   if (inputIds.length !== targetIds.length || targetIds.some(id => !Number.isInteger(id) || id < 0 || id > model.config.vocabulary.length)) throw new Error('Targets must match the valid input positions');
   const result = forward(model, inputIds, observer);
+  const cursor = objectiveSequence(result, targetIds, observer);
+  let step = cursor.next(); while (!step.done) step = cursor.next();
+  return step.value;
+}
+
+export function lossForDefinition(definition: ModelDefinitionContribution, model: Model, inputIds: readonly number[], targetIds: readonly number[], observer?: Observer): SequenceResult & { mean: Value; perPosition: Value[] } {
+  if (inputIds.length !== targetIds.length || targetIds.some(id => !Number.isInteger(id) || id < 0 || id > model.config.vocabulary.length)) throw new Error('Targets must match the valid input positions');
+  const result = forwardForDefinition(definition, model, inputIds, observer);
   const cursor = objectiveSequence(result, targetIds, observer);
   let step = cursor.next(); while (!step.done) step = cursor.next();
   return step.value;

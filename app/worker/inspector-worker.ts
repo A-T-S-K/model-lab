@@ -1,9 +1,10 @@
 import { inspectHistorical } from './inspector.js';
-import type { HistoricalRequest, AblationRequest, ActivationPatchRequest, WorkerResponse } from './protocol.js';
+import type { HistoricalRequest, AblationRequest, ActivationPatchRequest, ActivationVariantRequest, WorkerResponse } from './protocol.js';
 import { HEAD_ABLATION_RECIPE, isHeadAblationExperiment } from '../../experiments/ablation.js';
 import { ACTIVATION_PATCH_RECIPE, headOutputOccurrence, isActivationPatchExperiment } from '../../experiments/activation-patch.js';
 import { interventionRecipes } from '../../experiments/recipes.js';
-const scope = globalThis as unknown as { onmessage: (event: MessageEvent<HistoricalRequest | AblationRequest | ActivationPatchRequest>) => void; postMessage(response: WorkerResponse): void };
+import { runActivationVariant } from '../../experiments/model-variant.js';
+const scope = globalThis as unknown as { onmessage: (event: MessageEvent<HistoricalRequest | AblationRequest | ActivationPatchRequest | ActivationVariantRequest>) => void; postMessage(response: WorkerResponse): void };
 scope.onmessage = event => {
   const request = event.data;
   const tag = { sessionId: request.sessionId, runId: request.runId, generationId: request.generationId };
@@ -22,7 +23,10 @@ scope.onmessage = event => {
           if (!isActivationPatchExperiment(experiment)) throw new Error('Registered activation-patch executor returned another recipe');
           return { ...tag, status: 'activationPatch' as const, experiment };
         })
-      : inspectHistorical(request).then(inspection => ({ ...tag, status: 'inspection' as const, inspection }));
+      : request.command === 'activationVariant'
+        ? runActivationVariant({ snapshot: request.snapshot, inputIds: request.inputIds, targetIds: request.targetIds, tag })
+          .then(experiment => ({ ...tag, status: 'activationVariant' as const, experiment }))
+        : inspectHistorical(request).then(inspection => ({ ...tag, status: 'inspection' as const, inspection }));
   void execution.then(response => scope.postMessage(response))
     .catch(error => scope.postMessage({ ...tag, status: 'error', error: error instanceof Error ? error.message : String(error) }));
 };

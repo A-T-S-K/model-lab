@@ -23,6 +23,7 @@ const concepts: Record<string, [string, string, string, string]> = {
   exp: ['Exponential', 'exp(input)', 'model/value.ts', 'exp'],
   log: ['Natural logarithm', 'ln(input)', 'model/value.ts', 'log'],
   relu: ['ReLU', 'max(0, input)', 'model/value.ts', 'relu'],
+  leakyRelu: ['Leaky ReLU', 'input when input > 0; negativeSlope × input otherwise', 'model/value.ts', 'leakyRelu'],
 };
 function conceptKey(kind: string): string {
   if (/Norm$/.test(kind)) return 'rmsNorm';
@@ -30,6 +31,7 @@ function conceptKey(kind: string): string {
   if (kind === 'probabilities' || kind === 'attentionProbabilities') return 'softmax';
   if (/Residual$/.test(kind)) return 'residual';
   if (kind === 'mlpRelu') return 'relu';
+  if (kind === 'mlpLeakyRelu' || kind === 'leaky_relu') return 'leakyRelu';
   if (kind === 'gradient') return 'backward';
   if (kind === 'meanLoss') return 'loss';
   return kind;

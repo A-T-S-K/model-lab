@@ -18,7 +18,8 @@ grouped-axis/shape-only/opaque evidence fallback, and native Pythia's collapsed
 six-block/selected-layer world. **M2 is COMPLETE — scoped engineering qualification**
 after the integrated interaction/change-surface review; generation/cache, variants,
 model variants, later M3 experiment recipes and later failure/retention proof portions
-remain pending. M3-A now qualifies the registered runtime-intervention slice. See
+remain pending. M3-A qualifies the registered runtime-intervention slice, and M3-B1
+qualifies the simple Leaky ReLU model-definition replacement slice of FP-06. See
 [authority](README.md).
 
 The [repaired first-M1 qualification](reviews/M1-repair-qualification.md) retains its
@@ -49,7 +50,7 @@ Each row is a status pointer, not a reduced acceptance definition.
 | FP-03 | [Native Pythia execution, selected internals, generation and disconnected replay](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 native live/disconnected portion REQUALIFIED and M2-D native continuous-world/selected-layer/disconnected replay portion QUALIFIED; broader generation/cache proof pending |
 | FP-04 | [MLP/SGD plus grouped query/KV-axis numerical fixture](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 numeric MLP/SGD/state and grouped-axis witnesses, M2-B numeric MLP shared-world path and M2-C grouped-axis world path QUALIFIED; full foundation/M5 disposition pending |
 | FP-05 | [Shape-only, unknown and opaque states](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 fixture semantics and M2-C truthful shared-world structural/opaque/unsupported fallback QUALIFIED; full foundation/M5 disposition pending |
-| FP-06 | [Actual activation and composite parameterized replacement](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | NOT_RUN |
+| FP-06 | [Actual activation and composite parameterized replacement](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M3-B1 registered Leaky ReLU definition, explicit checkpoint initialization, real forward/backward, shared world/source and matched-variant comparison QUALIFIED; composite parameterized M3-B2 branch and independent M5 disposition pending |
 | FP-07 | [Head ablation and donor activation patch](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M3-A registered head-ablation and real donor-patch recipe/receipt/lifecycle slice QUALIFIED; full FP portfolio and independent M5 disposition pending |
 | FP-08 | [Matched data substitution and defense control](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | NOT_RUN |
 | FP-09 | [Repeated invocations and bounded generation/cache correctness](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | NOT_RUN |
@@ -72,7 +73,7 @@ and [native acceptance](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#4
 | M0 | [freeze invariants and the migration map, not untested APIs](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m0-freeze-invariants-and-the-migration-map-not-untested-apis) | PREPARATION COMPLETE; slice report migration map |
 | M1 | [contracts, codecs, and dual producers early](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m1-contracts-codecs-and-dual-producers-early) | COMPLETE — scoped engineering qualification; no M2/M5 or full FP acceptance |
 | M2 | [topology, world, and interaction separation](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m2-topology-world-and-interaction-separation) | COMPLETE — scoped engineering qualification; canonical/multilayer MicroGPT, numeric MLP/SGD, grouped-axis/shape-only/opaque fallback, native Pythia and integrated interaction/change-surface qualification passed; no M3, M5 or full FP acceptance |
-| M3 | [variants and experiments](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m3-variants-and-experiments) | IN PROGRESS — M3-A registered intervention recipes, matched-arm policy and donor activation patch qualified; replacements, data/security recipes and correlation remain pending |
+| M3 | [variants and experiments](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m3-variants-and-experiments) | IN PROGRESS — M3-A interventions and M3-B1 simple activation model variant qualified; composite parameterized replacement, data/security recipes and correlation remain pending |
 | M4 | [durable payloads and failure boundaries](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m4-durable-payloads-and-failure-boundaries) | NOT_RUN |
 | M5 | [independent foundation review](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m5-independent-foundation-review) | NOT_RUN |
 | M6 | [full user testing, workshop, station, release](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m6-full-user-testing-workshop-station-release) | NOT_RUN |
@@ -506,3 +507,41 @@ This increment qualifies only the M3-A engineering slice of FP-07. It does not m
 full FP-07, M3 or foundation acceptance complete, and it does not change FP-06 or
 FP-08. M3-B model replacements/variants and M3-C data/security recipes remain the next
 authorized dependencies; neither was started here.
+
+## M3-B1 registered activation-variant increment
+
+M3 remains **IN PROGRESS**. The first FP-06 slice registers canonical
+`microgpt@14fb038816c7aae0bb9342c2dbf1a51dd134a5ff` and distinct
+`microgpt.leaky-relu@1` definitions. The latter replaces only `mlpRelu` with the real
+native scalar `mlpLeakyRelu`, slope `0.01`, and explicit zero derivative convention
+`0.01`. Canonical execution, fixtures, oracle and exact legacy snapshot validator are
+unchanged.
+
+Canonical parameter bytes initialize the variant only through registered mapping
+`microgpt.canonical-parameters-to-leaky-relu@1`; the mapped variant checkpoint has a
+distinct identity, and canonical optimizer continuation state is not claimed as an
+exact cross-definition resume point. Strict `compareRuns` still refuses differing
+definitions. `matched-variant@1` separately requires the exact source/target
+definitions, checkpoint mapping, input, targets, numeric/runtime policy and explicit
+`mlpRelu/output ↔ mlpLeakyRelu/output` correspondence.
+
+The deterministic witness preserves `mlpUp` exactly, maps negative preactivation
+`-0.09757900640020112` to `-0.0009757900640020112`, records local derivative `0.01`
+and real backward contribution `-0.00003480925659825189`, then changes `mlpDown`,
+residual, logits and probabilities authentically. The continuous world displays the
+distinct definition/node, actual values and bound `Value.leakyRelu` source. The
+canonical snapshot hash remains
+`sha256:d1a46ae0fe2830a2bbcdc118913c5d974ef82e6acc2ef1004b5f8d0dae5b3ca1`.
+
+Qualified runtime is
+`sha256:0de2c0c15e5e6e88aea80aaeb0a857c3e7c9b69a763da4c8ac919803bbcaa9ce`.
+All 181 unit/integration cases completed with 176 passes and five optional native
+fixture skips; portable and byte-exact canonical references, typecheck, example and a
+fresh protected build passed. Exact-candidate Playwright passed the new M3-B1 route,
+retained M3-A routes and affected canonical spatial/learning routes (11/11). Durable
+details are in the
+[M3-B1 activation-variant qualification](reviews/M3-B1-activation-variant-qualification.md).
+
+This qualifies only the simple activation-replacement portion of FP-06. It does not
+complete FP-06, M3 or foundation acceptance. M3-B2's composite parameterized branch
+`W x + s B(Ax)` and its parameter/optimizer/state contract remain the next dependency.

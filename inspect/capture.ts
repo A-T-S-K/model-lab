@@ -132,6 +132,7 @@ export class CaptureContext implements Observer {
         ...(parameter ? { parameter } : {}),
         ...(value.detail.constant ? { constant: value.detail.constant } : {}),
         ...(value.detail.exponent === undefined ? {} : { exponent: value.detail.exponent }),
+        ...(value.detail.negativeSlope === undefined ? {} : { negativeSlope: value.detail.negativeSlope }),
       }));
       added.push(value);
       for (let index = value.parents.length - 1; index >= 0; index--) pending.push(value.parents[index]);
