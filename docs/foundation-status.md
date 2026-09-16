@@ -17,7 +17,8 @@ integration now includes canonical/multilayer MicroGPT, the numeric MLP/SGD witn
 grouped-axis/shape-only/opaque evidence fallback, and native Pythia's collapsed
 six-block/selected-layer world. **M2 is COMPLETE — scoped engineering qualification**
 after the integrated interaction/change-surface review; generation/cache, variants,
-experiments and later failure/retention proof portions remain pending. See
+model variants, later M3 experiment recipes and later failure/retention proof portions
+remain pending. M3-A now qualifies the registered runtime-intervention slice. See
 [authority](README.md).
 
 The [repaired first-M1 qualification](reviews/M1-repair-qualification.md) retains its
@@ -49,7 +50,7 @@ Each row is a status pointer, not a reduced acceptance definition.
 | FP-04 | [MLP/SGD plus grouped query/KV-axis numerical fixture](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 numeric MLP/SGD/state and grouped-axis witnesses, M2-B numeric MLP shared-world path and M2-C grouped-axis world path QUALIFIED; full foundation/M5 disposition pending |
 | FP-05 | [Shape-only, unknown and opaque states](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 fixture semantics and M2-C truthful shared-world structural/opaque/unsupported fallback QUALIFIED; full foundation/M5 disposition pending |
 | FP-06 | [Actual activation and composite parameterized replacement](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | NOT_RUN |
-| FP-07 | [Head ablation and donor activation patch](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | NOT_RUN |
+| FP-07 | [Head ablation and donor activation patch](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M3-A registered head-ablation and real donor-patch recipe/receipt/lifecycle slice QUALIFIED; full FP portfolio and independent M5 disposition pending |
 | FP-08 | [Matched data substitution and defense control](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | NOT_RUN |
 | FP-09 | [Repeated invocations and bounded generation/cache correctness](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | NOT_RUN |
 | FP-10 | [Legacy replay, export/import and representation-aware comparison](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 legacy and new-codec replay/state portions QUALIFIED; broader comparison/durability pending |
@@ -71,7 +72,7 @@ and [native acceptance](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#4
 | M0 | [freeze invariants and the migration map, not untested APIs](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m0-freeze-invariants-and-the-migration-map-not-untested-apis) | PREPARATION COMPLETE; slice report migration map |
 | M1 | [contracts, codecs, and dual producers early](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m1-contracts-codecs-and-dual-producers-early) | COMPLETE — scoped engineering qualification; no M2/M5 or full FP acceptance |
 | M2 | [topology, world, and interaction separation](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m2-topology-world-and-interaction-separation) | COMPLETE — scoped engineering qualification; canonical/multilayer MicroGPT, numeric MLP/SGD, grouped-axis/shape-only/opaque fallback, native Pythia and integrated interaction/change-surface qualification passed; no M3, M5 or full FP acceptance |
-| M3 | [variants and experiments](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m3-variants-and-experiments) | NOT_RUN |
+| M3 | [variants and experiments](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m3-variants-and-experiments) | IN PROGRESS — M3-A registered intervention recipes, matched-arm policy and donor activation patch qualified; replacements, data/security recipes and correlation remain pending |
 | M4 | [durable payloads and failure boundaries](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m4-durable-payloads-and-failure-boundaries) | NOT_RUN |
 | M5 | [independent foundation review](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m5-independent-foundation-review) | NOT_RUN |
 | M6 | [full user testing, workshop, station, release](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m6-full-user-testing-workshop-station-release) | NOT_RUN |
@@ -468,5 +469,40 @@ failure, visual, accessibility and unrun record is the
 
 This closure is only the topology/world/interaction M2 gate. FP-03 generation/cache,
 FP-06–FP-09, broader M4 guarantees, M5 independent foundation acceptance and M6
-unfamiliar-user/workshop/station/release acceptance remain ungranted. The next stage
-dependency is M3; it was not begun here.
+unfamiliar-user/workshop/station/release acceptance remain ungranted. At M2 closure the
+next stage dependency was M3; it was not begun in that increment.
+
+## M3-A registered intervention recipe increment
+
+M3 is **IN PROGRESS**. The first bounded increment replaces the archive's
+head-ablation-specific collection and validation with one immutable intervention
+experiment collection plus reviewed build-time recipe dispatch. The existing real
+head ablation now contributes `microgpt.head-ablation@1`; the second registered recipe,
+`microgpt.donor-activation-patch@1`, resolves an observed donor occurrence and replaces
+one exact canonical `headOutput` occurrence immediately before concatenation. The
+archive validates common source/checkpoint, model, arm/run, input/target, lifecycle and
+comparison identities before the registered recipe validator owns its semantics.
+
+The existing strict `compareRuns` behavior is unchanged. The separate
+`matched-intervention@1` policy additionally requires identical starting checkpoint and
+snapshot, an intervention-free baseline and the exact declared intervention. The
+qualified donor `p0/L0/h0` differs from target `p3/L0/h1`; the patched target equals the
+donor vector exactly, the pre-patch target equals the baseline, and retained evidence
+shows propagation through concatenation, attention projection, residual, logits and
+probabilities. The no-op control and wrong run/invocation/checkpoint, coordinate basis,
+token/layer/head and read-only-boundary refusals pass. Failed, cancelled and late stale
+arms are not admitted, and canonical accepted state remains unchanged.
+
+The qualified application runtime is
+`sha256:ff03c8ff2a3120468a5e33da5a5ef0bae58f4ac48f48a810d5ee4bca58dedbb0`.
+All 173 unit/integration cases completed with 168 passes and five optional native
+fixture skips; portable and byte-exact canonical references, typecheck, example and a
+fresh protected build passed. Exact-candidate Playwright passed the two new M3-A routes,
+two retained spatial intervention/lifecycle routes and the retained Guided head-ablation
+history route. The durable values, commands, visual review and unrun scope are in the
+[M3-A intervention qualification](reviews/M3-A-intervention-qualification.md).
+
+This increment qualifies only the M3-A engineering slice of FP-07. It does not mark
+full FP-07, M3 or foundation acceptance complete, and it does not change FP-06 or
+FP-08. M3-B model replacements/variants and M3-C data/security recipes remain the next
+authorized dependencies; neither was started here.
