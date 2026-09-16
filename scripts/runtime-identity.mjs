@@ -9,7 +9,7 @@ const directories = ['model', 'trace', 'inspect', 'archive', 'experiments', 'app
 const inputs = ['fixtures/canonical.initial.json', 'package.json', 'package-lock.json',
   'tsconfig.json', 'index.html', 'scripts/runtime-identity.mjs',
   'research/pythia/adapter.py', 'research/pythia/server.py', 'research/pythia/requirements.lock',
-  'research/pythia/dependencies.json', 'research/pythia/model-lock.json', 'research/pythia/profile.json', 'research/pythia/source.json', 'research/pythia/profile-legacy.json',
+  'research/pythia/dependencies.json', 'research/pythia/model-lock.json', 'research/pythia/profile.json', 'research/pythia/profile-generation.json', 'research/pythia/source.json', 'research/pythia/profile-legacy.json',
   'fixtures/noncanonical.initial.json','research/witnesses/mlp.py','research/witnesses/adapter.py','research/witnesses/fixtures.py','research/witnesses/profile.json'];
 export const generatedPath = 'runtime/revision.ts';
 

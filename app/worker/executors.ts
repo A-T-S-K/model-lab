@@ -19,8 +19,8 @@ export class ExecutorRegistry {
         const run=store.get(receipt.runId);
         check(run.integration==='microgpt-legacy-v1','Canonical receipt names another producer');return run;
       }});
-    this.register({id:'pythia-native-v1',label:'Pythia-14M · optional native CPU',inputLocation:'request',inputLabel:'Prompt',defaultInput:'The cat sat',endpoint:true,actions:['predict'],connected:()=>this.native.connected,
-      execute:({input,endpoint,store})=>this.native.execute(input,endpoint,store)});
+    this.register({id:'pythia-native-v1',label:'Pythia-14M · optional native CPU',inputLocation:'request',inputLabel:'Prompt',defaultInput:'The cat sat',endpoint:true,actions:['predict','generate'],connected:()=>this.native.connected,
+      execute:({input,action,endpoint,store})=>this.native.execute(input,action??'predict',endpoint,store)});
     this.register({id:'mlp-native-v1',label:'Numeric MLP · float32 / MSE / SGD',inputLocation:'request',inputLabel:'Numeric batch and targets (JSON)',defaultInput:JSON.stringify({kind:'numeric',values:[[1,2],[-1,0.5]],targets:[[0.5],[-0.25]]}),endpoint:true,actions:['predict','train'],connected:()=>this.native.connected,
       execute:({input,action,endpoint,store})=>this.native.executeRequest({version:2,integration:'mlp-native-v1',profile:'mlp-f32-sgd-v1',action:action??'predict',input:validateNumericInput(JSON.parse(input)),state:null},endpoint,store)});
     this.register({id:NONCANONICAL,label:'MicroGPT · 2 layers / 3 heads / width 6',inputLocation:'request',inputLabel:'Characters: w x y z ! (maximum five)',defaultInput:'wxyz!',actions:['predict'],connected:()=>true,

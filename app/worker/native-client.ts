@@ -1,5 +1,5 @@
 import { check, MAX_RECORD_BYTES, validateRequest, type ExecutionRequest, EvidenceStore, type EvidenceRun } from '../../trace/evidence.js';
-import profile from '../../research/pythia/profile.json';
+import profile from '../../research/pythia/profile-generation.json';
 
 /** One outstanding read-only native request; model switches invalidate admission, not just display. */
 export class NativeClient {
@@ -7,10 +7,13 @@ export class NativeClient {
   #epoch=0; #sequence=0; #abort?:AbortController;
   connected=false;
   cancel(){this.#epoch++;this.#abort?.abort();this.#abort=undefined;this.connected=false;}
-  async execute(input:string,endpoint:string,store:EvidenceStore):Promise<EvidenceRun>{
-    return this.executeRequest({version:1,integration:'pythia-native-v1',profile:profile.profile,action:'predict',input},endpoint,store);
+  async execute(input:string,action:string,endpoint:string,store:EvidenceStore):Promise<EvidenceRun>{
+    const intent=action==='generate'
+      ?{version:3 as const,integration:'pythia-native-v1',profile:profile.profile,action,input,generation:{recipe:profile.generation.recipe,maxNewTokens:2}}
+      :{version:1 as const,integration:'pythia-native-v1',profile:profile.profile,action:'predict',input};
+    return this.executeRequest(intent,endpoint,store);
   }
-  async executeRequest(intent:Pick<ExecutionRequest,'version'|'integration'|'profile'|'action'|'input'|'state'>,endpoint:string,store:EvidenceStore):Promise<EvidenceRun>{
+  async executeRequest(intent:Pick<ExecutionRequest,'version'|'integration'|'profile'|'action'|'input'|'state'|'generation'>,endpoint:string,store:EvidenceStore):Promise<EvidenceRun>{
     check(!this.#abort,'Native execution already pending');
     const url=new URL(endpoint);
     check(url.protocol==='http:'&&url.hostname==='127.0.0.1'&&!!url.port&&url.pathname==='/execute'&&!url.search&&!url.hash&&!url.username&&!url.password,'Only explicit loopback /execute endpoint allowed');

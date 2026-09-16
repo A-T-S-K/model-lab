@@ -1,0 +1,43 @@
+{
+  "profile": "pythia-14m-cpu-f32-eager-uncached-generation-v2",
+  "runtime": "sha256:1e6828657d55bb74295bfc95bd2e7af64d0e7c5516ace241207a7244ff3d012a",
+  "definition": "pythia-14m:f97f966a66c444890ed461fff2a51eefb15d74303df05b948124719f199b0b17",
+  "checkpoint": "sha256:116a02532db461f91386a5b20f942ff2c8d4de7341e21b55caafc3d7b25f49a1",
+  "inputTransform": "sha256:1740efbe7a82b08573b870209b637d876e9297408fb95e895141e4bceed5b20b",
+  "tokenizerSourceRevision": "sha256:870f4e2baa6b683221fa52004d5d6f40ab8c9d31961617304b78c910c2c3caf2",
+  "sourceRevision": "sha256:c8684ddf23ca40c8151459902f89b19b13372aeb766cc21afc8a5323ac55f538",
+  "adapterSourceRevision": "sha256:341e703f827f5487b2c1fb752cab16fd5f12d5e92ad43598095ab9c6e2c7f8a9",
+  "compatibilityBaseProfile": "pythia-14m-cpu-f32-eager-v1",
+  "architectureProfile": "profile.json",
+  "binding": "native torch module hooks and ordinary GPTNeoXForCausalLM forward calls; no TransformerBridge, model reimplementation, provider fallback, remote code or pickle",
+  "versions": {
+    "python": "3.14.7",
+    "torch": "2.14.0",
+    "transformers": "5.17.0"
+  },
+  "modelRevision": "cf967c0a9a04383db6f7b1108d86b2962634b4ac",
+  "tokenizerSize": 50277,
+  "outputSize": 50304,
+  "prediction": {
+    "maxInputTokens": 16,
+    "captureSchema": "profile.json#captureSchema"
+  },
+  "generation": {
+    "recipe": "pythia-greedy-full-prefix-uncached-v1",
+    "selectionPolicy": "argmax-full-output-v1",
+    "minNewTokens": 1,
+    "maxNewTokens": 2,
+    "maxPromptTokens": 4,
+    "maxTotalTokens": 16,
+    "honorEos": false,
+    "stochastic": false,
+    "captureSchema": "profile.json#captureSchema"
+  },
+  "cache": {
+    "capability": "unsupported",
+    "qualified": false,
+    "strategy": "full-prefix-reexecution",
+    "useCache": false,
+    "retainedState": false
+  }
+}

@@ -15,8 +15,8 @@ export function validateNumericInput(x: unknown): NumericInput {
   return r as unknown as NumericInput;
 }
 export interface ExecutionRequest {
-  version: 1 | 2; integration: string; profile: string; requestId: string; sessionId: string;
-  epoch: number; action: string; input: string | NumericInput; state?: unknown;
+  version: 1 | 2 | 3; integration: string; profile: string; requestId: string; sessionId: string;
+  epoch: number; action: string; input: string | NumericInput; state?: unknown; generation?: unknown;
 }
 export function check(ok: unknown, reason: string): asserts ok { if (!ok) throw new Error(reason); }
 export function object(x: unknown): Record<string, unknown> {
@@ -30,10 +30,12 @@ export function fields(x: unknown, keys: string[]): Record<string, unknown> {
 export function text(x: unknown, max = 1024): asserts x is string { check(typeof x === 'string' && x.length > 0 && x.length <= max, 'Invalid text'); }
 export function integer(x: unknown, max = Number.MAX_SAFE_INTEGER): asserts x is number { check(Number.isSafeInteger(x) && Number(x) >= 0 && Number(x) <= max, 'Invalid integer'); }
 export function validateRequest(x: unknown): ExecutionRequest {
-  const r = fields(x,['version','integration','profile','requestId','sessionId','epoch','action','input',...(object(x).version===2?['state']:[])]);
-  check(r.version === 1 || r.version === 2,'Unsupported execution request version');
+  const version=object(x).version;
+  const r = fields(x,['version','integration','profile','requestId','sessionId','epoch','action','input',...(version===2?['state']:version===3?['generation']:[])]);
+  check(r.version === 1 || r.version === 2 || r.version === 3,'Unsupported execution request version');
   for (const k of ['integration','profile','requestId','sessionId','action']) text(r[k],256);
-  integer(r.epoch); if(r.version===2 && typeof r.input!=='string')validateNumericInput(r.input);
+  integer(r.epoch); if(r.version===3)check(typeof r.input==='string','Generation input must be text');
+  else if(r.version===2 && typeof r.input!=='string')validateNumericInput(r.input);
   else check(typeof r.input === 'string' && r.input.length <= 512, 'Input exceeds request budget');
   return immutableCopy(r) as unknown as ExecutionRequest;
 }

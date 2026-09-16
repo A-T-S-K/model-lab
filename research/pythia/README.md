@@ -4,8 +4,10 @@ This is an explicitly launched inference/capture service, not a canonical applic
 runtime dependency. It uses the trusted native Hugging Face GPTNeoX implementation.
 No model forward pass is replaced. Canonical Node/browser installation is unchanged.
 
-The qualified local environment is Python 3.14.7, macOS arm64, PyTorch 2.14.0,
-Transformers 5.17.0, CPU, one thread, eager attention, eval, no cache. Published F16
+The current qualified local profile is
+`pythia-14m-cpu-f32-eager-uncached-generation-v2`. The environment is Python 3.14.7,
+macOS arm64, PyTorch 2.14.0, Transformers 5.17.0, CPU, one thread, eager attention,
+eval, and explicitly uncached. Published F16
 safetensors weights are explicitly converted to F32. `requirements.lock` pins every
 resolved distribution and its SHA-256. `dependencies.json` records direct/transitive
 provenance, requirements, download hashes and published license metadata; it is not
@@ -36,7 +38,9 @@ Use **Models & saved evidence** in the same application shell. The endpoint is
 the registered model/profile. No commands, paths, URLs, imports, writes or arbitrary
 code are executed from requests. Host and Origin must match. Requests are serial,
 with one native thread, 16 tokens, 128 ASCII characters, and bounded session/request
-counts. This initial profile refuses other text instead of silently transforming it.
+counts. Prediction accepts up to 16 tokens. Bounded generation accepts a prompt of at
+most four tokens and one or two requested new tokens. This profile refuses other text
+or configuration instead of silently transforming it.
 The browser bounds responses at 4 MB and requests at 30 seconds. Cancellation revokes
 browser admission; a CPU forward already running may finish server-side. It does not
 change any canonical state. Restarting explicitly clears server request bookkeeping.
@@ -48,14 +52,28 @@ input position's complete 50,304 logits. LayerNorm and MLP consume the same resi
 input; the layer uses `(MLP + attention) + input`. Layers 0 and 2–5 are uncaptured
 regions, not fabricated chains. Probabilities displayed from logits are derived;
 output indices without saved labels remain indices, and top-k preserves omitted mass.
-No scalar stepping, gradients, training, generation, cache, mutation or continuation
-is advertised. Parameter weights are not training continuation state.
+Predict remains an ordinary single capture and is not aliased to generation. Generate
+uses `pythia-greedy-full-prefix-uncached-v1`: one distinct prompt-processing call and
+one distinct native call per generated-token step. Every call uses the exact full
+prefix and `use_cache=False`; no KV payload survives or is advertised. Selection uses
+`argmax-full-output-v1` over all 50,304 logits. The observed logits and derived choice
+are separate evidence, with the choice retaining the source-logits occurrence, full
+output index, optional tokenizer label, generated position and stop reason. The fixed
+recipe does not honor EOS and always terminates at `max_new_tokens`; it uses no
+temperature, top-p, sampling or RNG. A future cached profile requires separate
+qualification and no cached-versus-uncached equivalence is claimed here.
+
+No scalar stepping, gradients, training, mutation or continuation is advertised.
+Parameter weights are not training continuation state.
 
 `identity.py` resolves the native source/binding identity and capture mapping before
-qualification. `qualify.py` compares a fresh direct native model (including a plain
-no-hook pass) against the adapter. Internal references use separate minimal native
-hooks and are disclosed as such. Do not silently change libraries, binding, weights,
-or eager-attention processing; regenerate the profile and rerun qualification.
+qualification. `qualify.py` compares a fresh direct native model (including plain
+no-hook passes) against prediction and every bounded generation occurrence. The
+independent generation loop does not call the adapter generation implementation; it
+reexecutes each full prefix with `use_cache=False` and applies the same full-support
+greedy argmax. Internal references use separate minimal native hooks and are disclosed
+as such. Do not silently change libraries, binding, weights, or eager-attention
+processing; create a new profile and rerun qualification.
 
 TransformerBridge was evaluated through the TransformerLens 3.9.0 release wheel
 (SHA-256 `94739f9c54f53239c61f01e1953b8ed89cd3338c385a974ab38d1b45187f151e`)
@@ -70,10 +88,12 @@ that TransformerBridge lacks NeoX support or failed a benchmark.
 Saved evidence uses the same registered codec, store, bounded queries and inspector
 for both producers. The save slot keeps one selected recording in browser storage;
 JSON export/import is inert and bounded. Versioned transport preserves negative zero.
-Open saved runs without this environment/service. Historical native profiles other
-than the explicitly registered profile are refused; a general profile/version reader
-campaign remains M4 work. Detailed evidence and remaining proofs are recorded in
-`docs/reviews/M0-M1-first-vertical-slice.md`.
+Open saved prediction or generation runs without this environment/service. The strict
+reader retains the M2-D `pythia-14m-cpu-f32-eager-v1` profile/runtime and the earlier
+legacy profile for historical replay; it never relabels them with the current runtime.
+Portable archive export/import and byte-backed payload storage remain M4-B work.
+Current generation qualification is recorded in
+`docs/reviews/M4-A-generation-qualification.md`.
 
 Qualification outputs are fresh scratch runs: `qualify.py` allocates under
 `test-results/scratch` before loading a model. `NATIVE_EVIDENCE_DIR`, if supplied,

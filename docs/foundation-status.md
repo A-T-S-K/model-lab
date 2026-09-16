@@ -24,8 +24,10 @@ M3-B2 together engineering-qualify FP-06's executable activation and composite
 parameterized replacement scope. M3-C engineering-qualifies the bounded FP-08
 registered matched-data substitution, defense-control and external-correlation slice.
 The final integrated archive/lifecycle/change-surface pass is complete, so **M3 is
-COMPLETE — scoped engineering qualification**; independent M5/foundation disposition
-remains pending. See
+COMPLETE — scoped engineering qualification**. **M4 is IN PROGRESS**: M4-A adds and
+engineering-qualifies bounded native Pythia generation and the explicitly uncached
+FP-09 profile; portable archives, byte-backed payloads and remote reconciliation remain
+for M4-B. Independent M5/foundation disposition remains pending. See
 [authority](README.md).
 
 The [repaired first-M1 qualification](reviews/M1-repair-qualification.md) retains its
@@ -53,13 +55,13 @@ Each row is a status pointer, not a reduced acceptance definition.
 | --- | --- | --- |
 | FP-01 | [Canonical preservation through new contracts](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 portion REQUALIFIED; full FP unaccepted; witness report |
 | FP-02 | [Noncanonical multi-layer tiny transformer](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 native multilayer execution/inspector/replay plus M2-A world structure and M2-E integrated interaction qualification QUALIFIED; full foundation/M5 disposition pending |
-| FP-03 | [Native Pythia execution, selected internals, generation and disconnected replay](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 native live/disconnected portion REQUALIFIED and M2-D native continuous-world/selected-layer/disconnected replay portion QUALIFIED; broader generation/cache proof pending |
+| FP-03 | [Native Pythia execution, selected internals, generation and disconnected replay](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 native live/disconnected portion REQUALIFIED, M2-D native continuous-world/selected-layer/disconnected replay QUALIFIED, and M4-A bounded native generation/full-support choice/disconnected replay ENGINEERING-QUALIFIED for the explicit uncached v2 profile; independent M5 disposition pending |
 | FP-04 | [MLP/SGD plus grouped query/KV-axis numerical fixture](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 numeric MLP/SGD/state and grouped-axis witnesses, M2-B numeric MLP shared-world path and M2-C grouped-axis world path QUALIFIED; full foundation/M5 disposition pending |
 | FP-05 | [Shape-only, unknown and opaque states](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 fixture semantics and M2-C truthful shared-world structural/opaque/unsupported fallback QUALIFIED; full foundation/M5 disposition pending |
 | FP-06 | [Actual activation and composite parameterized replacement](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | ENGINEERING-QUALIFIED within FP-06 implementation scope: M3-B1 registered Leaky ReLU plus M3-B2 real `W x + s B(Ax)` definition, parameter/state/optimizer/resume, semantic/source and matched-variant proof passed; independent M5/foundation disposition pending |
 | FP-07 | [Head ablation and donor activation patch](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M3-A registered head-ablation and real donor-patch recipe/receipt/lifecycle slice QUALIFIED; full FP portfolio and independent M5 disposition pending |
 | FP-08 | [Matched data substitution and defense control](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | ENGINEERING-QUALIFIED within M3-C implementation scope: registered clean/treatment/defended matched training, exact lineage, retained triggered/control/clean evidence, deterministic allowlist policy records and explicit tamper-resistant external correlation passed; independent M5/foundation disposition pending |
-| FP-09 | [Repeated invocations and bounded generation/cache correctness](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | NOT_RUN |
+| FP-09 | [Repeated invocations and bounded generation/cache correctness](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | ENGINEERING-QUALIFIED for `pythia-14m-cpu-f32-eager-uncached-generation-v2`: prompt/generated occurrence, position, step, request and cancellation-epoch identities are separate; full-prefix `use_cache=False` execution, full-support argmax, invalidation, stale refusal and replay passed. No cache path is advertised and no cached/uncached equivalence claim is made; a future cached profile requires separate qualification and M5 review. |
 | FP-10 | [Legacy replay, export/import and representation-aware comparison](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 legacy and new-codec replay/state portions QUALIFIED; broader comparison/durability pending |
 | FP-11 | [Async, retention, transport and inert-import failure controls](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 affected receipt/stale/import/transport controls REQUALIFIED; broader M4 failures/retention pending |
 | FP-12 | [Shared visual/explanation routes and extension change surface](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 same-inspector/source/fallback and integrated M2-A through M2-E world/interaction/change-surface work QUALIFIED; independent M5 review pending |
@@ -80,7 +82,7 @@ and [native acceptance](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#4
 | M1 | [contracts, codecs, and dual producers early](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m1-contracts-codecs-and-dual-producers-early) | COMPLETE — scoped engineering qualification; no M2/M5 or full FP acceptance |
 | M2 | [topology, world, and interaction separation](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m2-topology-world-and-interaction-separation) | COMPLETE — scoped engineering qualification; canonical/multilayer MicroGPT, numeric MLP/SGD, grouped-axis/shape-only/opaque fallback, native Pythia and integrated interaction/change-surface qualification passed; no M3, M5 or full FP acceptance |
 | M3 | [variants and experiments](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m3-variants-and-experiments) | COMPLETE — scoped engineering qualification; registered interventions, actual activation/composite replacements, definition-aware variant state, matched data/security experiment, correlation and integrated lifecycle/change-surface qualification passed; no M4, M5 or full foundation acceptance |
-| M4 | [durable payloads and failure boundaries](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m4-durable-payloads-and-failure-boundaries) | NOT_RUN |
+| M4 | [durable payloads and failure boundaries](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m4-durable-payloads-and-failure-boundaries) | IN PROGRESS — M4-A bounded native generation / FP-03 + FP-09 uncached slice engineering-qualified; M4-B portable archive, byte-backed payloads and remote reconciliation not begun |
 | M5 | [independent foundation review](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m5-independent-foundation-review) | NOT_RUN |
 | M6 | [full user testing, workshop, station, release](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m6-full-user-testing-workshop-station-release) | NOT_RUN |
 
@@ -674,3 +676,38 @@ captures, failures and unrun scope are in the
 This disposition grants only the M3 engineering gate described above. It does not
 complete FP-03 generation/cache, FP-09, M4, independent M5/foundation acceptance, M6,
 release or full unfamiliar-user testing. The next dependency is M4; it was not begun.
+
+## M4-A bounded native Pythia generation increment
+
+M4 is **IN PROGRESS**. The current Pythia profile
+`pythia-14m-cpu-f32-eager-uncached-generation-v2` adds a separate bounded generation
+action without changing Predict into generation. The fixed `The cat sat` witness uses
+prompt IDs `[510, 5798, 2206]`, retains a distinct `prefill:0` occurrence, and then
+reexecutes exact prefixes for `generation:1` and `generation:2`. Full-support greedy
+argmax over 50,304 logits chooses `327` (`Ġon`) and `253` (`Ġthe`); the second generated
+invocation consumes `[510, 5798, 2206, 327]`. Observed logits and derived policy choices
+remain separate evidence with explicit source occurrence, output index, optional label,
+generated position and `max_new_tokens` termination.
+
+Every occurrence uses ordinary native `GPTNeoXForCausalLM` forward execution with
+`use_cache=False`; no KV payload is retained. The profile advertises cache as
+unsupported/unqualified, not equivalent. Prompt, generated step, model position,
+request/run, cancellation epoch and semantic point identities are independently
+validated. Same-prompt repetition retains new request/run occurrence identity even
+when deterministic token IDs match. Cancel/profile switch and delayed response tests
+publish no stale generation evidence, and imports with changed policy, prefix, choice,
+label, occurrence, step, dependency, checkpoint, runtime or logits refuse admission.
+
+Independent direct-Hugging-Face full-prefix execution agreed exactly for every retained
+logit and selected internal (`0` maximum absolute and relative error under the existing
+float32 tolerance). The 3,194,555-byte / 163,860-value witness remains below unchanged
+4,000,000-byte / 200,000-value limits. Live 1920×1080 and bridge-stopped 1280×720
+reduced-motion routes passed; retained navigation and exact slices issued zero native
+requests. Historical M2-D and earlier legacy profile readers retain their original
+identities. Exact commands, artifacts and disposition are in the
+[M4-A generation qualification](reviews/M4-A-generation-qualification.md).
+
+This engineering-qualifies the bounded-generation portion of FP-03 and FP-09 only for
+the explicit uncached profile. It does not complete M4, advertise a cache, claim
+cached-versus-uncached equivalence, or begin portable archives, byte-backed payloads or
+remote reconciliation. The next dependency is M4-B.
