@@ -1,4 +1,4 @@
-import { forwardBoundaries } from '../../model/microgpt.js';
+import { forwardBoundaries, HEAD_OUTPUT_BOUNDARY } from '../../model/microgpt.js';
 import type { ForwardProgress } from '../worker/protocol.js';
 import type { RecordedRun } from "../../trace/types.js";
 import type { ArchivedSnapshot } from "../../archive/session.js";
@@ -45,6 +45,7 @@ export interface ForwardSource {
   topology:MicrogptTopologyConfig;input:readonly number[];targets:readonly number[];runId:string;invocation:string;phase:string;runtime:string;
   artifact(address:Address):SpatialArtifact|undefined;matrix(name:string):readonly (readonly number[])[]|undefined;sourceStateId?:string;
   parameterProvenance:"observed-checkpoint"|"pinned-source-derived";
+  headAblation?:{layer:number;head:number};
 }
 export function composeForward(source:ForwardSource){
   const {topology,input}=source,heads=topology.nHead,width=topology.nEmbd/heads,layers=topology.nLayer;
@@ -74,7 +75,9 @@ export function composeForward(source:ForwardSource){
     const pairs=definition?.family==="add"?deps.map(d=>values(d.address)?.[element]):undefined,before=address.kind==="mlpRelu"?get("mlpUp")?.[element]:undefined;
     const probabilities=output&&address.kind==="headOutput"?get("attentionProbabilities",address.token,address.head):undefined;
     const points=probabilities?probabilities.map((_,key)=>get("v",key)?.slice((address.head??0)*width,((address.head??0)+1)*width)):undefined,complete=points?.every(p=>p?.length===width),mixture=complete&&probabilities?affineMixture(points as number[][],probabilities):undefined;
-    return {address,semanticAddress:semanticAddress(address),semanticId:semanticId(address),definition,output,zeroed:false,headWidth:width,heads,artifact:artifact(address),indexValid,observed:indexValid?output?.[element]:undefined,inputs,parameter,parameterName,terms,
+    const selectedAblation=source.headAblation;
+    const zeroed=address.kind==='headOutput'&&selectedAblation?.layer===address.layer&&selectedAblation?.head===address.head;
+    return {address,semanticAddress:semanticAddress(address),semanticId:semanticId(address),definition,output,zeroed,headWidth:width,heads,artifact:artifact(address),indexValid,observed:indexValid?output?.[element]:undefined,inputs,parameter,parameterName,terms,
       maximum,scoreInputs,exponentials,denominator,meanSquare,normScale,pairs,before,derivative:!output||before===undefined?undefined:Number(before>0),probabilities,points,mixture,
       simplex:address.kind==="probabilities"&&output?.length===4?probabilitySimplex(output):undefined,lookupRow:address.kind==="tokenEmbedding"?input[address.token]:address.token,upstream:deps,downstream:downstream(address)};
   };
@@ -83,9 +86,14 @@ export function composeForward(source:ForwardSource){
 }
 export function forwardReadModel(run:RecordedRun,snapshot:ArchivedSnapshot|undefined){
   const a=run.manifest.model.architecture,input=run.manifest.input as readonly number[],compatible=snapshot?.id===run.manifest.startingSnapshotId;
+  const declaration=run.manifest.intervention;
+  const record=declaration&&typeof declaration==='object'&&!Array.isArray(declaration)?declaration as Record<string,unknown>:undefined;
+  const headAblation=record?.kind==='head_ablation'&&record.boundary===HEAD_OUTPUT_BOUNDARY&&record.replacement===0&&
+    Number.isInteger(record.layer)&&Number.isInteger(record.head)
+    ?{layer:record.layer as number,head:record.head as number}:undefined;
   return composeForward({topology:{integration:"microgpt-legacy-v1",modelDefinition:`${run.manifest.model.id}:${run.manifest.model.version}`,label:"Canonical MicroGPT",nLayer:Number(a.nLayer),nHead:Number(a.nHead),nEmbd:Number(a.nEmbd),vocabulary:a.vocabulary as readonly string[]},
     input,targets:run.manifest.targets as readonly number[],runId:run.manifest.runId,invocation:`legacy-run:${run.manifest.runId}`,phase:"legacy-recorded",runtime:run.manifest.runtimeRevision,
-    artifact:address=>attentionArtifact(run,address.kind,address.layer??0,address.token,address.head),matrix:name=>compatible?snapshot?.state.parameters[name]:undefined,sourceStateId:compatible?snapshot?.id:undefined,parameterProvenance:"observed-checkpoint"});
+    artifact:address=>attentionArtifact(run,address.kind,address.layer??0,address.token,address.head),matrix:name=>compatible?snapshot?.state.parameters[name]:undefined,sourceStateId:compatible?snapshot?.id:undefined,parameterProvenance:"observed-checkpoint",headAblation});
 }
 export type ForwardModel=ReturnType<typeof composeForward>;
 export type Explanation=ReturnType<ForwardModel["explain"]>;

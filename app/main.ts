@@ -64,6 +64,8 @@ import {
 } from "../trace/types.js";
 import { SessionArchive } from "../archive/session.js";
 import { InspectorWorkerClient } from "./worker/inspector-client.js";
+import { isHeadAblationExperiment } from "../experiments/ablation.js";
+import { isActivationPatchExperiment } from "../experiments/activation-patch.js";
 import type {
   InspectionResult,
   InspectionTarget,
@@ -156,7 +158,7 @@ let result: RunResult | undefined;
 let player: TracePlayer | undefined;
 let beforeForward: RunResult | undefined;
 let readyComparison = true;
-let activeAblation: number | undefined;
+let activeIntervention: number | undefined;
 let beforeForwardLocation: ReturnType<SpatialPresenter['captureLocation']> | undefined;
 let beforeForwardExperiment = '';
 function restoreExecutionView() {
@@ -571,18 +573,23 @@ function render(): void {
     const makeModel=()=>evidenceRun?spatialEvidenceReadModel(evidenceRun,archive.evidence.envelope(evidenceRun.id),worldSelection,spatialSelection,spatialEvidenceReplay):displayed&&source?spatialReadModel(displayed.run,sourceSnapshot(source.sourceSnapshotId??"")??displayed.snapshots.find(s=>s.id===source.sourceSnapshotId),source,spatialSelection):undefined;
     let model=makeModel();if(model&&spatialPresenter.bindWorld(model,!evidenceRun))model=makeModel();
     const learning = evidenceRun?undefined:spatialLearningModel();
-    const ablation=evidenceRun?undefined:[...archive.interventionExperiments.values()].find(e=>e.baselineRun.manifest.runId===result?.run.manifest.runId||e.interventionRun.manifest.runId===result?.run.manifest.runId);
-    const ablationPair=ablation?{before:forwardReadModel(ablation.baselineRun,sourceSnapshot(ablation.startingSnapshotId)),after:forwardReadModel(ablation.interventionRun,sourceSnapshot(ablation.startingSnapshotId))}:undefined;
+    const interventionExperiment=evidenceRun?undefined:[...archive.interventionExperiments.values()].find(e=>e.baselineRun.manifest.runId===result?.run.manifest.runId||e.interventionRun.manifest.runId===result?.run.manifest.runId||e.donorRun?.manifest.runId===result?.run.manifest.runId);
+    const ablation=interventionExperiment&&isHeadAblationExperiment(interventionExperiment)?interventionExperiment:undefined;
+    const patch=interventionExperiment&&isActivationPatchExperiment(interventionExperiment)?interventionExperiment:undefined;
+    const interventionPair=interventionExperiment?{before:forwardReadModel(interventionExperiment.baselineRun,sourceSnapshot(interventionExperiment.startingSnapshotId)),after:forwardReadModel(interventionExperiment.interventionRun,sourceSnapshot(interventionExperiment.startingSnapshotId))}:undefined;
+    const donorToken=spatialSelection.query===0?Math.min(1,Math.max(0,(Array.isArray(result?.run.manifest.input)?result.run.manifest.input.length:1)-1)):0;
+    const donorHead=(spatialSelection.head+1)%config.nHead;
     mount.innerHTML = spatialPresenter.render(model, {
       attract: !evidenceRun&&attract&&exhibitEntry, exhibit: !evidenceRun&&exhibitEntry, idleResetEnabled:kioskEnabled, idleResetSeconds:exhibitConfiguration.resetAfterMs/1000,
       retention:{bytes:evidenceBytes,runs:archive.runs.size,snapshots:archive.snapshots.size,experiments:archive.learningExperiments.size},
-      ablationPending: activeAblation!==undefined,
-      inspectedArm:forwardDriver.progress?.training?.readyOutputs?(result?.run.manifest.runId===forwardDriver.progress.training.readyOutputs.before.manifest.runId?'Current · accepted checkpoint':'Candidate · provisional checkpoint'):ablation?(result?.run.manifest.runId===ablation.baselineRun.manifest.runId?'Baseline':'Head output zeroed'):undefined,
+      interventionPending: activeIntervention!==undefined,
+      inspectedArm:forwardDriver.progress?.training?.readyOutputs?(result?.run.manifest.runId===forwardDriver.progress.training.readyOutputs.before.manifest.runId?'Current · accepted checkpoint':'Candidate · provisional checkpoint'):interventionExperiment?(result?.run.manifest.runId===interventionExperiment.baselineRun.manifest.runId?'Baseline':result?.run.manifest.runId===interventionExperiment.donorRun?.manifest.runId?'Donor':'Intervention'):undefined,
       document: documentText, busy, ready, status:evidenceRun?'Read-only admitted evidence · no execution requested':status, error, execution: evidenceRun?undefined:forwardDriver.active?forwardDriver:undefined,
-      outputPair:ablation?{before:ablation.baselineRun,after:ablation.interventionRun}:undefined,
-      comparisonLabels:ablation?['Baseline','Head output zeroed']:undefined,
-      intervention:ablation?{head:ablation.selection.head,snapshot:ablation.startingSnapshotId,arm:result?.run.manifest.runId===ablation.baselineRun.manifest.runId?'Baseline':'Head output zeroed'}:undefined,
-      comparison: ablationPair ?? (readyComparison && forwardDriver.progress?.training?.readyOutputs ? {
+      outputPair:interventionExperiment?{before:interventionExperiment.baselineRun,after:interventionExperiment.interventionRun}:undefined,
+      comparisonLabels:ablation?['Baseline','Head output zeroed']:patch?['Baseline','Donor patched']:undefined,
+      intervention:ablation?{snapshot:ablation.startingSnapshotId,arm:result?.run.manifest.runId===ablation.baselineRun.manifest.runId?'Baseline':'Head output zeroed',summary:`layer ${ablation.selection.layer} / head ${ablation.selection.head} · all positions, aggregated output → zero → concat`}:patch?{snapshot:patch.startingSnapshotId,arm:result?.run.manifest.runId===patch.baselineRun.manifest.runId?'Baseline':result?.run.manifest.runId===patch.donorRun.manifest.runId?'Donor':'Donor patched',summary:`target p${patch.declaration.target.token}/L${patch.declaration.target.layer}/h${patch.declaration.target.head} ← donor p${patch.declaration.donor.token}/L${patch.declaration.donor.layer}/h${patch.declaration.donor.head} · exact observed vector → concat`,receipt:{policy:`${patch.comparison.policy.id}@${patch.comparison.policy.version}`,donor:patch.receipt.donorVector,original:patch.receipt.originalTargetVector,replacement:patch.receipt.effectiveReplacement,noOp:patch.receipt.noOp}}:undefined,
+      patchDonor:{head:donorHead,token:donorToken},
+      comparison: interventionPair ?? (readyComparison && forwardDriver.progress?.training?.readyOutputs ? {
         before:forwardReadModel(forwardDriver.progress.training.readyOutputs.before,forwardDriver.progress.training.readyOutputs.starting),
         after:forwardReadModel(forwardDriver.progress.training.readyOutputs.after,sourceSnapshot(forwardDriver.progress.training.candidateId!))} : undefined),
       learning, experimentId: evidenceRun?'':spatialExperimentId, liveStep: liveTrainingStep,evidenceWorld:evidenceRun?{label:evidenceRun.integration,replay:spatialEvidenceReplay}:undefined,
@@ -838,8 +845,9 @@ async function inspectSpatialGradient(child?: number) {
     await inspect(m.experiment.trainingRunId,{kind:"node",nodeId:child},"Captured contribution child",[child]);
 }
 function bindSpatialLearning() {
-  mount.querySelector('#cancel-ablation')?.addEventListener('click',()=>{if(activeAblation===undefined)return;++operation;activeAblation=undefined;busy=false;clearDisplayedInspection();status='Head comparison cancelled · accepted model unchanged';render();});
+  mount.querySelector('#cancel-ablation')?.addEventListener('click',()=>{if(activeIntervention===undefined)return;++operation;activeIntervention=undefined;inspector.cancel();busy=false;clearDisplayedInspection();status='Intervention cancelled · accepted model unchanged';render();});
   mount.querySelector('#spatial-ablate')?.addEventListener('click',()=>{syncSpatialSelection();void ablateHead();});
+  mount.querySelector('#spatial-patch')?.addEventListener('click',()=>{syncSpatialSelection();void patchHeadOutput();});
   const on = (id:string, action:()=>void) => mount.querySelector(id)?.addEventListener("click",action);
   on("#spatial-learn",()=>{if(result?.run.manifest.runId===liveRunId&&!busy&&ready&&sourceBinding(result.run,config.vocabulary,result.trainingStep,liveRunId,documentText,"LEARN").capturedDocument===documentText)void execute("train");});
   mount.querySelector("#spatial-experiment")?.addEventListener("change",event=>{
@@ -1369,6 +1377,9 @@ function bind(): void {
   document.querySelector("#ablate-head")?.addEventListener("click", () => {
     void ablateHead();
   });
+  document.querySelector("#patch-head")?.addEventListener("click", () => {
+    void patchHeadOutput();
+  });
   document.querySelector("#whole-capture")?.addEventListener("click", () => {
     if (result)
       void inspect(
@@ -1720,7 +1731,7 @@ async function execute(
 }
 
 async function reset(cancelled: boolean, clear = false): Promise<void> {
-  activeAblation=undefined;
+  activeIntervention=undefined;
   discardForward();
   spatialPresenter.invalidate();
   if (cancelled && !busy && inspectionPending) {
@@ -2097,7 +2108,7 @@ function renderHistory(): string {
           }</div>`
         : ""
     }
-    <details><summary>Experiment · head ablation</summary><p>Run two disposable copies of the selected run’s exact starting snapshot and input. Zero only layer ${layer}, head ${head} output immediately before concatenation. Both are new observed executions; live training state stays unchanged.</p><button id="ablate-head" ${busy || !result ? "disabled" : ""}>Compare selected head ablation</button><p>${archive.interventionExperiments.size} declared ablation experiments archived. Select any baseline or intervention run to inspect its values and comparison. No poisoning or backdoor claim is made.</p></details><label class="kiosk-option"><input id="kiosk-mode" type="checkbox" ${kioskEnabled ? "checked" : ""}>Exhibit mode · reset after inactivity</label><div class="controls exhibit-timing"><label>Idle reset after (seconds)<input id="idle-seconds" type="number" min="30" max="3600" value="${exhibitConfiguration.resetAfterMs / 1000}"></label><label>Warning before reset (seconds)<input id="warning-seconds" type="number" min="5" max="120" value="${exhibitConfiguration.warningMs / 1000}"></label><p>Initial field-test timing. Settings are kept in this URL; visitor evidence is not persisted.</p></div><details><summary>Bounded learning and complete capture</summary><div class="controls"><label>Actual updates (1–500)<input id="training-count" type="number" min="1" max="500" value="${trainingCount}"></label><button id="train-many" ${busy || !ready ? "disabled" : ""}>Learn selected updates</button><button id="whole-capture" ${busy || !result ? "disabled" : ""}>Record everything · inspect statistics</button></div><p>Every actual update keeps a loss summary. A batch retains full checkpoints at its first and final step and whenever loss halves from the last retained checkpoint. Explicit single updates always retain complete evidence. The 64 MiB evidence budget is checked between operations, with room for one completed operation. Clear session starts a new archive; history is never silently evicted. Complete capture displays statistics.</p>${
+    <details><summary>Experiment · head ablation</summary><p>Registered interventions run disposable matched arms from the selected run’s immutable starting snapshot. Head ablation zeros layer ${layer}, head ${head} at the existing writable boundary. Donor patch replaces position ${selectedToken}, layer ${layer}, head ${head} with an observed donor occurrence from another head/position. Live accepted state stays unchanged.</p><button id="ablate-head" ${busy || !result ? "disabled" : ""}>Compare selected head ablation</button><button id="patch-head" ${busy || !result ? "disabled" : ""}>Patch selected head output</button><p>${archive.interventionExperiments.size} registered intervention experiments archived. Select baseline, donor, or intervention runs to inspect observed values and matched-policy deltas. No outcome is labeled beneficial or harmful.</p></details><label class="kiosk-option"><input id="kiosk-mode" type="checkbox" ${kioskEnabled ? "checked" : ""}>Exhibit mode · reset after inactivity</label><div class="controls exhibit-timing"><label>Idle reset after (seconds)<input id="idle-seconds" type="number" min="30" max="3600" value="${exhibitConfiguration.resetAfterMs / 1000}"></label><label>Warning before reset (seconds)<input id="warning-seconds" type="number" min="5" max="120" value="${exhibitConfiguration.warningMs / 1000}"></label><p>Initial field-test timing. Settings are kept in this URL; visitor evidence is not persisted.</p></div><details><summary>Bounded learning and complete capture</summary><div class="controls"><label>Actual updates (1–500)<input id="training-count" type="number" min="1" max="500" value="${trainingCount}"></label><button id="train-many" ${busy || !ready ? "disabled" : ""}>Learn selected updates</button><button id="whole-capture" ${busy || !result ? "disabled" : ""}>Record everything · inspect statistics</button></div><p>Every actual update keeps a loss summary. A batch retains full checkpoints at its first and final step and whenever loss halves from the last retained checkpoint. Explicit single updates always retain complete evidence. The 64 MiB evidence budget is checked between operations, with room for one completed operation. Clear session starts a new archive; history is never silently evicted. Complete capture displays statistics.</p>${
       trainingSummaries.length
         ? `<p data-testid="training-summary">${trainingSummaries.length} actual update summaries · latest pre-update loss ${number(trainingSummaries.at(-1)!.loss)}</p><details><summary>Actual loss timeline</summary><p>Showing the latest ${Math.min(500, trainingSummaries.length)} real update summaries. Earlier summaries remain in session memory.</p><div class="table-scroll"><table><thead><tr><th>Source training run / input</th><th>Source snapshot / step</th><th>Resulting step</th><th>Loss before update</th></tr></thead><tbody>${trainingSummaries
             .slice(-500)
@@ -2509,7 +2520,7 @@ async function ablateHead(): Promise<void> {
     return;
   }
   clearDisplayedInspection();
-  const currentOperation = ++operation; activeAblation=currentOperation;
+  const currentOperation = ++operation; activeIntervention=currentOperation;
   busy = true;
   error = "";
   status = "Running matched baseline and head ablation…";
@@ -2530,7 +2541,7 @@ async function ablateHead(): Promise<void> {
     evidenceBytes += new TextEncoder().encode(
       JSON.stringify(experiment),
     ).byteLength;
-    activeAblation=undefined;
+    activeIntervention=undefined;
     comparisonRunId = experiment.baselineRun.manifest.runId;
     busy = false;
     selectRun(experiment.interventionRun.manifest.runId);
@@ -2544,8 +2555,48 @@ async function ablateHead(): Promise<void> {
     status = "Ablation failed";
   } finally {
     if (currentOperation === operation) {
-      activeAblation=undefined; busy = false;
+      activeIntervention=undefined; busy = false;
       render();
     }
+  }
+}
+
+async function patchHeadOutput(): Promise<void> {
+  if (forwardDriver.active) { error='Finish/cancel execution or accept/discard the candidate before patching an activation.';render();return; }
+  if (busy || !result) return;
+  if (evidenceBytes >= SESSION_BUDGET) { error="Session evidence limit reached (64 MiB estimate). Clear session before testing another intervention.";render();return; }
+  const source = result;
+  if(source.run.manifest.runtimeRevision!==RUNTIME_REVISION){error='Selected source runtime differs; choose a compatible completed run.';render();return;}
+  const snapshot = sourceSnapshot(source.run.manifest.startingSnapshotId ?? "");
+  if (!snapshot) { error = "The selected starting snapshot is unavailable."; render(); return; }
+  const targetToken = Math.max(0, Math.min(source.tokenIds.length - 1, selectedToken));
+  const donorToken = targetToken === 0 ? Math.min(1, source.tokenIds.length - 1) : 0;
+  const donorHead = (head + 1) % snapshot.state.config.nHead;
+  clearDisplayedInspection();
+  const currentOperation = ++operation; activeIntervention=currentOperation;
+  busy = true; error = ""; status = "Capturing donor, baseline, and patched target arms…"; render();
+  try {
+    const experiment = await inspector.activationPatch({ snapshot, inputIds: source.tokenIds, targetIds: source.targetIds,
+      donor: { token: donorToken, layer, head: donorHead }, target: { token: targetToken, layer, head } });
+    if (currentOperation !== operation) return;
+    const destination = archive;
+    await destination.addRun(experiment.donorRun);
+    await destination.addRun(experiment.baselineRun);
+    await destination.addRun(experiment.interventionRun);
+    await destination.addInterventionExperiment(experiment);
+    if (currentOperation !== operation) return;
+    evidenceBytes += new TextEncoder().encode(JSON.stringify(experiment)).byteLength;
+    activeIntervention=undefined; comparisonRunId = experiment.baselineRun.manifest.runId; busy = false;
+    selectRun(experiment.interventionRun.manifest.runId);
+    selectedToken = targetToken; selectedKind = "headOutput";
+    spatialPresenter.learningStage=undefined;spatialPresenter.kind='headOutput';spatialPresenter.parameter=undefined;spatialPresenter.lens=true;spatialPresenter.focusSelection();
+    status = `Observed donor patch complete · p${targetToken}/L${layer}/h${head} ← p${donorToken}/L${layer}/h${donorHead} · matched-intervention · accepted state unchanged`;
+    render();
+  } catch (failure) {
+    if (currentOperation !== operation) return;
+    error = failure instanceof Error ? failure.message : String(failure);
+    status = "Activation patch failed";
+  } finally {
+    if (currentOperation === operation) { activeIntervention=undefined; busy = false; render(); }
   }
 }

@@ -1,6 +1,7 @@
-import type { HistoricalRequest, AblationRequest, WorkerResponse } from './protocol.js';
+import type { HistoricalRequest, AblationRequest, ActivationPatchRequest, WorkerResponse } from './protocol.js';
 import type { InspectionResult } from '../../inspect/types.js';
 import type { HeadAblationExperiment } from '../../experiments/ablation.js';
+import type { ActivationPatchExperiment } from '../../experiments/activation-patch.js';
 
 /** Cancellation terminates disposable historical work; it never resets the live model. */
 export class InspectorWorkerClient {
@@ -19,7 +20,12 @@ export class InspectorWorkerClient {
     if (response.status !== 'ablation') throw new Error('Invalid ablation response');
     return response.experiment;
   }
-  private request(request: Omit<HistoricalRequest, 'sessionId' | 'generationId' | 'runId'> | Omit<AblationRequest, 'sessionId' | 'generationId' | 'runId'>): Promise<WorkerResponse> {
+  async activationPatch(request: Omit<ActivationPatchRequest, 'command' | 'sessionId' | 'generationId' | 'runId'>): Promise<ActivationPatchExperiment> {
+    const response = await this.request({ ...request, command: 'activationPatch' });
+    if (response.status !== 'activationPatch') throw new Error('Invalid activation-patch response');
+    return response.experiment;
+  }
+  private request(request: Omit<HistoricalRequest, 'sessionId' | 'generationId' | 'runId'> | Omit<AblationRequest, 'sessionId' | 'generationId' | 'runId'> | Omit<ActivationPatchRequest, 'sessionId' | 'generationId' | 'runId'>): Promise<WorkerResponse> {
     if (!this.worker) {
       const worker = new Worker(new URL('./inspector-worker.ts', import.meta.url), { type: 'module' });
       this.worker = worker;
@@ -27,7 +33,7 @@ export class InspectorWorkerClient {
         if (worker !== this.worker || data.sessionId !== this.sessionId || data.generationId !== this.generation) return;
         const pending = this.pending.get(data.runId); if (!pending) return;
         this.pending.delete(data.runId);
-        if (data.status === 'inspection' || data.status === 'ablation') pending.resolve(data);
+        if (data.status === 'inspection' || data.status === 'ablation' || data.status === 'activationPatch') pending.resolve(data);
         else pending.reject(new Error(data.status === 'error' ? data.error : 'Invalid inspector response'));
       };
       worker.onerror = event => { if (worker === this.worker) { for (const item of this.pending.values()) item.reject(new Error(event.message)); this.pending.clear(); } };

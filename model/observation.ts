@@ -75,6 +75,10 @@ export const structure = {
     observer?.structural?.({ operation: 'head_ablation', description: 'Declared head output replacement with zero before concatenation.',
       values: [layer, head], concept: { kind: 'headOutput', token, layer, head } }, output);
   },
+  activationPatch(observer: Observer | undefined, output: readonly Value[], token: number, layer: number, head: number): void {
+    observer?.structural?.({ operation: 'activation_patch', description: 'Declared donor activation replacement immediately before concatenation.',
+      values: [layer, head, token], concept: { kind: 'headOutput', token, layer, head } }, output);
+  },
   concatenation(observer: Observer | undefined, combinedHeads: readonly Value[], nHead: number, headDimension: number, token: number, layer: number): void {
     observer?.structural?.({ operation: 'concatenation', description: 'Head outputs concatenated in head order.',
       values: [nHead, headDimension], concept: { kind: 'attentionOutput', token, layer } }, combinedHeads);

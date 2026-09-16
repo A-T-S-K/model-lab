@@ -4,8 +4,9 @@ import { validateLegacyRun } from './legacy-run.js';
 import { immutableCopy, type RecordedRun } from '../trace/types.js';
 import { archiveSnapshot, snapshotId, canonicalBytes, type ArchivedSnapshot } from './snapshot.js';
 import { exactData, validateLearningExperiment, type LearningExperiment } from './experiment.js';
-import type { HeadAblationExperiment } from '../experiments/ablation.js';
-import { compareRuns } from '../trace/compare.js';
+import type { InterventionExperiment } from '../experiments/intervention.js';
+import { interventionRecipes } from '../experiments/recipes.js';
+import { compareMatchedInterventionArms } from '../trace/compare.js';
 
 export { archiveSnapshot, snapshotId, validateTrainingSnapshot, canonicalBytes } from './snapshot.js';
 export type { ArchivedSnapshot } from './snapshot.js';
@@ -33,11 +34,11 @@ export class SessionArchive {
   readonly #snapshots = new Map<string, ArchivedSnapshot>();
   readonly #runs = new Map<string, RecordedRun>();
   readonly #learningExperiments = new Map<string, LearningExperiment>();
-  readonly #interventionExperiments = new Map<string, HeadAblationExperiment>();
+  readonly #interventionExperiments = new Map<string, InterventionExperiment>();
   readonly snapshots: ReadonlyMap<string, ArchivedSnapshot> = new ArchiveView(this.#snapshots);
   readonly runs: ReadonlyMap<string, RecordedRun> = new ArchiveView(this.#runs);
   readonly learningExperiments: ReadonlyMap<string, LearningExperiment> = new ArchiveView(this.#learningExperiments);
-  readonly interventionExperiments: ReadonlyMap<string, HeadAblationExperiment> = new ArchiveView(this.#interventionExperiments);
+  readonly interventionExperiments: ReadonlyMap<string, InterventionExperiment> = new ArchiveView(this.#interventionExperiments);
 
   async addSnapshot(record: ArchivedSnapshot): Promise<void> {
     const copy = await archiveSnapshot(record.state);
@@ -68,18 +69,44 @@ export class SessionArchive {
     this.#learningExperiments.set(copy.id, copy);
   }
 
-  async addInterventionExperiment(experiment: HeadAblationExperiment): Promise<void> {
+  async addInterventionExperiment(experiment: InterventionExperiment): Promise<void> {
     const copy = immutableCopy(experiment);
+    canonicalBytes(copy);
+    if (typeof copy.id !== 'string' || !copy.id) throw new Error('Invalid intervention experiment ID');
+    const recipe = interventionRecipes.require(copy.recipe);
     const snapshot = this.#snapshots.get(copy.startingSnapshotId);
-    const before = this.#runs.get(copy.baselineRun.manifest.runId), after = this.#runs.get(copy.interventionRun.manifest.runId);
-    const { layer, head } = copy.selection;
-    if (!snapshot || !before || !after || !Number.isInteger(layer) || !Number.isInteger(head) || layer < 0 || head < 0 ||
-      layer >= snapshot.state.config.nLayer || head >= snapshot.state.config.nHead ||
-      before.manifest.startingSnapshotId !== snapshot.id || after.manifest.startingSnapshotId !== snapshot.id ||
-      before.manifest.intervention !== undefined || copy.boundary !== 'head output immediately before concatenation' || copy.provenance !== 'observed' ||
-      !exactData(after.manifest.intervention, { kind: 'head_ablation', layer, head, boundary: copy.boundary, replacement: 0 }) ||
-      !exactData(before, copy.baselineRun) || !exactData(after, copy.interventionRun) ||
-      !copy.comparison.compatible || !exactData(compareRuns(before, after), copy.comparison)) throw new Error('Invalid ablation experiment references or declaration');
+    const before = this.#runs.get(copy.arms.baseline.runId), after = this.#runs.get(copy.arms.intervention.runId);
+    const donor = copy.arms.donor ? this.#runs.get(copy.arms.donor.runId) : undefined;
+    if (!snapshot || !before || !after) throw new Error('Intervention experiment references missing snapshot or arm runs');
+    if (await snapshotId(snapshot.state) !== snapshot.id || copy.source.snapshotId !== snapshot.id ||
+        copy.source.checkpointId !== snapshot.id || copy.startingSnapshotId !== snapshot.id)
+      throw new Error('Intervention experiment source snapshot or checkpoint mismatch');
+    if (copy.lifecycle.status !== 'succeeded' || copy.arms.baseline.status !== 'succeeded' || copy.arms.intervention.status !== 'succeeded' ||
+        (copy.arms.donor && copy.arms.donor.status !== 'succeeded'))
+      throw new Error('Failed or cancelled intervention arms cannot be admitted as successful');
+    if (!exactData(before, copy.baselineRun) || !exactData(after, copy.interventionRun) ||
+        copy.baselineRun.manifest.runId !== copy.arms.baseline.runId || copy.interventionRun.manifest.runId !== copy.arms.intervention.runId)
+      throw new Error('Intervention arm identity does not match immutable retained runs');
+    if (Boolean(copy.arms.donor) !== Boolean(copy.donorRun) || (copy.arms.donor && (!donor || !copy.donorRun ||
+        donor.manifest.runId !== copy.arms.donor.runId || !exactData(donor, copy.donorRun))))
+      throw new Error('Intervention donor identity does not match immutable retained evidence');
+    for (const run of [before, after, ...(donor ? [donor] : [])]) {
+      if (run.manifest.startingSnapshotId !== snapshot.id || run.manifest.startingCheckpointId !== snapshot.id ||
+          run.manifest.model.id !== copy.source.modelDefinitionId || run.manifest.model.version !== copy.source.modelDefinitionVersion ||
+          run.manifest.sessionId !== copy.lifecycle.sessionId || run.manifest.generationId !== copy.lifecycle.generationId)
+        throw new Error('Intervention arm source, model, session, or generation identity mismatch');
+    }
+    if (!exactData(before.manifest.input, copy.inputs.baseline.input) || !exactData(before.manifest.targets, copy.inputs.baseline.targets) ||
+        !exactData(after.manifest.input, copy.inputs.intervention.input) || !exactData(after.manifest.targets, copy.inputs.intervention.targets) ||
+        before.manifest.intervention !== undefined || !exactData(after.manifest.intervention, copy.declaration))
+      throw new Error('Intervention arm input, target, or declaration mismatch');
+    if (donor && copy.inputs.donor && (!exactData(donor.manifest.input, copy.inputs.donor.input) || !exactData(donor.manifest.targets, copy.inputs.donor.targets)))
+      throw new Error('Intervention donor input or target identity mismatch');
+    if (Boolean(donor) !== Boolean(copy.inputs.donor)) throw new Error('Intervention donor input identity is incomplete');
+    const comparison = compareMatchedInterventionArms(before, after, copy.declaration);
+    if (!copy.comparison.compatible || !exactData(comparison, copy.comparison))
+      throw new Error('Invalid matched-intervention comparison receipt');
+    recipe.validateReceipt(copy, { snapshot, runs: this.runs });
     const existing = this.#interventionExperiments.get(copy.id);
     if (existing && !exactData(existing, copy)) throw new Error('Experiment ID already has different immutable evidence');
     this.#interventionExperiments.set(copy.id, copy);

@@ -25,6 +25,26 @@ export function rmsNorm(input: readonly Value[]): Value[] {
 export interface SequenceResult { logits: Value[][]; probabilities: Value[][] }
 /** A declared intervention at one attention head, after aggregation and before concatenation. */
 export interface HeadAblation { layer: number; head: number }
+export const HEAD_OUTPUT_BOUNDARY = 'head output immediately before concatenation' as const;
+export const HEAD_OUTPUT_COORDINATE_SPACE = 'microgpt.head-output.feature.v1' as const;
+export interface HeadActivationPatch {
+  readonly kind: 'activation_patch';
+  readonly target: {
+    readonly invocation: 0;
+    readonly token: number;
+    readonly layer: number;
+    readonly head: number;
+    readonly boundary: typeof HEAD_OUTPUT_BOUNDARY;
+    readonly coordinateSpace: {
+      readonly id: typeof HEAD_OUTPUT_COORDINATE_SPACE;
+      readonly axes: readonly ['feature'];
+      readonly shape: readonly [number];
+      readonly dtype: 'float64';
+    };
+  };
+  readonly replacement: readonly number[];
+}
+export type HeadOutputIntervention = HeadAblation | HeadActivationPatch;
 
 export interface ForwardBoundary { kind: string; token: number; layer?: number; head?: number }
 /** Metadata only. Mirrors the declared token → layer → head traversal; performs no math. */
@@ -43,16 +63,18 @@ export function forwardBoundaries(model: { config: Pick<Model['config'], 'nLayer
   return boundaries;
 }
 /** Fast prediction and training drain exactly the same math as permitted execution. */
-export function forward(model: Model, tokenIds: readonly number[], observer?: Observer, ablation?: HeadAblation): SequenceResult {
-  const sequence = forwardSequence(model, tokenIds, observer, ablation);
+export function forward(model: Model, tokenIds: readonly number[], observer?: Observer, intervention?: HeadOutputIntervention): SequenceResult {
+  const sequence = forwardSequence(model, tokenIds, observer, intervention);
   let step = sequence.next();
   while (!step.done) step = sequence.next();
   return step.value;
 }
 
 /** Sequential causal attention keeps earlier K/V Values connected to the training graph. */
-export function* forwardSequence(model: Model, tokenIds: readonly number[], observer?: Observer, ablation?: HeadAblation): Generator<ForwardBoundary, SequenceResult> {
+export function* forwardSequence(model: Model, tokenIds: readonly number[], observer?: Observer, intervention?: HeadOutputIntervention): Generator<ForwardBoundary, SequenceResult> {
   const { nLayer, nEmbd, nHead, blockSize, vocabulary } = model.config;
+  const patch = intervention && 'kind' in intervention ? intervention : undefined;
+  const ablation = intervention && !('kind' in intervention) ? intervention : undefined;
   if (ablation && (!Number.isInteger(ablation.layer) || ablation.layer < 0 || ablation.layer >= nLayer ||
       !Number.isInteger(ablation.head) || ablation.head < 0 || ablation.head >= nHead)) {
     throw new Error('Head ablation must select a valid layer and head');
@@ -61,6 +83,17 @@ export function* forwardSequence(model: Model, tokenIds: readonly number[], obse
     throw new Error('Input must contain valid token IDs within the context window');
   }
   const headDimension = nEmbd / nHead;
+  if (patch && (patch.target.invocation !== 0 || patch.target.boundary !== HEAD_OUTPUT_BOUNDARY ||
+      patch.target.coordinateSpace.id !== HEAD_OUTPUT_COORDINATE_SPACE ||
+      patch.target.coordinateSpace.dtype !== 'float64' || patch.target.coordinateSpace.axes.length !== 1 ||
+      patch.target.coordinateSpace.axes[0] !== 'feature' || patch.target.coordinateSpace.shape.length !== 1 ||
+      patch.target.coordinateSpace.shape[0] !== headDimension || patch.replacement.length !== headDimension ||
+      !patch.replacement.every(Number.isFinite) || !Number.isInteger(patch.target.token) || patch.target.token < 0 ||
+      patch.target.token >= tokenIds.length || !Number.isInteger(patch.target.layer) || patch.target.layer < 0 ||
+      patch.target.layer >= nLayer || !Number.isInteger(patch.target.head) || patch.target.head < 0 || patch.target.head >= nHead)) {
+    throw new Error('Activation patch must select one valid writable head-output occurrence and coordinate space');
+  }
+  let patchApplications = 0;
   const keys: Value[][][] = Array.from({ length: nLayer }, () => []);
   const values: Value[][][] = Array.from({ length: nLayer }, () => []);
   const result: SequenceResult = { logits: [], probabilities: [] };
@@ -122,6 +155,12 @@ export function* forwardSequence(model: Model, tokenIds: readonly number[], obse
           headOutput = headOutput.map(() => Value.constant(0, 'declared head ablation'));
           structure.headAblation(observer, headOutput, token, layer, head);
         }
+        if (patch?.target.token === token && patch.target.layer === layer && patch.target.head === head) {
+          observe('headOutputBeforePatch', headOutput, layer, head);
+          headOutput = patch.replacement.map(value => Value.constant(value, 'declared donor activation patch'));
+          structure.activationPatch(observer, headOutput, token, layer, head);
+          patchApplications++;
+        }
         observe('headOutput', headOutput, layer, head);
         yield { kind: 'headOutput', token, layer, head };
         combinedHeads.push(...headOutput);
@@ -163,11 +202,12 @@ export function* forwardSequence(model: Model, tokenIds: readonly number[], obse
     result.logits.push(logits);
     result.probabilities.push(probabilities);
   }
+  if (patch && patchApplications !== 1) throw new Error('Activation patch did not apply exactly once');
   return result;
 }
 
-export function predict(model: Model, tokenIds: readonly number[], observer?: Observer, ablation?: HeadAblation): { logits: number[][]; probabilities: number[][] } {
-  const result = forward(model, tokenIds, observer, ablation);
+export function predict(model: Model, tokenIds: readonly number[], observer?: Observer, intervention?: HeadOutputIntervention): { logits: number[][]; probabilities: number[][] } {
+  const result = forward(model, tokenIds, observer, intervention);
   return { logits: result.logits.map(row => row.map(value => value.data)), probabilities: result.probabilities.map(row => row.map(value => value.data)) };
 }
 
