@@ -63,7 +63,7 @@ test('a real native reply delayed past a model switch cannot enter retained evid
     const response=await route.fetch();received();await hold;
     try{await route.fulfill({response});}catch{/* The actual client abort closes the route. */}
   });
-  await page.goto('/?presentation=spatial');await page.locator('#open-shared-inspector').click();
+  await page.goto('/?presentation=spatial');await expect(page.locator('#predict')).toBeEnabled();await page.locator('#open-shared-inspector').click();
   await page.locator('#shared-model').selectOption('pythia-native-v1');await page.locator('#native-endpoint').fill(process.env.SLICE_NATIVE_ENDPOINT!);await page.locator('#shared-execute').click();await ready;
   await page.locator('#shared-model').selectOption('microgpt-legacy-v1');release();
   await expect(page.getByTestId('shared-status')).toContainText('Producer changed');

@@ -39,6 +39,11 @@ export function integrations():IntegrationRegistry {
     check(run.version===1&&run.request.version===1,'Native version');
     check(run.integration==='pythia-native-v1'&&run.profile===profile.profile&&run.runtime===profile.runtime,'Unqualified native binding/profile');
     check(run.definition===profile.definition&&run.checkpoint===profile.checkpoint&&run.inputTransform===profile.inputTransform,'Native identity mismatch');
+    const architecture=profile.architecture;
+    check(architecture.configRevision===`sha256:${run.definition.split(':')[1]}`&&architecture.sourceRevision===profile.sourceRevision,'Native architecture source binding mismatch');
+    check(architecture.layerCount===6&&architecture.capturedLayer===1&&architecture.hiddenWidth===128&&architecture.attentionHeads===4&&architecture.headWidth===32&&architecture.mlpWidth===512,'Native architecture dimensions');
+    check(architecture.normalization.kind==='LayerNorm'&&architecture.normalization.epsilon===1e-5&&architecture.activation==='gelu'&&architecture.parallelResidual===true,'Native block semantics');
+    check(architecture.position.kind==='rotary'&&architecture.outputSize===50304&&architecture.tokenizerSize===profile.tokenizerSize,'Native position/output semantics');
     check(run.request.action==='predict' && run.precision.storage==='F16' && run.precision.compute==='float32','Unsupported native mode/precision');
     check(run.id===`${run.request.sessionId}:${run.request.requestId}`,'Native receipt ID mismatch');
     check('tokenIds' in run.input,'Native token input required');
@@ -52,7 +57,7 @@ export function integrations():IntegrationRegistry {
       check(canonicalIdentity(expectedMetadata)===canonicalIdentity(actualMetadata),'Native semantic/source/axis mapping mismatch');
       if(p.id==='tokens')check(canonicalIdentity(p.values)===canonicalIdentity(run.input.tokenIds),'Native token evidence mismatch');
       const n=run.input.tokenIds.length;
-      const shape=p.id==='tokens'?[n]:p.id==='logits'?[50304]:p.id==='attention.weights'?[4,n,n]:p.id==='attention.qkv'?[n,4,3,32]:[n,128];
+      const shape=p.id==='tokens'?[n]:p.id==='logits'?[architecture.outputSize]:p.id==='attention.weights'?[architecture.attentionHeads,n,n]:p.id==='attention.qkv'?[n,architecture.attentionHeads,3,architecture.headWidth]:[n,architecture.hiddenWidth];
       check(JSON.stringify(p.shape)===JSON.stringify(shape)&&p.dtype===(p.id==='tokens'?'int32':'float32'),'Native capture shape/dtype');
       check(p.source.revision===(p.id==='tokens'?profile.tokenizerSourceRevision:profile.sourceRevision),'Native source identity');
     }

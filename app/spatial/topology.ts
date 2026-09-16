@@ -24,7 +24,7 @@ export interface SemanticRelationship {
   to: SemanticAddress;
   port: string;
   kind: RelationshipKind;
-  origin?: "observed" | "derived";
+  origin?: "observed" | "derived" | "source_declared";
 }
 export interface WorldNode {
   id: string;
@@ -34,6 +34,8 @@ export interface WorldNode {
   parameter?: string;
   invocation?: string;
   phase?: string;
+  /** Structural provenance is separate from numerical availability. */
+  origin?: "observed" | "source_declared" | "derived" | "unavailable";
 }
 export interface WorldDescriptor {
   integration: string;

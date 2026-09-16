@@ -1,7 +1,7 @@
 """Write the declared binding identity after source/profile changes, before qualification."""
 import json
 from pathlib import Path
-from adapter import NativePythia, PROFILE
+from adapter import LAYER, NativePythia, PROFILE
 if __name__ == '__main__':
     model=NativePythia(); lock=model.lock
     profile={'profile':PROFILE,'runtime':model.runtime,'definition':'pythia-14m:'+lock['files']['config.json']['sha256'],
@@ -12,6 +12,25 @@ if __name__ == '__main__':
     request={'version':1,'integration':'pythia-native-v1','profile':PROFILE,'requestId':'schema','sessionId':'schema','epoch':0,'action':'predict','input':'The cat sat'}
     capture=model.capture(request)['record']
     profile['tokenizerSize']=len(model.tokenizer)
+    config=model.model.config
+    profile['architecture']={
+        'configRevision':'sha256:'+lock['files']['config.json']['sha256'],
+        'sourceRevision':'sha256:'+model.source_digest,
+        'layerCount':config.num_hidden_layers,
+        'capturedLayer':LAYER,
+        'hiddenWidth':config.hidden_size,
+        'attentionHeads':config.num_attention_heads,
+        'headWidth':config.hidden_size//config.num_attention_heads,
+        'mlpWidth':config.intermediate_size,
+        'normalization':{'kind':'LayerNorm','epsilon':config.layer_norm_eps,'learnedBias':True},
+        'activation':config.hidden_act,
+        'parallelResidual':config.use_parallel_residual,
+        'position':{'kind':'rotary','base':config.rope_parameters['rope_theta'],'fraction':config.rope_parameters['partial_rotary_factor']},
+        'attentionBias':config.attention_bias,
+        'mlpBias':True,
+        'outputSize':config.vocab_size,
+        'tokenizerSize':len(model.tokenizer),
+    }
     profile['captureSchema']=[{k:p[k] for k in ['id','node','port','invocation','phase','source','owners','dependencies','capabilities']} | {'axes':[{'role':a['role'],'space':a['space']} for a in p['axes']]} for p in capture['points']]
     (Path(__file__).parent/'profile.json').write_text(json.dumps(profile,indent=2)+'\n')
     print(json.dumps(profile))

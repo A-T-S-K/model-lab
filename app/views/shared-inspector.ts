@@ -3,6 +3,7 @@ import { ExecutorRegistry, type CanonicalReceipt } from '../worker/executors.js'
 import { RUNTIME_REVISION } from '../../runtime/revision.js';
 import { boundSource } from '../source/registered.js';
 import { sourceFiles } from '../source/catalog.js';
+import { fullSupportDistribution } from './full-support-distribution.js';
 const esc=(x:unknown)=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const SAVED='model-lab-evidence-v1';
 
@@ -32,13 +33,9 @@ export class SharedInspector {
   private select(id:string,replay=false){check(this.#store,'Store unavailable');this.#player=new EvidencePlayer(this.#store,id);this.#offset=0;this.#replay=replay;this.#selected=this.#player.run.integration;}
   private distribution(p:EvidencePoint):string{
     if(p.availability!=='available'||p.axes.length!==1||p.axes[0].role!=='output_index'||!this.#store||!this.#player)return '';
-    let maximum=-Infinity;
-    for(let i=0;i<p.shape[0];i+=256)for(const v of this.#store.slice(this.#player.runId,p.id,i,Math.min(256,p.shape[0]-i)))maximum=Math.max(maximum,v);
-    let denominator=0;const top:{index:number;logit:number}[]=[];
-    for(let i=0;i<p.shape[0];i+=256)this.#store.slice(this.#player.runId,p.id,i,Math.min(256,p.shape[0]-i)).forEach((v,j)=>{denominator+=Math.exp(v-maximum);top.push({index:i+j,logit:v});top.sort((a,b)=>b.logit-a.logit);if(top.length>5)top.pop();});
-    const shown=top.reduce((s,p)=>s+Math.exp(p.logit-maximum)/denominator,0);
-    const selected=this.#store.slice(this.#player.runId,p.id,this.#offset,1)[0];
-    return `<h3>Derived full-support softmax</h3><p>Denominator covers all ${p.shape[0]} output indices. No sampling or top-k renormalization. Output indices are shown without invented tokenizer labels.</p><table><thead><tr><th>Output index</th><th>Observed logit</th><th>Derived probability</th></tr></thead><tbody>${top.map(p=>`<tr><td>${p.index}</td><td>${p.logit}</td><td>${Math.exp(p.logit-maximum)/denominator}</td></tr>`).join('')}</tbody></table><p data-testid="omitted-mass">Omitted mass: ${1-shown}</p><p data-testid="selected-probability">Exact selected index ${this.#offset}: logit ${selected}; derived probability ${Math.exp(selected-maximum)/denominator}</p>`;
+    const values:number[]=[];for(let i=0;i<p.shape[0];i+=256)values.push(...this.#store.slice(this.#player.runId,p.id,i,Math.min(256,p.shape[0]-i)));
+    const distribution=fullSupportDistribution(values,this.#offset);
+    return `<h3>Derived full-support softmax</h3><p>Denominator covers all ${distribution.size} output indices. No sampling or top-k renormalization. Output indices are shown without invented tokenizer labels.</p><table><thead><tr><th>Output index</th><th>Observed logit</th><th>Derived probability</th></tr></thead><tbody>${distribution.top.map(p=>`<tr><td>${p.index}</td><td>${p.logit}</td><td>${p.probability}</td></tr>`).join('')}</tbody></table><p data-testid="omitted-mass">Omitted mass: ${distribution.omittedMass}</p><p data-testid="selected-probability">Exact selected index ${distribution.selected.index}: logit ${distribution.selected.logit}; derived probability ${distribution.selected.probability}</p>`;
   }
   private source(p:EvidencePoint):string {
     const code=boundSource(p.source);

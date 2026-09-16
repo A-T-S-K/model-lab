@@ -14,6 +14,32 @@
   },
   "modelRevision": "cf967c0a9a04383db6f7b1108d86b2962634b4ac",
   "tokenizerSize": 50277,
+  "architecture": {
+    "configRevision": "sha256:f97f966a66c444890ed461fff2a51eefb15d74303df05b948124719f199b0b17",
+    "sourceRevision": "sha256:c8684ddf23ca40c8151459902f89b19b13372aeb766cc21afc8a5323ac55f538",
+    "layerCount": 6,
+    "capturedLayer": 1,
+    "hiddenWidth": 128,
+    "attentionHeads": 4,
+    "headWidth": 32,
+    "mlpWidth": 512,
+    "normalization": {
+      "kind": "LayerNorm",
+      "epsilon": 1e-05,
+      "learnedBias": true
+    },
+    "activation": "gelu",
+    "parallelResidual": true,
+    "position": {
+      "kind": "rotary",
+      "base": 10000,
+      "fraction": 0.25
+    },
+    "attentionBias": true,
+    "mlpBias": true,
+    "outputSize": 50304,
+    "tokenizerSize": 50277
+  },
   "captureSchema": [
     {
       "id": "tokens",
