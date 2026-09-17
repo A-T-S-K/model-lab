@@ -34,7 +34,7 @@ test('reset cancels old work and ignores both stale replies and stale worker err
   } finally { globalThis.Worker = OriginalWorker; }
 });
 
-test('T06 client recovers last matching receipt, not an unacknowledged candidate after worker death',async()=>{
+test('T06 disposable local-worker authority recovers last matching receipt, not an unacknowledged candidate after worker death',async()=>{
  const OriginalWorker=globalThis.Worker,workers:any[]=[];
  class FakeWorker {onmessage:any;onerror:any;sent:any[]=[];constructor(){workers.push(this);}postMessage(m:any){this.sent.push(m);}terminate(){}}
  globalThis.Worker=FakeWorker as any;
@@ -46,6 +46,7 @@ test('T06 client recovers last matching receipt, not an unacknowledged candidate
   const response={...workers[0].sent[1],status:'result',result:{snapshots:[initial,{id:'candidate-1'}]}};
   workers[0].onmessage({data:{...response,generationId:99}});workers[0].onmessage({data:{...response,runId:'unknown'}});
   workers[0].onerror({message:'worker died'});await rejected;
+  // Unlike a surviving remote authority, this worker's private unacknowledged state died with it.
   const recovery=client.cancel();assert.equal(workers[1].sent[0].command,'restore');assert.equal(workers[1].sent[0].snapshot.id,'accepted-0');
   workers[1].onmessage({data:{...workers[1].sent[0],status:'ready',archivedSnapshot:initial,snapshot:{}}});await recovery;
   const accepted=client.request({command:'acceptTraining',executionId:'new',candidateId:'candidate-1'});

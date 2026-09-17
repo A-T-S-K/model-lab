@@ -1702,6 +1702,8 @@ async function execute(
         : "Computing loss, backward, and one Adam update…"
       : "Recording a live prediction…";
   render();
+  let acceptedThisIteration: RunResult | undefined;
+  let retentionFailed = false;
   let completedRunId: string | undefined;
   let failureReason: string | undefined;
   try {
@@ -1713,6 +1715,7 @@ async function execute(
         error = failure instanceof Error ? failure.message : String(failure); failureReason = status; break;
       }
       activeRetentionTransaction = transaction;
+      acceptedThisIteration = undefined;
       pendingModelCommand = command;
       const response = completedForward ? { status: "result" as const, result: completedForward } : await client.request({
         command, document: executionDocument,
@@ -1725,13 +1728,8 @@ async function execute(
         throw new Error("Worker did not return model evidence");
       pendingModelCommand = undefined;
       const incoming = response.result;
-      const destination = transaction.archive;
-      for (const snapshot of incoming.snapshots) await destination.addSnapshot(snapshot);
-      for (const run of incoming.runs) await destination.addRun(run);
-      if (incoming.experiment) await destination.addLearningExperiment(incoming.experiment);
-      if (currentOperation !== operation) { cancelRetention(transaction); return {status:'refused',reason:'Canonical execution was superseded'}; }
-      await commitRetention(transaction); activeRetentionTransaction = undefined;
       lastAcceptedResult = incoming;
+      acceptedThisIteration = incoming;
       if (guided && incoming.learn) {
         if (guidedBatch) {
           guidedBatch.completedCount++;
@@ -1789,18 +1787,45 @@ async function execute(
       const retain =
         true;
       recordTrainingSummary(incoming);
-      if (retain) completedRunId = incoming.run.manifest.runId;
       if (currentOperation !== operation) return {status:'refused',reason:'Canonical execution was superseded'};
       render();
+      if (retain) {
+        const destination = transaction.archive;
+        for (const snapshot of incoming.snapshots) await destination.addSnapshot(snapshot);
+        for (const run of incoming.runs) await destination.addRun(run);
+        if (incoming.experiment) await destination.addLearningExperiment(incoming.experiment);
+        if (currentOperation !== operation) { cancelRetention(transaction); return {status:'refused',reason:'Canonical execution was superseded'}; }
+        await commitRetention(transaction); activeRetentionTransaction = undefined;
+        completedRunId = incoming.run.manifest.runId;
+      }
     }
   } catch (failure) {
-    cancelRetention(activeRetentionTransaction); activeRetentionTransaction = undefined;
     if (currentOperation !== operation) return {status:'refused',reason:'Canonical execution was superseded'};
     error = failure instanceof Error ? failure.message : String(failure);
     failureReason = error;
-    status = "Run failed";
+    retentionFailed = !!acceptedThisIteration;
+    status = retentionFailed ? "Accepted update · local evidence retention failed" : "Run failed";
   } finally {
     if (currentOperation === operation) {
+      // The disposable local worker has already acknowledged and published this
+      // state. Retry only immutable evidence admission under the reservation that
+      // preceded execution; never describe retention failure as model rollback.
+      if (retentionFailed && acceptedThisIteration && activeRetentionTransaction) {
+        try {
+          const destination = activeRetentionTransaction.archive;
+          for (const snapshot of acceptedThisIteration.snapshots) await destination.addSnapshot(snapshot);
+          for (const run of acceptedThisIteration.runs) await destination.addRun(run);
+          if (acceptedThisIteration.experiment) await destination.addLearningExperiment(acceptedThisIteration.experiment);
+          await commitRetention(activeRetentionTransaction);
+          activeRetentionTransaction = undefined;
+          completedRunId = acceptedThisIteration.run.manifest.runId;
+          failureReason = undefined;
+          status = "Accepted update · evidence retained after retry";
+        } catch (retentionFailure) {
+          error = `${error} · Completed result retention failed: ${retentionFailure instanceof Error ? retentionFailure.message : String(retentionFailure)}`;
+        }
+      }
+      cancelRetention(activeRetentionTransaction); activeRetentionTransaction = undefined;
       pendingModelCommand = undefined;
       if (guidedBatch?.status === "RUNNING") guidedBatch.status = "STOPPED";
       busy = false;
