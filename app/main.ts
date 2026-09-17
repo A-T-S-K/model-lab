@@ -71,6 +71,7 @@ import {
 } from "../archive/portable.js";
 import { RETENTION_RESERVATION_BOUNDS, RETENTION_RESERVATION_BYTES, SessionRetention, type RetentionOperation, type RetentionStatus, type RetentionTransaction } from '../archive/retention.js';
 import { BoundedCache, type CacheReservation } from './presentation/bounded-cache.js';
+import { PRESENTATION_WORK, nextWindowOffset, presentationWindow, previousWindowOffset, windowSummary } from './presentation/work-contract.js';
 import { InspectorWorkerClient } from "./worker/inspector-client.js";
 import { isHeadAblationExperiment } from "../experiments/ablation.js";
 import { isActivationPatchExperiment } from "../experiments/activation-patch.js";
@@ -109,6 +110,7 @@ function clearWorldSelection(){Object.assign(worldSelection,{node:'',port:'',pha
 function focusCanonicalPredict(){queueMicrotask(()=>document.querySelector<HTMLButtonElement>('#predict')?.focus({preventScroll:true}));}
 const spatialPresenter = new SpatialPresenter(spatialSelection);
 let spatialExperimentId = "";
+let spatialExperimentOffset = 0;
 let activeDataExperimentId = "";
 const config = fixture.config;
 const client = new ModelWorkerClient();
@@ -130,12 +132,17 @@ let inspectionLabel = "";
 let inspectionPending = false;
 let inspectionOperation = 0;
 let inspectionWhole = false;
+let microscopeWindows = { operands: 0, consumers: 0, structural: 0 };
 const INSPECTION_CACHE_MAX_BYTES = 8 * 1024 * 1024;
 const INSPECTION_CACHE_ENTRY_BYTES = 2 * 1024 * 1024;
 const inspectionCache = new BoundedCache<string, InspectionResult>(8, INSPECTION_CACHE_MAX_BYTES, INSPECTION_CACHE_ENTRY_BYTES);
 let pendingInspectionCacheReservation: CacheReservation<InspectionResult> | undefined;
 let selectedSnapshotId = "";
 let comparisonRunId = "";
+let historyRunOffset = 0;
+let snapshotOffset = 0;
+let comparisonRunOffset = 0;
+let comparisonRowOffset = 0;
 let trainingCount = 1;
 let guidedMapIndex = 5;
 let guidedLearning: GuidedLearning | undefined;
@@ -630,6 +637,8 @@ function render(): void {
     const compositePair=compositeExperiment?{before:forwardReadModel(compositeExperiment.baselineRun,sourceSnapshot(compositeExperiment.source.snapshotId)),after:forwardReadModel(compositeExperiment.trainedRun,sourceSnapshot(compositeExperiment.source.snapshotId),compositeExperiment.trainedState)}:undefined;
     const donorToken=spatialSelection.query===0?Math.min(1,Math.max(0,(Array.isArray(result?.run.manifest.input)?result.run.manifest.input.length:1)-1)):0;
     const donorHead=(spatialSelection.head+1)%config.nHead;
+    const experimentList=[...archive.learningExperiments.values()].map(e=>({id:e.id,step:e.update.step+1})),experimentWindow=presentationWindow(experimentList,spatialExperimentOffset,PRESENTATION_WORK.spatialExperiments),selectedExperiment=experimentList.find(e=>e.id===spatialExperimentId),experimentItems=selectedExperiment&&!experimentWindow.items.includes(selectedExperiment)?[selectedExperiment,...experimentWindow.items.slice(0,PRESENTATION_WORK.spatialExperiments-1)]:experimentWindow.items;
+    spatialExperimentOffset=experimentWindow.offset;
     mount.innerHTML = spatialPresenter.render(model, {
       attract: !evidenceRun&&attract&&exhibitEntry, exhibit: !evidenceRun&&exhibitEntry, idleResetEnabled:kioskEnabled, idleResetSeconds:exhibitConfiguration.resetAfterMs/1000,
       retention:{bytes:retentionStatus?.retained.archiveBytes??0,runs:archive.runs.size,snapshots:archive.snapshots.size,experiments:archive.learningExperiments.size},
@@ -644,9 +653,9 @@ function render(): void {
         before:forwardReadModel(forwardDriver.progress.training.readyOutputs.before,forwardDriver.progress.training.readyOutputs.starting),
         after:forwardReadModel(forwardDriver.progress.training.readyOutputs.after,sourceSnapshot(forwardDriver.progress.training.candidateId!))} : undefined),
       learning, experimentId: evidenceRun?'':spatialExperimentId, liveStep: liveTrainingStep,evidenceWorld:evidenceRun?{label:evidenceRun.integration,replay:spatialEvidenceReplay}:undefined,
-      experiments: [...archive.learningExperiments.values()].map(e => ({id:e.id,step:e.update.step+1})),
+      experiments: experimentItems, experimentsWindow:{offset:experimentWindow.offset,end:experimentWindow.end,total:experimentWindow.total,hasPrevious:experimentWindow.hasPrevious,hasNext:experimentWindow.hasNext},
       canLearn: !evidenceRun&&!forwardDriver.active&&!!result&&result.run.manifest.runId===liveRunId&&source?.capturedDocument===documentText&&!busy&&ready,
-      scalar:evidenceRun?'No scalar continuation is captured for this run.':microscopeView(inspection,inspectionPath,inspectionLabel,inspectionPending,inspectionWhole,inspectionRelationship(),inspectionBinding),
+      scalar:evidenceRun?'No scalar continuation is captured for this run.':microscopeView(inspection,inspectionPath,inspectionLabel,inspectionPending,inspectionWhole,inspectionRelationship(),inspectionBinding,microscopeWindows),
     });
     bind();
     spatialPresenter.bind(model, spatialSelectionChanged, render, selectExplanationPhase);
@@ -689,7 +698,7 @@ function render(): void {
     ${renderHistory()}<section class="source-block"><h2>Source position and operation</h2><div class="tokens">${result?.tokenIds.map((id, index) => `<button data-token="${index}" class="token ${index === selectedToken ? "active" : ""}" aria-pressed="${index === selectedToken}"><strong>${escapeHtml(tokenName(id, config.vocabulary))}</strong><small>position ${index} · ID ${id}</small></button>`).join("") ?? ""}</div><h3>Forward prediction</h3><div class="flow" data-testid="forward-stages">${forwardStages.map(([kind, label]) => `<button data-stage="${kind}" aria-pressed="${kind === selectedKind}">${label}</button>`).join("")}</div><h3>Training · after forward prediction</h3><div class="flow" data-testid="training-stages">${trainingStages.map(([kind, label]) => `<button data-stage="${kind}" aria-pressed="${kind === selectedKind}">${label}</button>`).join("")}</div></section>
     <section class="source-block"><h2>Recorded full-run Attention values</h2><div class="controls"><label>Layer<select id="layer">${Array.from({ length: config.nLayer }, (_, index) => `<option value="${index}" ${index === layer ? "selected" : ""}>${index}</option>`).join("")}</select></label><label>Head<select id="head">${Array.from({ length: config.nHead }, (_, index) => `<option value="${index}" ${index === head ? "selected" : ""}>${index}</option>`).join("")}</select></label><button data-open-attention>Open Attention in place</button></div><div class="table-scroll">${renderAttention()}</div><div data-testid="attention-detail">${detailView(detail)}</div></section>
     <section class="source-block"><h2>Raw completed transition fields</h2>${result?.experiment ? `<nav class="controls" aria-label="Learning experiment"><button data-experiment-run="${escapeHtml(result.experiment.beforeRunId)}" ${busy ? "disabled" : ""}>Before state · inspect prediction</button><button data-experiment-run="${escapeHtml(result.experiment.trainingRunId)}" ${busy ? "disabled" : ""}>Observed training · loss and backward</button><button data-experiment-run="${escapeHtml(result.experiment.afterRunId)}" ${busy ? "disabled" : ""}>After state · inspect prediction</button><button id="open-completed-learning" ${busy ? "disabled" : ""}>Open completed backward / Adam in place</button></nav>` : ""}<div data-testid="learn-evidence">${learnView(result?.learn, selectedParameter, selectedToken, config.vocabulary, result?.targetIds[selectedToken], sourceSnapshot(result?.experiment?.startingSnapshotId ?? "")?.state.optimizer, result?.experiment ? adamReadModel(result.experiment, sourceSnapshot(result.experiment.startingSnapshotId), sourceSnapshot(result.experiment.resultingSnapshotId), archive.runs.get(result.experiment.beforeRunId), archive.runs.get(result.experiment.afterRunId), result.experiment.update.parameters[selectedParameter]!) : undefined)}${result?.learn ? sourceView("adam") : ""}</div></section><p class="source-attribution">Based on <a href="https://gist.github.com/karpathy/8627fe009c40f57531cb18360106ce95" target="_blank" rel="noopener noreferrer">Andrej Karpathy’s microgpt</a>. IBM Plex <a href="${plexSansLicense}">Sans license</a> / <a href="${plexMonoLicense}">Mono license</a>.</p>`;
-  const localEvidence = `<section class="local-expansion ${mode === "microscope" ? "with-scalar" : ""}" data-owner="${selectedStageOwner()}"><div class="local-source-summary"><section class="local-operation" data-scroll-region="local-operation"><h2>${escapeHtml(stage?.[1] ?? selectedKind)} · position ${selectedToken}</h2><p>${escapeHtml(stage?.[2] ?? "Selected recorded evidence")}</p><div data-testid="vector-evidence">${stageEvidence()}</div>${sourceView(selectedKind)}</section><section class="local-prediction" data-scroll-region="local-probability"><h2>Selected position ${selectedToken} · probabilities</h2>${probabilityContextView(result, guidedLearning)}<div data-testid="probabilities">${probabilityView(values, config.vocabulary)}</div>${greedy === undefined ? "" : `<p>Greedy selection: <strong data-testid="greedy-token">${escapeHtml(tokenName(greedy, config.vocabulary))}</strong> · derived from the observed probabilities.</p>`}<button id="why-prediction">Why this prediction?</button></section></div>${mode === "microscope" ? `<section class="local-scalar" id="microscope" data-scroll-region="local-scalar"><h2>Microscope · source-connected scalar</h2><p>Scalar source model step ${sourceSnapshot(archive.runs.get(inspectionBinding?.sourceRunId ?? "")?.manifest.startingSnapshotId ?? "")?.state.optimizer.step ?? "unavailable"}</p><div data-testid="microscope-evidence">${microscopeView(inspection, inspectionPath, inspectionLabel, inspectionPending, inspectionWhole, inspectionRelationship(), inspectionBinding)}</div></section>` : ""}</section>`;
+  const localEvidence = `<section class="local-expansion ${mode === "microscope" ? "with-scalar" : ""}" data-owner="${selectedStageOwner()}"><div class="local-source-summary"><section class="local-operation" data-scroll-region="local-operation"><h2>${escapeHtml(stage?.[1] ?? selectedKind)} · position ${selectedToken}</h2><p>${escapeHtml(stage?.[2] ?? "Selected recorded evidence")}</p><div data-testid="vector-evidence">${stageEvidence()}</div>${sourceView(selectedKind)}</section><section class="local-prediction" data-scroll-region="local-probability"><h2>Selected position ${selectedToken} · probabilities</h2>${probabilityContextView(result, guidedLearning)}<div data-testid="probabilities">${probabilityView(values, config.vocabulary)}</div>${greedy === undefined ? "" : `<p>Greedy selection: <strong data-testid="greedy-token">${escapeHtml(tokenName(greedy, config.vocabulary))}</strong> · derived from the observed probabilities.</p>`}<button id="why-prediction">Why this prediction?</button></section></div>${mode === "microscope" ? `<section class="local-scalar" id="microscope" data-scroll-region="local-scalar"><h2>Microscope · source-connected scalar</h2><p>Scalar source model step ${sourceSnapshot(archive.runs.get(inspectionBinding?.sourceRunId ?? "")?.manifest.startingSnapshotId ?? "")?.state.optimizer.step ?? "unavailable"}</p><div data-testid="microscope-evidence">${microscopeView(inspection, inspectionPath, inspectionLabel, inspectionPending, inspectionWhole, inspectionRelationship(), inspectionBinding, microscopeWindows)}</div></section>` : ""}</section>`;
   if (result) {
     const context = guidedReadModel(
       result,
@@ -747,6 +756,7 @@ function render(): void {
             inspectionWhole,
             inspectionRelationship(),
             inspectionBinding,
+            microscopeWindows,
           )
         : "";
     const parameterValue = followedParameter
@@ -907,6 +917,8 @@ function bindSpatialLearning() {
     const m=spatialLearningModel();clearDisplayedInspection();
     if(m.available)selectRun(m.experiment.afterRunId);else render();
   });
+  mount.querySelector("#spatial-experiment-prev")?.addEventListener("click",()=>{spatialExperimentOffset=previousWindowOffset(spatialExperimentOffset,PRESENTATION_WORK.spatialExperiments);render();});
+  mount.querySelector("#spatial-experiment-next")?.addEventListener("click",()=>{spatialExperimentOffset=nextWindowOffset(spatialExperimentOffset,PRESENTATION_WORK.spatialExperiments,archive.learningExperiments.size);render();});
   mount.querySelectorAll<HTMLElement>("[data-learning-phase]").forEach(button=>button.addEventListener("click",()=>{
     spatialPresenter.invalidate();
     const m=spatialLearningModel();if(!m.available||busy)return;
@@ -1425,8 +1437,31 @@ function bind(): void {
     .querySelector("#compare-run")
     ?.addEventListener("change", (event) => {
       comparisonRunId = (event.target as HTMLSelectElement).value;
+      comparisonRowOffset = 0;
       render();
     });
+  document.querySelector("#history-run-open")?.addEventListener("click",()=>{
+    const id=document.querySelector<HTMLInputElement>("#history-run-id")?.value??"";
+    if(archive.runs.has(id))selectRun(id);else{error="No retained run has that exact ID.";render();}
+  });
+  document.querySelector("#snapshot-open")?.addEventListener("click",()=>{
+    const id=document.querySelector<HTMLInputElement>("#snapshot-id")?.value??"";
+    if(!id||archive.snapshots.has(id)){selectedSnapshotId=id;const index=[...archive.snapshots.keys()].indexOf(id);if(index>=0)snapshotOffset=Math.floor(index/PRESENTATION_WORK.historySnapshots)*PRESENTATION_WORK.historySnapshots;render();}else{error="No retained snapshot has that exact ID.";render();}
+  });
+  document.querySelectorAll<HTMLElement>("[data-history-page]").forEach(control=>control.addEventListener("click",()=>{
+    const [kind,direction]=control.dataset.historyPage!.split(":") as ["runs"|"snapshots"|"compare"|"comparison-rows","previous"|"next"];
+    const previous=direction==="previous";
+    if(kind==="runs")historyRunOffset=previous?previousWindowOffset(historyRunOffset,PRESENTATION_WORK.historyRuns):nextWindowOffset(historyRunOffset,PRESENTATION_WORK.historyRuns,archive.runs.size);
+    else if(kind==="snapshots")snapshotOffset=previous?previousWindowOffset(snapshotOffset,PRESENTATION_WORK.historySnapshots):nextWindowOffset(snapshotOffset,PRESENTATION_WORK.historySnapshots,archive.snapshots.size);
+    else if(kind==="compare")comparisonRunOffset=previous?previousWindowOffset(comparisonRunOffset,PRESENTATION_WORK.historyRuns):nextWindowOffset(comparisonRunOffset,PRESENTATION_WORK.historyRuns,archive.runs.size);
+    else {const total=historyComparisonReadModel(player!.recordedRun,archive.runs.get(comparisonRunId)!,selectedArtifact(selectedKind)?.id).deltas?.length??0;comparisonRowOffset=previous?previousWindowOffset(comparisonRowOffset,PRESENTATION_WORK.comparisonRows):nextWindowOffset(comparisonRowOffset,PRESENTATION_WORK.comparisonRows,total);}
+    render();queueMicrotask(()=>document.querySelector<HTMLElement>(`[data-history-page="${kind}:${direction}"]`)?.focus({preventScroll:true}));
+  }));
+  document.querySelectorAll<HTMLElement>("[data-microscope-page]").forEach(control=>control.addEventListener("click",()=>{
+    const [kind,direction]=control.dataset.microscopePage!.split(":") as [keyof typeof microscopeWindows,"previous"|"next"],graph=inspection?.graph,node=graph?.nodes.find(candidate=>candidate.id===(inspectionPath.at(-1)??graph.roots[0]));
+    if(!graph||!node)return;const total=kind==="operands"?graph.edges.filter(edge=>edge.child===node.id).length:kind==="consumers"?graph.edges.filter(edge=>edge.parent===node.id).length:graph.structural.length,limit=kind==="operands"?PRESENTATION_WORK.scalarOperands:kind==="consumers"?PRESENTATION_WORK.scalarEdges:PRESENTATION_WORK.structuralEvents;
+    microscopeWindows={...microscopeWindows,[kind]:direction==="previous"?previousWindowOffset(microscopeWindows[kind],limit):nextWindowOffset(microscopeWindows[kind],limit,total)};render();queueMicrotask(()=>document.querySelector<HTMLElement>(`[data-microscope-page="${kind}:${direction}"]`)?.focus({preventScroll:true}));
+  }));
   document.querySelector("#export-archive")?.addEventListener("click", () => void exportSessionArchive());
   document.querySelector<HTMLInputElement>("#import-archive")?.addEventListener("change", (event) => void importSessionArchive(event));
   document
@@ -1594,6 +1629,7 @@ function clearDisplayedInspection(): void {
   inspectionLabel = "";
   inspectionWhole = false;
   inspectionBinding = undefined;
+  microscopeWindows = { operands: 0, consumers: 0, structural: 0 };
   pendingInspectionCacheReservation?.cancel(); pendingInspectionCacheReservation = undefined;
 }
 
@@ -1802,6 +1838,7 @@ async function reset(cancelled: boolean, clear = false): Promise<void> {
   if (clear) {
     spatialEvidenceRunId = ""; spatialEvidenceReplay = false; clearWorldSelection();
     spatialExperimentId = ""; activeDataExperimentId = ""; spatialPresenter.resetVisitor();
+    spatialExperimentOffset = 0;
     beforeForward = undefined; beforeForwardLocation = undefined; beforeForwardExperiment = "";
     inspectedExecutionRevision = undefined; readyComparison = true; clearDisplayedInspection();
     lastActivity = Date.now();
@@ -1839,6 +1876,10 @@ async function reset(cancelled: boolean, clear = false): Promise<void> {
     guidedMapIndex = 5;
     comparisonRunId = "";
     selectedSnapshotId = "";
+    historyRunOffset = 0;
+    snapshotOffset = 0;
+    comparisonRunOffset = 0;
+    comparisonRowOffset = 0;
     documentText = fixture.document;
     selectedToken = 0;
     selectedKind = "embeddingNorm";
@@ -2112,7 +2153,8 @@ async function importSessionArchive(event: Event): Promise<void> {
   try {
     const imported = await importPortableArchive(new Uint8Array(await file.arrayBuffer()));
     retentionStatus = await retention.replace(imported.archive); archive = retention.archive; importedArchiveId = imported.archiveId;
-    selectedSnapshotId = ""; comparisonRunId = ""; learningExperimentId = ""; spatialExperimentId = ""; activeDataExperimentId = "";
+    selectedSnapshotId = ""; comparisonRunId = ""; learningExperimentId = ""; spatialExperimentId = ""; activeDataExperimentId = ""; spatialExperimentOffset = 0;
+    historyRunOffset=0;snapshotOffset=0;comparisonRunOffset=0;comparisonRowOffset=0;
     inspectionCache.clear(); trainingSummaries.length=0;trainingSummaryTotal=0;trainingSummaryDiscarded=0;clearDisplayedInspection();
     status = `Retained historical archive opened · ${imported.archiveId} · live accepted model unchanged · no executor or network request`;
     portableArchiveMessage = status;
@@ -2131,13 +2173,20 @@ function renderHistory(): string {
   const runs = [...archive.runs.values()];
   if (result && !archive.runs.has(result.run.manifest.runId))
     runs.push(result.run);
-  const options = (selected: string) =>
-    runs
+  const selectedRunId=result?.run.manifest.runId??"";
+  const runWindow=presentationWindow(runs,historyRunOffset,PRESENTATION_WORK.historyRuns);
+  historyRunOffset=runWindow.offset;
+  const windowItems=(window:typeof runWindow,selected:string)=>{const current=runs.find(run=>run.manifest.runId===selected);return current&&!window.items.includes(current)?[current,...window.items.slice(0,PRESENTATION_WORK.historyRuns-1)]:window.items;};
+  const options = (items:readonly RecordedRun[],selected: string) =>
+    items
       .map(
         (run) =>
           `<option value="${escapeHtml(run.manifest.runId)}" ${run.manifest.runId === selected ? "selected" : ""}>${escapeHtml(runLabel(run))}</option>`,
       )
       .join("");
+  const compareWindow=presentationWindow(runs,comparisonRunOffset,PRESENTATION_WORK.historyRuns);comparisonRunOffset=compareWindow.offset;
+  const snapshots=[...archive.snapshots.values()],snapshotWindow=presentationWindow(snapshots,snapshotOffset,PRESENTATION_WORK.historySnapshots);snapshotOffset=snapshotWindow.offset;
+  const selectedSnapshot=snapshots.find(snapshot=>snapshot.id===selectedSnapshotId),snapshotItems=selectedSnapshot&&!snapshotWindow.items.includes(selectedSnapshot)?[selectedSnapshot,...snapshotWindow.items.slice(0,PRESENTATION_WORK.historySnapshots-1)]:snapshotWindow.items;
   const comparisonRun = archive.runs.get(comparisonRunId);
   const selected = selectedArtifact(selectedKind);
   const comparison =
@@ -2151,33 +2200,32 @@ function renderHistory(): string {
   const retained=retentionStatus,cache=inspectionCache.status();
   const retentionText=retained?`Exact portable-v1 footprint ${(retained.retained.archiveBytes/1048576).toFixed(2)} MiB / ${(retained.hardLimitBytes/1048576).toFixed(0)} MiB · ${(retained.remainingBytes/1048576).toFixed(2)} MiB and ${retained.remainingManifestDataNodes.toLocaleString()} manifest nodes unreserved · ${retained.reservationCount} active reservation${retained.reservationCount===1?'':'s'} · new canonical evidence ${retained.remainingBytes>=RETENTION_RESERVATION_BYTES.canonical&&retained.remainingManifestDataNodes>=RETENTION_RESERVATION_BOUNDS.canonical.manifestDataNodes?'available':'blocked'}`:'Exact portable-v1 footprint synchronizing';
   return `<section class="source-block history"><h2>Explore exact runs and checkpoints</h2>${result ? `<details data-testid="runtime-provenance"><summary>Exact runtime provenance · available offline</summary><p>This selected run was recorded by Model Lab runtime <code data-testid="runtime-revision">${escapeHtml(result.run.manifest.runtimeRevision)}</code>. Historical inspection requires a compatible runtime.</p></details>` : ""}<p data-testid="history-count">${archive.runs.size} runs · ${archive.snapshots.size} snapshots · ${archive.learningExperiments.size} learning experiments retained in this session.</p><p data-testid="retention-status">${retentionText}. Historical records are not evicted.</p><p data-testid="ephemeral-cache-status">Derived inspection cache ${(cache.bytes/1048576).toFixed(2)} MiB / ${(cache.maxBytes/1048576).toFixed(0)} MiB · ${cache.entries} entries · ${cache.evictions} evictions · not portable evidence.</p>${!kioskEnabled ? portableArchiveControls() : ""}<div class="controls">
-    <label>Recorded run<select id="history-run" ${busy ? "disabled" : ""}>${options(result?.run.manifest.runId ?? "")}</select></label>
-    <label>Reset destination<select id="snapshot-select"><option value="">Canonical initial model</option>${[...archive.snapshots.values()].map((snapshot) => `<option value="${snapshot.id}" ${snapshot.id === selectedSnapshotId ? "selected" : ""}>step ${snapshot.state.optimizer.step} · ${snapshot.id.slice(0, 23)}…</option>`).join("")}</select></label>
-    <label>Compare from<select id="compare-run"><option value="">Choose an earlier run</option>${options(comparisonRunId)}</select></label></div>
+    <label>Recorded run<select id="history-run" ${busy ? "disabled" : ""}>${options(windowItems(runWindow,selectedRunId),selectedRunId)}</select></label><button data-history-page="runs:previous" ${runWindow.hasPrevious?'':'disabled'}>Previous recorded runs</button><button data-history-page="runs:next" ${runWindow.hasNext?'':'disabled'}>Next recorded runs</button><span data-testid="history-run-window">${windowSummary(runWindow)}</span><label>Exact run ID<input id="history-run-id" value="${escapeHtml(selectedRunId)}"></label><button id="history-run-open">Open exact run</button>
+    <label>Reset destination<select id="snapshot-select"><option value="">Canonical initial model</option>${snapshotItems.map((snapshot) => `<option value="${snapshot.id}" ${snapshot.id === selectedSnapshotId ? "selected" : ""}>step ${snapshot.state.optimizer.step} · ${snapshot.id.slice(0, 23)}…</option>`).join("")}</select></label><button data-history-page="snapshots:previous" ${snapshotWindow.hasPrevious?'':'disabled'}>Previous snapshots</button><button data-history-page="snapshots:next" ${snapshotWindow.hasNext?'':'disabled'}>Next snapshots</button><span data-testid="snapshot-window">${windowSummary(snapshotWindow)}</span><label>Exact snapshot ID<input id="snapshot-id" value="${escapeHtml(selectedSnapshotId)}"></label><button id="snapshot-open">Select exact snapshot</button>
+    <label>Compare from<select id="compare-run"><option value="">Choose an earlier run</option>${options(windowItems(compareWindow,comparisonRunId),comparisonRunId)}</select></label><button data-history-page="compare:previous" ${compareWindow.hasPrevious?'':'disabled'}>Previous comparison runs</button><button data-history-page="compare:next" ${compareWindow.hasNext?'':'disabled'}>Next comparison runs</button><span data-testid="comparison-run-window">${windowSummary(compareWindow)}</span></div>
     ${
       comparison
         ? `<div class="source-comparison" data-testid="run-comparison" data-selected-run="${escapeHtml(comparison.selectedRunId)}" data-comparison-run="${escapeHtml(comparison.comparisonRunId)}"><p>Selected run minus comparison run · ${escapeHtml(selectedKind)} · position ${selectedToken}</p><p>Selected: ${escapeHtml(comparison.selectedRunId)}<br>Reference: ${escapeHtml(comparison.comparisonRunId)}</p>${
             !comparison.compatible
               ? `<p>Incompatible evidence: ${escapeHtml(comparison.reason ?? "")}. No deltas calculated.</p>`
               : comparison.deltas && comparison.domain
-                ? `<p>Shared domain [${comparison.domain.join(", ")}] · reference line / selected bar · deltas DERIVED</p>${comparison.deltas
-                    .slice(0, 32)
+                ? (()=>{const deltaWindow=presentationWindow(comparison.deltas,comparisonRowOffset,PRESENTATION_WORK.comparisonRows);comparisonRowOffset=deltaWindow.offset;return `<p>Shared domain [${comparison.domain.join(", ")}] · reference line / selected bar · deltas DERIVED · ${windowSummary(deltaWindow)} pairs</p><div class="controls"><button data-history-page="comparison-rows:previous" ${deltaWindow.hasPrevious?'':'disabled'}>Previous comparison rows</button><button data-history-page="comparison-rows:next" ${deltaWindow.hasNext?'':'disabled'}>Next comparison rows</button></div>${deltaWindow.items
                     .map((delta, index) => {
                       const [minimum, maximum] = comparison.domain!;
                       const zero = ((0 - minimum) / (maximum - minimum)) * 100;
                       const current =
-                          ((comparison.selected![index]! - minimum) /
+                          ((comparison.selected![deltaWindow.offset+index]! - minimum) /
                             (maximum - minimum)) *
                           100,
                         reference =
-                          ((comparison.comparison![index]! - minimum) /
+                          ((comparison.comparison![deltaWindow.offset+index]! - minimum) /
                             (maximum - minimum)) *
                           100;
-                      return `<div class="comparison-row"><span>${index}</span><div class="comparison-track" data-domain="${comparison.domain!.join(",")}"><span class="comparison-zero" style="left:${zero}%"></span><span class="comparison-current" style="left:${Math.min(zero, current)}%;width:${Math.abs(current - zero)}%"></span><span class="comparison-reference" style="left:${reference}%"></span></div><span title="${comparison.comparison![index]}">${number(comparison.comparison![index], 4)}</span><span title="${comparison.selected![index]}">${number(comparison.selected![index], 4)}</span><span title="${delta}">Δ ${number(delta, 4)}</span></div>`;
+                      const actual=deltaWindow.offset+index;return `<div class="comparison-row"><span>${actual}</span><div class="comparison-track" data-domain="${comparison.domain!.join(",")}"><span class="comparison-zero" style="left:${zero}%"></span><span class="comparison-current" style="left:${Math.min(zero, current)}%;width:${Math.abs(current - zero)}%"></span><span class="comparison-reference" style="left:${reference}%"></span></div><span title="${comparison.comparison![actual]}">${number(comparison.comparison![actual], 4)}</span><span title="${comparison.selected![actual]}">${number(comparison.selected![actual], 4)}</span><span title="${delta}">Δ ${number(delta, 4)}</span></div>`;
                     })
                     .join(
                       "",
-                    )}<details><summary>All ${comparison.deltas.length} raw comparison pairs</summary><pre>${escapeHtml(JSON.stringify(comparison, null, 2))}</pre></details>`
+                    )}<p>The complete compatible comparison contains ${comparison.deltas.length} pairs; only this bounded page is materialized.</p>`;})()
                 : `<p>${escapeHtml(comparison.reason ?? "Selected evidence is unavailable.")}</p>`
           }</div>`
         : ""
@@ -2197,6 +2245,7 @@ function renderHistory(): string {
 function selectRun(id: string): void {
   const run = archive.runs.get(id);
   if (!run) return;
+  const retainedIndex=[...archive.runs.keys()].indexOf(id);if(retainedIndex>=0)historyRunOffset=Math.floor(retainedIndex/PRESENTATION_WORK.historyRuns)*PRESENTATION_WORK.historyRuns;
   clearDisplayedInspection();
   const tokenIds = run.manifest.input as number[];
   const targetIds = run.manifest.targets as number[];
@@ -2340,6 +2389,7 @@ async function inspect(
   inspectionPath = [];
   inspectionLabel = label;
   inspectionWhole = target.kind === "whole";
+  microscopeWindows = { operands: 0, consumers: 0, structural: 0 };
   render();
   mount.querySelector<HTMLElement>("#microscope")?.scrollTo({ top: 0 });
   try {

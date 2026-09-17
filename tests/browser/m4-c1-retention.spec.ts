@@ -10,7 +10,7 @@ test('M4-C1 near-limit history stays inspectable while native work refuses befor
   await page.setViewportSize({width:1920,height:1080});await page.goto('/?presentation=spatial');
   await page.getByTestId('portable-archive-controls').getByText('Portable historical archive').click();await page.locator('#import-archive').setInputFiles(nearArchive!);
   await expect(page.getByTestId('imported-archive-status')).toContainText('live accepted model unchanged');
-  await page.locator('#open-shared-inspector').click();await page.locator('#shared-run').selectOption('qualification:qualification-generate');await page.locator('#shared-world').click();
+  await page.locator('#open-shared-inspector').click();await page.locator('#shared-run-id').fill('qualification:qualification-generate');await page.locator('#shared-run-open').click();await page.locator('#shared-world').click();
   await page.locator('#pythia-invocation').selectOption('generation:2');await page.locator('#pythia-operation').selectOption('generation:2/logits');const output=page.locator('[data-pythia-coordinate="output_index"]');await output.fill('50303');await output.dispatchEvent('change');
   await expect(page.getByTestId('pythia-selected-output')).toContainText('-3.8919265270233154');await page.screenshot({path:`${directory}/m4-c1-near-limit-pythia-1920.png`});
   await page.locator('#return-canonical-world').click();await page.locator('#open-shared-inspector').click();await page.locator('#shared-model').selectOption('pythia-native-v1');await page.locator('#shared-action').selectOption('generate');

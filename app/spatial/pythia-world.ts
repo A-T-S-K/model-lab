@@ -4,7 +4,7 @@ import generationProfile from '../../research/pythia/profile-generation.json';
 import legacyProfile from '../../research/pythia/profile-legacy.json';
 import nativeSource from '../../research/pythia/source.json';
 import {escapeHtml as esc} from '../views/evidence.js';
-import {fullSupportDistributionFromSlices} from '../views/full-support-distribution.js';
+import {fullSupportDistributionFromSlices,memoizedFullSupportDistribution} from '../views/full-support-distribution.js';
 import {composeWorld,semanticAddressId,type RegisteredWorldPresentation,type SemanticAddress,type SemanticRelationship,type SemanticWorld,type WorldDescriptor,type WorldSelection} from './topology.js';
 
 export const PYTHIA_PRESENTATION='pythia-six-block-v1';
@@ -110,7 +110,7 @@ function distribution(model:PythiaWorldModel,p:EvidencePoint){
   const choice=generationReceipt(model.envelope)?.invocations.find(invocation=>invocation.identity===p.invocation)?.choice;
   if(choice){const summary=choice.distribution,logit=pointValue(model,p,index),selected=index===choice.chosenOutputIndex?` retained full-support probability ${summary.selectedProbability}`:' probability is not retained for this arbitrary index; no unrequested full-tensor materialization';
     return `<section class="pythia-distribution"><h3>Retained full-support distribution summary</h3><p>Retained selection evidence covers all <strong>${summary.support}</strong> observed logits. Top 5 is a bounded view and is not renormalized.</p><table data-testid="pythia-topk"><thead><tr><th>Output index</th><th>Observed logit</th><th>Derived probability</th></tr></thead><tbody>${summary.top.map(row=>`<tr><td>${row.index}</td><td>${row.logit}</td><td>${row.probability}</td></tr>`).join('')}</tbody></table><p data-testid="pythia-omitted-mass">Omitted probability mass: ${summary.omittedMass}</p><p data-testid="pythia-selected-output">Exact output index ${index}: observed logit ${logit};${selected}. ${label}.</p></section>`;}
-  const size=p.shape.reduce((product,value)=>product*value,1),d=fullSupportDistributionFromSlices(size,index,(start,count)=>model.store?model.store.slice(model.run.id,p.id,start,count):p.values!.slice(start,start+count));
+  const size=p.shape.reduce((product,value)=>product*value,1),read=(start:number,count:number)=>model.store?model.store.slice(model.run.id,p.id,start,count):p.values!.slice(start,start+count),d=model.store?memoizedFullSupportDistribution(model.store,`${model.run.id}/${p.id}`,size,index,read):fullSupportDistributionFromSlices(size,index,read);
   return `<section class="pythia-distribution"><h3>Derived full-support distribution</h3><p>Stable softmax denominator includes all <strong>${d.size}</strong> observed logits through bounded scans. Top 5 is a bounded view and is not renormalized.</p><table data-testid="pythia-topk"><thead><tr><th>Output index</th><th>Observed logit</th><th>Derived probability</th></tr></thead><tbody>${d.top.map(row=>`<tr><td>${row.index}</td><td>${row.logit}</td><td>${row.probability}</td></tr>`).join('')}</tbody></table><p data-testid="pythia-omitted-mass">Omitted probability mass: ${d.omittedMass}</p><p data-testid="pythia-selected-output">Exact output index ${index}: observed logit ${d.selected.logit}; derived probability ${d.selected.probability}. ${label}.</p></section>`;
 }
 export function renderPythiaWorld(model:PythiaWorldModel,status:string,error:string,replay:boolean){

@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import profile from '../../research/witnesses/profile.json';
-import {EvidenceStore,parseEvidence,serializeEvidence,type EvidenceEnvelope,type EvidencePoint,type EvidenceRun} from '../../trace/evidence.js';
+import {EvidenceStore,IntegrationRegistry,parseEvidence,serializeEvidence,type EvidenceEnvelope,type EvidencePoint,type EvidenceRun} from '../../trace/evidence.js';
 import {integrations} from '../../trace/integrations.js';
 import {composeEvidenceFallback,groupedFallbackConfig,groupedMappingValue,opaqueFallbackConfig,renderEvidenceFallback,renderEvidenceFallbackScene,resolveEvidenceSelection,selectEvidencePoint,selectionForEvidencePoint,shapeFallbackConfig,type CoordinateMemory} from '../../app/spatial/evidence-fallback.js';
 import {evidenceWorldIntegration} from '../../app/spatial/integrations.js';
@@ -41,7 +41,7 @@ test('M2-C grouped query and KV coordinates remain distinct and use the observed
 
 test('M2-C coordinates survive only matching roles and coordinate spaces',async()=>{
   const {run}=await fixture('shape'),input=run.points[0]!,output=run.points[1]!,selection:WorldSelection={node:input.node,port:input.port,phase:input.phase,coordinates:{example:1,feature:2}};
-  const memory:CoordinateMemory={identity:'fixture:shape',values:new Map()};
+  const memory:CoordinateMemory={identity:'fixture:shape',values:new Map(),pointOffset:0,upstreamOffset:0,downstreamOffset:0,valueOffset:0};
   const compatible=selectionForEvidencePoint(output,input,selection,memory);assert.deepEqual(compatible.coordinates,{example:1,feature:2});
   const other={...output,axes:output.axes.map((axis,i)=>i===1?{...axis,space:'unrelated:feature'}:axis)} as EvidencePoint;
   const incompatible=selectionForEvidencePoint(other,input,selection,memory);assert.deepEqual(incompatible.coordinates,{example:1,feature:0});
@@ -52,7 +52,7 @@ test('M2-C shape-only world remains structural and renders no numerical glyph',a
   assert(run.points.every(p=>p.availability==='shape_only'&&p.values===null));assert(model.world.relationships.every(r=>r.kind==='structural'));
   assert(!renderEvidenceFallbackScene(model).includes('data-numerical-glyph'));
   selectEvidencePoint(run,selection,'unknown.custom',model.memory,shapeFallbackConfig);const html=renderEvidenceFallback(composeEvidenceFallback(run,envelope,selection,false,shapeFallbackConfig),'ready','',false);
-  assert.match(html,/Shape \[2, 5\]/);assert.match(html,/structural preview, not a forward execution/);assert.match(html,/values are null/);
+  assert.match(html,/Shape \[2, 5\]/);assert.match(html,/Only structural shape/);assert.doesNotMatch(html,/data-testid="fallback-values"/);
 });
 
 test('M2-C opaque boundary retains known input and output while unsupported detail refuses fabrication',async()=>{
@@ -60,7 +60,7 @@ test('M2-C opaque boundary retains known input and output while unsupported deta
   assert.deepEqual(run.points.find(p=>p.id==='input')!.values,[3,4]);assert.deepEqual(run.points.find(p=>p.id==='output')!.values,[5]);assert.equal(run.points.find(p=>p.id==='opaque.norm')!.values,null);
   assert(model.world.relationships.some(r=>r.kind==='evidence_boundary'&&r.from.node==='input'&&r.to.node==='opaque.norm'));
   selectEvidencePoint(run,selection,'unknown.scalar.explanation',model.memory,opaqueFallbackConfig);const html=renderEvidenceFallback(composeEvidenceFallback(run,envelope,selection,false,opaqueFallbackConfig),'ready','',false);
-  assert.match(html,/requested scalar explanation is unsupported/i);assert.match(html,/no internal arithmetic is registered/i);assert.doesNotMatch(html,/3\s*[×*²^]|4\s*[×*²^]|sqrt|square root/i);
+  assert.match(html,/does not support the requested evidence/i);assert.match(html,/no registered scalar explanation/i);assert.doesNotMatch(html,/3\s*[×*²^]|4\s*[×*²^]|sqrt|square root/i);
 });
 
 test('M2-C saved fixture replay composes without execution and fixture switching clears coordinates',async()=>{
@@ -71,8 +71,30 @@ test('M2-C saved fixture replay composes without execution and fixture switching
   assert.equal(saved.source.relationship,'REPLAY');assert.deepEqual(replayed.points,grouped.run.points);assert.equal(saved.run.request.action,'predict');
 });
 
-test('M2-C fallback bounds scene objects and discloses retained points beyond the scene',async()=>{
-  const grouped=await fixture('grouped'),points=Array.from({length:30},(_,i)=>({...grouped.run.points[0]!,id:`point.${i}`,node:`point.${i}`,shape:[],axes:[],values:[i],dependencies:[]})),run={...grouped.run,id:'fixture:bounded',definition:'fixture-bounded-v1',points} as EvidenceRun,envelope={version:1,codec:run.integration,record:run} as EvidenceEnvelope;
-  const model=composeEvidenceFallback(run,envelope,blank(),false,{label:'Bounded synthetic evidence'});assert.equal(model.displayed.length,24);assert.equal(model.hiddenCount,6);assert.equal(model.world.nodes.length,24);
-  const html=renderEvidenceFallback(model,'ready','',false);assert.match(html,/first 24 of 30 points/);assert.match(html,/6 additional points remain/);assert.match(html,/point\.29/);
+test('M4-C2 fallback bounds a 2048-point scene and moves the window to an exact retained point',async()=>{
+  const grouped=await fixture('grouped'),points=Array.from({length:2048},(_,i)=>({...grouped.run.points[0]!,id:`point.${i}`,node:`point.${i}`,shape:[],axes:[],values:[i],dependencies:i?[`point.${i-1}`]:[]})),run={...grouped.run,id:'fixture:bounded',definition:'fixture-bounded-v1',points} as EvidenceRun,envelope={version:1,codec:run.integration,record:run} as EvidenceEnvelope,selection=blank();
+  let model=composeEvidenceFallback(run,envelope,selection,false,{label:'Bounded synthetic evidence'});assert.equal(model.displayed.length,24);assert.equal(model.hiddenCount,2024);assert.equal(model.world.nodes.length,24);assert(model.world.relationships.length<=23);
+  assert(selectEvidencePoint(run,selection,'point.2039',model.memory,model.config));model=composeEvidenceFallback(run,envelope,selection,false,model.config);assert.equal(model.selected.id,'point.2039');assert(model.displayed.some(point=>point.id==='point.2039'));assert.equal(model.world.nodes.length,24);
+  const html=renderEvidenceFallback(model,'ready','',false);assert.match(html,/showing 2017–2040 of 2048 retained/);assert.match(html,/2024 retained points are outside/);assert.match(html,/point\.2039/);
+});
+
+test('M4-C2 generic fallback reads payload-backed evidence through bounded store slices',async()=>{
+  const values=Array.from({length:300},(_,index)=>index+0.25),point:EvidencePoint={id:'large',node:'generic.large',port:'output',invocation:'fixture:0',phase:'forward',shape:[300],axes:[{role:'feature',space:'generic:feature',size:300}],dtype:'float64',encoding:'json-numbers-row-major',values,origin:'observed',availability:'available',source:{file:'fixture.ts',symbol:'large',revision:'fixture'},owners:[],dependencies:[],semantics:'Generic payload-backed tensor.',capabilities:['slice','source']};
+  const run:EvidenceRun={version:1,id:'generic-payload',integration:'generic-test-v1',definition:'generic-test',checkpoint:'checkpoint',inputTransform:'identity',profile:'generic-test',runtime:'runtime',request:{version:1,integration:'generic-test-v1',profile:'generic-test',requestId:'request',sessionId:'session',epoch:0,action:'predict',input:'fixture'},execution:'native',precision:{storage:'float64',compute:'float64',policy:'exact fixture'},input:{text:'fixture',tokenIds:[1],labels:['fixture'],offsets:[[0,1]]},points:[point],limits:[]};
+  const registry=new IntegrationRegistry().register({id:'generic-test-v1',decode:async record=>record as EvidenceRun}),store=new EvidenceStore(registry),retained=await store.admit({version:1,codec:'generic-test-v1',record:run}),selection=blank();
+  assert.equal(retained.points[0]!.availability,'available');assert.equal(retained.points[0]!.values,null);assert(retained.points[0]!.payload);
+  let model=composeEvidenceFallback(retained,store.metadataEnvelope(retained.id),selection,true,{label:'Generic payload'},store);selection.coordinates.feature=299;model=composeEvidenceFallback(retained,store.metadataEnvelope(retained.id),selection,true,{label:'Generic payload'},store);
+  const html=renderEvidenceFallback(model,'ready','',true);assert.match(html,/Selected exact value 299\.25/);assert.match(html,/payload|AVAILABLE/);assert.match(html,/showing 285–300 of 300 retained elements/);assert.doesNotMatch(html,/DETAIL UNSUPPORTED|BUDGET EXCEEDED/);assert.equal((html.match(/<option/g)??[]).length,1,'large axis uses constant-DOM numeric input');
+});
+
+test('M4-C2 fallback bounds relationship DOM and preserves precise availability vocabulary',async()=>{
+  const grouped=await fixture('grouped'),source={...grouped.run.points[0]!,id:'source',node:'source',shape:[200000],axes:[{role:'output_index',space:'stress:index',size:200000}],values:Array(200000).fill(1),dependencies:[]} as EvidencePoint;
+  const states=['not_captured','not_applicable','unsupported','budget_exceeded','shape_only','opaque'] as const;
+  const consumers=Array.from({length:80},(_,i)=>({...grouped.run.points[0]!,id:`consumer.${i}`,node:`consumer.${i}`,shape:[],axes:[],values:[i],dependencies:['source']} as EvidencePoint));
+  const unavailable=states.map((availability,i)=>({...grouped.run.points[0]!,id:`state.${availability}`,node:`state.${availability}`,shape:[2],axes:[{role:'feature',space:'stress:feature',size:2}],values:null,availability,dependencies:[],semantics:`${availability} fixture`} as EvidencePoint));
+  const run={...grouped.run,id:'fixture:relationships',definition:'fixture-stress',points:[source,...consumers,...unavailable]} as EvidenceRun,envelope={version:1,codec:run.integration,record:run} as EvidenceEnvelope,selection=blank();
+  let model=composeEvidenceFallback(run,envelope,selection,false,{label:'Relationship stress'});assert(selectEvidencePoint(run,selection,'source',model.memory,model.config));model=composeEvidenceFallback(run,envelope,selection,false,model.config);let html=renderEvidenceFallback(model,'ready','',false);
+  assert.match(html,/showing 1–24 of 80 retained/);assert.equal((html.match(/consumer\.\d+ · available/g)??[]).length,24);assert.match(html,/type="number" min="0" max="199999"/);assert.equal((html.match(/<option/g)??[]).length,24,'only bounded operation options exist');
+  for(const availability of states){assert(selectEvidencePoint(run,selection,`state.${availability}`,model.memory,model.config));model=composeEvidenceFallback(run,envelope,selection,false,model.config);html=renderEvidenceFallback(model,'ready','',false);assert.match(html,new RegExp(availability.replaceAll('_',' ').toUpperCase()));assert.doesNotMatch(html,/Selected exact value 0/);}
+  assert(selectEvidencePoint(run,selection,'state.budget_exceeded',model.memory,model.config));html=renderEvidenceFallback(composeEvidenceFallback(run,envelope,selection,false,model.config),'ready','',false);assert.match(html,/capture budget prevented retention/i);assert.match(html,/zero is not substituted/i);
 });
