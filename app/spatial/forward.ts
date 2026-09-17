@@ -14,7 +14,7 @@ import { globalKinds, headKinds, layerKinds, microgptWorldDescriptor, parameterF
 export interface Address { kind:string; token:number; layer?:number; head?:number }
 export interface Dependency { address:Address; port:string; type:RelationshipKind }
 export interface Operation { kind:string; title:string; purpose:string; family:string; input?:string; parameter?:string }
-export interface SpatialArtifact { id:string; availability:string; values:readonly number[]|null; provenance?:string }
+export interface SpatialArtifact { id:string; kind?:string; availability:string; values:readonly number[]|null; provenance?:string }
 const linear:Record<string,string>={q:"preAttentionNorm",k:"preAttentionNorm",v:"preAttentionNorm",attentionProjection:"attentionOutput",mlpUp:"preMlpNorm",mlpDown:"mlpRelu",logits:"mlpResidual"};
 const norms:Record<string,string>={embeddingNorm:"embeddingSum",preAttentionNorm:"__prior",preMlpNorm:"attentionResidual"};
 export const operations:Operation[]=forwardStages.filter(([kind])=>kind!=="greedy").map(([kind,title,purpose])=>({kind,title,purpose,
@@ -112,8 +112,31 @@ export function composeForward(source:ForwardSource){
     const points=probabilities?probabilities.map((_,key)=>get("v",key)?.slice((address.head??0)*width,((address.head??0)+1)*width)):undefined,complete=points?.every(p=>p?.length===width),mixture=complete&&probabilities?affineMixture(points as number[][],probabilities):undefined;
     const selectedAblation=source.headAblation;
     const zeroed=address.kind==='headOutput'&&selectedAblation?.layer===address.layer&&selectedAblation?.head===address.head;
+    const preAblationArtifact=zeroed?source.artifact({kind:'headOutputBeforeAblation',token:address.token,layer:address.layer,head:address.head}):undefined;
+    const preAblationValues=preAblationArtifact?.availability==='available'?preAblationArtifact.values??undefined:undefined;
+    const preAblationObserved=indexValid&&preAblationValues?preAblationValues[element]:undefined;
+    const derivedReconstruction=mixture?.mixture?.[element];
+    let preAblationVerification:{status:'verified'|'mismatch'|'unavailable';diff?:number;tolerance?:number;message:string}|undefined=undefined;
+    if(zeroed){
+      if(preAblationObserved!==undefined&&derivedReconstruction!==undefined){
+        const diff=Math.abs(derivedReconstruction-preAblationObserved);
+        const tolerance=1e-30+1e-12*Math.abs(preAblationObserved);
+        const verified=diff<=tolerance;
+        preAblationVerification={
+          status:verified?'verified':'mismatch',
+          diff,
+          tolerance,
+          message:verified
+            ?(diff===0?'Verified exact match with observed pre-ablation artifact':`Verified match within canonical float64 policy (|Δ| = ${diff.toExponential(3)})`)
+            :`Verification failed: derived reconstruction differs from observed pre-ablation artifact (|Δ| = ${diff.toExponential(3)}, tolerance ${tolerance.toExponential(3)})`
+        };
+      }else{
+        preAblationVerification={status:'unavailable',message:'Actual pre-ablation observation is unavailable in this recording'};
+      }
+    }
     return {address,semanticAddress:semanticAddress(address),semanticId:semanticId(address),definition:operationDefinition,output,zeroed,headWidth:width,heads,artifact:artifact(address),indexValid,observed:indexValid?output?.[element]:undefined,inputs,parameter,parameterName,terms,
       maximum,scoreInputs,exponentials,denominator,meanSquare,normScale,pairs,fixedScale,before,derivative:!output||before===undefined?undefined:(before>0?1:activationKind==='mlpLeakyRelu'?0.01:0),probabilities,points,mixture,
+      preAblationArtifact,preAblationValues,preAblationObserved,derivedReconstruction,reconstructionProvenance:'DERIVED' as const,preAblationVerification,
       simplex:address.kind==="probabilities"&&output?.length===4?probabilitySimplex(output):undefined,lookupRow:address.kind==="tokenEmbedding"?input[address.token]:address.token,upstream:deps,downstream:downstream(address)};
   };
   return {descriptor,semanticNodes,input,targets:source.targets,vocabulary:topology.vocabulary,heads,width,layers,addresses,operations:modelOperations,activationKind,executionState,matrix:source.matrix,artifact,values,upstream,downstream,explain,semanticAddress,semanticId,

@@ -50,7 +50,7 @@ export function probabilitySimplex(probabilities: readonly number[]) {
     throw new Error("The four-class simplex requires an actual normalized probability vector");
   return {vertices:tetrahedron, point:[0,1,2].map(i=>probabilities.reduce((s,p,j)=>s+p*tetrahedron[j][i],0))};
 }
-/** Fixed orthographic view of 3D geometry; screen distances are not original distances. */
+/** Fixed oblique linear screen projection of 3D geometry. Screen geometry is a display transform where screen distances and angles may be distorted; original-space values and arithmetic remain authoritative. */
 export function project3(point: readonly number[]) { return [point[0] - .55*point[2], -point[1] + .35*point[2]] as const; }
 /** Accepted cividis-derived sequential ramp. Invalid probabilities stay unavailable. */
 export function probabilityColor(value: number | undefined): string {

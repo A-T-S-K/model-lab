@@ -126,6 +126,7 @@ function repeatedSceneSvg(f:ForwardModel,selected:Address,key:number,parameter:s
     <g class="tokens">${labels.map((label,i)=>`<g role="button" tabindex="0" data-world-token="${i}" aria-label="Position ${esc(label)}"><rect x="20" y="${345+i*56}" width="120" height="44"/><text class="token-label" x="28" y="${376+i*56}">${esc(label)}</text>${query===i?reticle(20,345+i*56,120,44):''}</g>`).join('')}</g>${edges.join('')}${all.map(field).join('')}${banks}
     <text class="training-label" x="850" y="${canvasHeight-25}">READ-ONLY QUALIFIED INFERENCE · unsupported training and optimizer actions are not routed</text></svg>`;
 }
+/** Fixed oblique linear screen projection of 3D tetrahedron coordinates. */
 export function simplexGlyph(vertices:readonly (readonly number[])[],point:readonly number[],ox:number,oy:number,scale:number,labels?:readonly string[]) {
   const ps=vertices.map(project3),p=project3(point),xy=(v:readonly number[])=>`${ox+v[0]*scale},${oy+v[1]*scale}`;
   return `<g class="simplex">${ps.flatMap((a,i)=>ps.slice(i+1).map(b=>`<path d="M${xy(a)} L${xy(b)}"/>`)).join("")}${ps.map((v,i)=>`<circle cx="${ox+v[0]*scale}" cy="${oy+v[1]*scale}" r="3"/><text x="${ox+v[0]*scale+5}" y="${oy+v[1]*scale-4}">${esc(labels?.[i]??String(i))}</text>`).join("")}<circle data-testid="simplex-point" data-coordinates="${point.join(",")}" cx="${ox+p[0]*scale}" cy="${oy+p[1]*scale}" r="5" class="barycenter"/></g>`;
