@@ -24,7 +24,7 @@ M3-B2 together engineering-qualify FP-06's executable activation and composite
 parameterized replacement scope. M3-C engineering-qualifies the bounded FP-08
 registered matched-data substitution, defense-control and external-correlation slice.
 The final integrated archive/lifecycle/change-surface pass is complete, so **M3 is
-COMPLETE — scoped engineering qualification**. **M4 is IN PROGRESS**: M4-A adds and
+COMPLETE — scoped engineering qualification**. **M4 is COMPLETE — scoped engineering qualification**: M4-A adds and
 engineering-qualifies bounded native Pythia generation and the explicitly uncached
 FP-09 profile; M4-B1 engineering-qualifies validated byte-backed numerical payload
 storage and bounded access; M4-B2 engineering-qualifies deterministic portable whole-
@@ -32,7 +32,8 @@ session archives; M4-C1 engineering-qualifies exact retained-footprint accountin
 pre-execution backpressure and bounded ephemeral-cache lifecycle; M4-C2 engineering-
 qualifies bounded presentation work; M4-D engineering-qualifies stable mutation identity,
 ambiguous acknowledgement handling and authoritative reconciliation with a simulated
-surviving authority. M4-E integrated qualification remains. Independent M5/foundation
+surviving authority; and M4-E engineering-qualifies candidate repairs MLR-01 and MLR-02,
+cross-slice witness sequences A–I, and integrated browser routes A–D. Independent M5/foundation
 disposition remains pending. See [authority](README.md).
 
 The [repaired first-M1 qualification](reviews/M1-repair-qualification.md) retains its
@@ -68,7 +69,7 @@ Each row is a status pointer, not a reduced acceptance definition.
 | FP-08 | [Matched data substitution and defense control](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | ENGINEERING-QUALIFIED within M3-C implementation scope: registered clean/treatment/defended matched training, exact lineage, retained triggered/control/clean evidence, deterministic allowlist policy records and explicit tamper-resistant external correlation passed; independent M5/foundation disposition pending |
 | FP-09 | [Repeated invocations and bounded generation/cache correctness](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | ENGINEERING-QUALIFIED for `pythia-14m-cpu-f32-eager-uncached-generation-v2`: prompt/generated occurrence, position, step, request and cancellation-epoch identities are separate; full-prefix `use_cache=False` execution, full-support argmax, invalidation, stale refusal and replay passed. No cache path is advertised and no cached/uncached equivalence claim is made; a future cached profile requires separate qualification and M5 review. |
 | FP-10 | [Legacy replay, export/import and representation-aware comparison](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | ENGINEERING-QUALIFIED within implemented scope: M1 legacy/new-codec replay, M4-B1 bounded byte-backed retention, and M4-B2 deterministic portable whole-session export/import preserve record, evidence and payload identities plus qualified comparisons/refusals; independent M5 review and later durability policy remain pending |
-| FP-11 | [Async, retention, transport and inert-import failure controls](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 affected receipt/stale/import/transport controls REQUALIFIED; M4-B1 payload integrity/bounded-fetch, M4-B2 bounded inert parsing/validation/tamper/atomic publication, M4-C1 exact durable accounting/reservations/cache lifecycle, M4-C2 bounded renderer/DOM work and truthful availability/presentation isolation, and M4-D stable operation/intent/state identities, expected-state preconditions, lost-acknowledgement `INDETERMINATE`, authoritative reconciliation, safe same-ID retry, duplicate suppression, conflict refusal and single publication ENGINEERING-QUALIFIED. M4-D uses a fault-injecting local surviving-authority contract, not a deployed remote backend; M4-E and independent M5 review remain pending. |
+| FP-11 | [Async, retention, transport and inert-import failure controls](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 affected receipt/stale/import/transport controls REQUALIFIED; M4-B1 payload integrity/bounded-fetch, M4-B2 bounded inert parsing/validation/tamper/atomic publication, M4-C1 exact durable accounting/reservations/cache lifecycle, M4-C2 bounded renderer/DOM work and truthful availability/presentation isolation, M4-D stable operation/intent/state identities, expected-state preconditions, lost-acknowledgement `INDETERMINATE`, authoritative reconciliation, safe same-ID retry, duplicate suppression, conflict refusal and single publication, and M4-E cross-boundary failure regressions and candidate repairs ENGINEERING-QUALIFIED. M4-D uses a fault-injecting local surviving-authority contract, not a deployed remote backend; M4-E integrated qualification passed; independent M5 review remains pending. |
 | FP-12 | [Shared visual/explanation routes and extension change surface](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#3-required-proof-matrix) | M1 same-inspector/source/fallback and integrated M2-A through M2-E world/interaction/change-surface work QUALIFIED; M4-C2 bounded shared navigation/fallback/Microscope routes ENGINEERING-QUALIFIED; independent M5 review pending |
 
 Native Pythia is a required real second transformer executing through the shared
@@ -87,7 +88,7 @@ and [native acceptance](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#4
 | M1 | [contracts, codecs, and dual producers early](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m1-contracts-codecs-and-dual-producers-early) | COMPLETE — scoped engineering qualification; no M2/M5 or full FP acceptance |
 | M2 | [topology, world, and interaction separation](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m2-topology-world-and-interaction-separation) | COMPLETE — scoped engineering qualification; canonical/multilayer MicroGPT, numeric MLP/SGD, grouped-axis/shape-only/opaque fallback, native Pythia and integrated interaction/change-surface qualification passed; no M3, M5 or full FP acceptance |
 | M3 | [variants and experiments](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m3-variants-and-experiments) | COMPLETE — scoped engineering qualification; registered interventions, actual activation/composite replacements, definition-aware variant state, matched data/security experiment, correlation and integrated lifecycle/change-surface qualification passed; no M4, M5 or full foundation acceptance |
-| M4 | [durable payloads and failure boundaries](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m4-durable-payloads-and-failure-boundaries) | IN PROGRESS — M4-A bounded native generation / FP-03 + FP-09 uncached slice, M4-B1 byte-backed numerical payload storage/bounded access, M4-B2 portable archives, M4-C1 bounded retention/backpressure/cache lifecycle, M4-C2 renderer/work/availability presentation and M4-D mutation reconciliation engineering-qualified; M4-E integrated qualification and closure pending |
+| M4 | [durable payloads and failure boundaries](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m4-durable-payloads-and-failure-boundaries) | COMPLETE — scoped engineering qualification; M4-A bounded native generation, M4-B1 payload store, M4-B2 portable archives, M4-C1 retained accounting/backpressure, M4-C2 presentation work/availability, M4-D mutation reconciliation, and M4-E candidate repairs/integrated qualification passed; no M5, M6 or full foundation acceptance |
 | M5 | [independent foundation review](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m5-independent-foundation-review) | NOT_RUN |
 | M6 | [full user testing, workshop, station, release](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#m6-full-user-testing-workshop-station-release) | NOT_RUN |
 
@@ -877,4 +878,29 @@ M4-B2 witness re-exported byte-identically.
 Exact schemas, state transitions, fault counts, commands, regressions and limitations are
 in the [M4-D qualification](reviews/M4-D-reconciliation-qualification.md). M4-D adds the
 implemented remote-transport reconciliation portion to FP-11 without claiming a durable
-service. The next dependency is **M4-E integrated M4 qualification and closure**.
+service.
+
+## M4-E integrated qualification and M4 closure
+
+**M4 is COMPLETE — scoped engineering qualification**. The candidate repairs MLR-01
+(fixed oblique linear screen projection terminology and display transform disclosures)
+and MLR-02 (explicit pre-ablation provenance breakdown separating OBSERVED pre-ablation
+artifacts from DERIVED Σ αV reconstructions under canonical float64 verification) were
+implemented and verified.
+
+Integrated qualification validated cross-slice sequences A through I, combining the
+reused M4 slice witnesses with focused cross-boundary regressions covering reservation
+invalidation upon archive replacement, portable roundtrip of M3 experiment receipts and
+comparison policies, availability state integrity across all 10 states, and mutation
+reconciliation. The test suite floor of 242/242 tests passed with zero skips and zero
+failures, accompanied by exact portable and canonical reference test passes and native
+Pythia qualification. Integrated browser qualification across Routes A, B, C, and D
+passed in 41.4s, capturing high-resolution (1920×1080) and reduced-motion (1280×720)
+evidence, with zero executor calls during capacity refusal and byte-identical archive
+roundtrip re-export.
+
+Exact schemas, test counts, browser routes, screenshots, and scope boundaries are in the
+[M4-E qualification](reviews/M4-integration-qualification.md). This closes the M4
+engineering gate. Full unfamiliar-user testing, workshop/station rehearsal, and release
+qualification remain gated behind the independent M5 review and M6. The next dependency
+is **M5 independent foundation review**.
