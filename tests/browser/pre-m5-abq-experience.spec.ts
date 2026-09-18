@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 
-const evidenceDir = process.env.PRE_M5_EVIDENCE_DIR ?? 'test-results/scratch/p0-r2-review-evidence-20260917-01';
+const evidenceDir = process.env.PRE_M5_EVIDENCE_DIR ?? 'test-results/scratch/p0-final-review-evidence-20260918-01';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -83,53 +83,68 @@ test('2. 5-stop short route traversal, primary actions, and detour resume', asyn
   await expect(page.getByTestId('status')).toContainText('Live prediction complete');
 
   // Stop 1: Prediction
+  await expect(page.locator('#short-resume')).toHaveCount(0);
   await expect(page.getByTestId('lesson-progress')).toContainText('Step 1 of 5 · Prediction');
+  await expect(page.getByTestId('route-purpose')).toContainText('What does the model predict comes next?');
   await expect(page.locator('#short-continue')).toContainText('Continue: Q/K scores');
   await page.screenshot({ path: `${evidenceDir}/02-prediction-1920.png` });
 
   // Advance to Stop 2: Q/K scores
   await page.locator('#short-continue').click();
+  await expect(page.locator('#short-resume')).toHaveCount(0);
   await expect(page.getByTestId('lesson-progress')).toContainText('Step 2 of 5 · Q/K scores');
+  await expect(page.getByTestId('route-purpose')).toContainText("Compare this position's query with allowed earlier keys");
   await expect(page.locator('#short-continue')).toContainText('Continue: Softmax');
   await expect(page.getByTestId('scene-construction')).toBeVisible();
   await expect(page.getByTestId('scene-construction')).toContainText('Attention scores');
+  await expect(page.locator('.construction-purpose')).toContainText("Compare this position's query with allowed earlier keys");
   await page.screenshot({ path: `${evidenceDir}/03-qk-1920.png` });
 
   // Advance to Stop 3: Softmax
   await page.locator('#short-continue').click();
+  await expect(page.locator('#short-resume')).toHaveCount(0);
   await expect(page.getByTestId('lesson-progress')).toContainText('Step 3 of 5 · Softmax');
+  await expect(page.getByTestId('route-purpose')).toContainText('Turn the causal scores into normalized attention weights');
   await expect(page.locator('#short-continue')).toContainText('Continue: Value mixture');
   await expect(page.getByTestId('scene-construction')).toContainText('Attention softmax');
+  await expect(page.locator('.construction-purpose')).toContainText('Turn the causal scores into normalized attention weights');
   await page.screenshot({ path: `${evidenceDir}/04-softmax-1920.png` });
 
   // Advance to Stop 4: Value mixture
   await page.locator('#short-continue').click();
+  await expect(page.locator('#short-resume')).toHaveCount(0);
   await expect(page.getByTestId('lesson-progress')).toContainText('Step 4 of 5 · Value mixture');
+  await expect(page.getByTestId('route-purpose')).toContainText('combine information from the allowed value vectors');
   await expect(page.locator('#short-continue')).toContainText('Continue: Residual');
   await expect(page.getByTestId('scene-construction')).toContainText('Weighted values');
+  await expect(page.locator('.construction-purpose')).toContainText('combine information from allowed value vectors');
   await page.screenshot({ path: `${evidenceDir}/05-value-mixture-1920.png` });
 
   // Advance to Stop 5: Residual
   await page.locator('#short-continue').click();
+  await expect(page.locator('#short-resume')).toHaveCount(0);
   await expect(page.getByTestId('lesson-progress')).toContainText('Step 5 of 5 · Residual');
+  await expect(page.getByTestId('route-purpose')).toContainText('Project the attention result and add it back to the saved residual stream');
   await expect(page.locator('#short-continue')).toHaveCount(0);
   await expect(page.locator('#short-teach')).toBeVisible();
   await expect(page.locator('#short-teach')).toContainText('Teach: step through learning');
   await expect(page.getByTestId('scene-construction')).toContainText(/residual/i);
+  await expect(page.locator('.construction-purpose')).toContainText('Project the attention result and add it back to the saved residual stream');
   await page.screenshot({ path: `${evidenceDir}/06-residual-1920.png` });
 
-  // Detour via Free Exploration
+  // Detour via Free Exploration: changing operation sets shortDetour = true
   await page.locator('#visitor-explore-toggle').click();
   await expect(page.locator('.spatial-selection')).toBeVisible();
   await page.locator('#spatial-operation').selectOption('mlpRelu');
   await expect(page.locator('.short-guide')).toContainText('Exploring a detour');
   await expect(page.locator('#short-resume')).toBeVisible();
-  await page.screenshot({ path: `${evidenceDir}/06b-detour-exploration.png` });
+  await page.screenshot({ path: `${evidenceDir}/14-detour-resume-1920.png` });
 
-  // Resume short route
+  // Resume short route: clears detour state, returns to stop 5, hides resume button
   await page.locator('#short-resume').click();
   await expect(page.getByTestId('lesson-progress')).toContainText('Step 5 of 5 · Residual');
   await expect(page.locator('.short-guide')).not.toContainText('Exploring a detour');
+  await expect(page.locator('#short-resume')).toHaveCount(0);
   await expect(page.getByTestId('scene-construction')).toContainText(/residual/i);
 });
 
@@ -151,12 +166,25 @@ test('3. Stepped training, candidate discard, and authority preservation', async
   await page.locator('#short-teach').click();
   await expect(page.locator('#execution-controls')).toBeVisible();
   await expect(page.locator('.spatial-shell')).toHaveAttribute('data-experience-profile', 'visitor');
+
+  // Verify learning bridge causal sequence and pinned parameter rationale (Outcome C)
+  await expect(page.getByTestId('learning-bridge')).toBeVisible();
+  await expect(page.getByTestId('learning-bridge')).toContainText('Predictions for known targets');
+  await expect(page.getByTestId('learning-bridge')).toContainText('losses combine into training objective');
+  await expect(page.getByTestId('learning-bridge')).toContainText('Backpropagation carries backward signal');
+  await expect(page.getByTestId('learning-bridge')).toContainText('Parameter uses produce gradient contributions');
+  await expect(page.getByTestId('learning-bridge')).toContainText('Contributions accumulate into final gradient');
+  await expect(page.getByTestId('learning-bridge')).toContainText('Adam uses final gradient for parameter proposal');
+  await expect(page.getByTestId('learning-bridge')).toContainText('Provisional candidate: Accept or Discard');
+  await expect(page.locator('.bridge-scope')).toContainText('We follow one selected parameter');
+
   await page.screenshot({ path: `${evidenceDir}/07-learning-entry-1920.png` });
 
   // Verify diagnostic stepping buttons are omitted in visitor profile
   await expect(page.locator('#execution-next')).toHaveCount(0);
   await expect(page.locator('#execution-pause')).toHaveCount(0);
   await expect(page.locator('#execution-follow')).toHaveCount(0);
+  await expect(page.locator('#execution-controls details')).toHaveCount(0);
 
   // Stepped controls permitted in visitor profile
   await expect(page.locator('#execution-continue')).toBeVisible();
@@ -306,7 +334,7 @@ test('5. Workbench profile preservation at /?presentation=spatial', async ({ pag
   await expect(page.locator('#step-learning')).toBeVisible();
   await expect(page.locator('#clear-session')).toContainText('Clear session');
 
-  await page.screenshot({ path: `${evidenceDir}/11-workbench-preserved.png` });
+  await page.screenshot({ path: `${evidenceDir}/workbench-preserved-1920.png` });
 });
 
 test('6. 44px minimum touch targets and keyboard accessibility across qualified viewports', async ({ page }) => {
@@ -433,7 +461,6 @@ test('6. 44px minimum touch targets and keyboard accessibility across qualified 
   await assertMin44('#execution-pin', '720p Visitor Execution Pin button');
   await assertMin44('#execution-continue', '720p Visitor Execution Continue button');
   await assertMin44('#execution-cancel', '720p Visitor Execution Cancel button');
-  await page.screenshot({ path: `${evidenceDir}/17-gradient-contribution-1280.png` });
 
   // Advance to Ready
   await page.locator('#execution-continue').click();
@@ -442,13 +469,11 @@ test('6. 44px minimum touch targets and keyboard accessibility across qualified 
   // Directly measure visitor execution controls at 1280x720 in Ready state
   await assertMin44('#execution-accept', '720p Visitor Execution Accept button');
   await assertMin44('#execution-cancel', '720p Visitor Discard Candidate button');
-  await page.screenshot({ path: `${evidenceDir}/18-candidate-ready-1280.png` });
 
   // Accept candidate update and verify settled state at 1280x720
   await page.locator('#execution-accept').click();
   await expect(page.locator('#execution-controls')).toHaveCount(0);
   await expect(page.getByTestId('status')).toContainText('Live update complete · training step 1');
-  await page.screenshot({ path: `${evidenceDir}/19-post-accept-1280.png` });
 
   // Reset session
   await page.locator('#clear-session').click();
@@ -456,38 +481,97 @@ test('6. 44px minimum touch targets and keyboard accessibility across qualified 
 });
 
 test('7. 1280x720 layout and reduced motion visual captures', async ({ page }) => {
+  test.setTimeout(180_000);
   await page.setViewportSize({ width: 1280, height: 720 });
+  await audit(page);
   await page.goto('/?presentation=spatial&kiosk=1');
   await expect(page.locator('#exhibit-start')).toBeEnabled();
 
-  await page.screenshot({ path: `${evidenceDir}/14-attract-1280.png` });
+  // 15: Attract screen at 1280x720
+  await page.screenshot({ path: `${evidenceDir}/15-attract-1280.png` });
+
+  // Start visitor route
   await page.locator('#exhibit-start').click();
   await expect(page.getByTestId('status')).toContainText('Live prediction complete');
-  await page.screenshot({ path: `${evidenceDir}/15-prediction-1280.png` });
 
-  // Traverse to stop 2 and verify scene construction fits
+  // 16: Prediction (Stop 1)
+  await page.screenshot({ path: `${evidenceDir}/16-prediction-1280.png` });
+
+  // 17: Scene math (Stop 2: Q/K scores)
   await page.locator('#short-continue').click();
   await expect(page.getByTestId('scene-construction')).toBeVisible();
   const box = await page.getByTestId('scene-construction').boundingBox();
   expect(box).not.toBeNull();
   expect(box!.height).toBeGreaterThanOrEqual(150);
   expect(box!.y + box!.height).toBeLessThanOrEqual(720);
-  await page.screenshot({ path: `${evidenceDir}/16-scene-math-1280.png` });
+  await page.screenshot({ path: `${evidenceDir}/17-scene-math-1280.png` });
 
-  // Check facilitator mode layout at 1280x720
+  // Advance to Stop 5: Residual
+  for (let i = 2; i < 5; i++) {
+    await page.locator('#short-continue').click();
+  }
+  await expect(page.locator('#short-teach')).toBeVisible();
+
+  // 18: Stepped learning entry at 1280x720 (showing learning bridge and pinned rationale)
+  await page.locator('#short-teach').click();
+  await expect(page.locator('#execution-controls')).toBeVisible();
+  await expect(page.getByTestId('learning-bridge')).toBeVisible();
+  const ctrlBox = await page.locator('#execution-controls').boundingBox();
+  expect(ctrlBox).not.toBeNull();
+  expect(ctrlBox!.y + ctrlBox!.height).toBeLessThanOrEqual(720);
+  await page.screenshot({ path: `${evidenceDir}/18-learning-entry-1280.png` });
+
+  // 19: Gradient contribution pinned/stopped
+  await page.locator('#execution-pin').click();
+  await expect(page.locator('#execution-continue')).toBeEnabled({ timeout: 60000 });
+  await expect(page.getByTestId('execution-frontier')).toContainText('stopped after matching backward node');
+  await expect(page.getByTestId('live-contribution')).toBeVisible();
+  await page.screenshot({ path: `${evidenceDir}/19-gradient-contribution-1280.png` });
+
+  // 20: Candidate ready
+  await page.locator('#execution-continue').click();
+  await expect(page.locator('#execution-controls')).toHaveAttribute('data-training-phase', 'ready', { timeout: 60000 });
+  await expect(page.locator('#execution-accept')).toBeVisible();
+  await page.screenshot({ path: `${evidenceDir}/20-candidate-ready-1280.png` });
+
+  // 21: Post-accept
+  await page.locator('#execution-accept').click();
+  await expect(page.locator('#execution-controls')).toHaveCount(0);
+  await expect(page.getByTestId('status')).toContainText('Live update complete · training step 1');
+  await page.screenshot({ path: `${evidenceDir}/21-post-accept-1280.png` });
+
+  // Reset and repeat stepped learning to discard
+  await page.locator('#clear-session').click();
+  await expect(page.locator('#exhibit-start')).toBeEnabled();
+  await page.locator('#exhibit-start').click();
+  await expect(page.getByTestId('status')).toContainText('Live prediction complete');
+  for (let i = 0; i < 4; i++) {
+    await page.locator('#short-continue').click();
+  }
+  await page.locator('#short-teach').click();
+  await expect(page.locator('#execution-controls')).toBeVisible();
+  await page.locator('#execution-pin').click();
+  await expect(page.locator('#execution-continue')).toBeEnabled({ timeout: 60000 });
+  await page.locator('#execution-continue').click();
+  await expect(page.locator('#execution-controls')).toHaveAttribute('data-training-phase', 'ready', { timeout: 60000 });
+
+  // 22: Post-discard
+  await page.locator('#execution-cancel').click();
+  await expect(page.locator('#execution-controls')).toHaveCount(0);
+  await expect(page.getByTestId('status')).toContainText('Execution cancelled · prior completed evidence preserved');
+  await page.screenshot({ path: `${evidenceDir}/22-post-discard-1280.png` });
+
+  // 23: Facilitator mode at 1280x720
   await page.locator('#operator-controls').click();
   await expect(page.getByTestId('facilitator-panel')).toBeVisible();
-  await page.locator('[data-short-stop="1"]').click();
-  await expect(page.getByTestId('scene-construction')).toBeVisible();
-  const fBox = await page.getByTestId('scene-construction').boundingBox();
-  expect(fBox).not.toBeNull();
-  expect(fBox!.height).toBeGreaterThanOrEqual(150);
-  expect(fBox!.y + fBox!.height).toBeLessThanOrEqual(720);
-  await page.screenshot({ path: `${evidenceDir}/20-facilitator-1280.png` });
+  const fPanel = await page.getByTestId('facilitator-panel').boundingBox();
+  expect(fPanel).not.toBeNull();
+  expect(fPanel!.y + fPanel!.height).toBeLessThanOrEqual(720);
+  await page.screenshot({ path: `${evidenceDir}/23-facilitator-1280.png` });
 
-  // Reduced motion visual capture
+  // 24: Reduced motion visual capture
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.screenshot({ path: `${evidenceDir}/21-reduced-motion-1280.png` });
+  await page.screenshot({ path: `${evidenceDir}/24-reduced-motion-1280.png` });
 
   // Write visual verification audit summary
   await writeFile(`${evidenceDir}/qualification-summary.json`, JSON.stringify({
