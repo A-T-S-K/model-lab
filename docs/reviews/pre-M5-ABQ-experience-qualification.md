@@ -6,7 +6,7 @@
 
 **Starting Source:** `3ac091d02b396e22712a4d02d78368d8c7467879` (tree: `b673f3a43d1093ac542f61e99cfde897e0b83d14`)
 
-**Qualified Implementation Commit:** `9fdf7ffbbb0ee7cacf88463083be3ec8d975f5bf`
+**Qualified Implementation Commit:** `7c3f21c52ef464e54e5cde27a362aaf6842c26ff` (following P0-R1 commit `9fdf7ffbbb0ee7cacf88463083be3ec8d975f5bf` and P0-R1a amendment `7c3f21c52ef464e54e5cde27a362aaf6842c26ff`)
 
 **Frozen M4 Authority Baseline:**
 - **Tag:** `foundation-v2-m4-qualified`
@@ -17,10 +17,17 @@
 - **Qualified M4-B2 Archive:** `13,285,363` bytes (`sha256:7cef8902cfd6489fe482ee314d8251de4e6eb263e5506df001a76ab20a7d7373`)
 
 **Stabilized Application Runtime:**
-- **Runtime Hash:** `sha256:1c10060fa68c3ec3ec4c8553a902754420e59d61dedac9c38bf2f164afdd5ab7` (128 runtime source files)
+- **Runtime Hash:** `sha256:02a387bcace02aff16d22e554ce8e9993c93ca562ac7989d361d047bfc228de7` (128 runtime source files)
 
 **Disposition:**
-`Pre-M5 ABQ Visitor Experience Stabilization = ENGINEERING-QUALIFIED`. This gate qualifies bounded presentation and kiosk walk-up stabilization on `pre-m5-abq-experience`. It establishes progressive disclosure, 3 distinct experience profiles (`visitor`, `facilitator`, `workbench`), persistent profile DOM identification, clean DOM control omissions in visitor mode, a 5-stop sequential short route with detour resumption, paced stepped training with explicit accept/discard choices, authoritative durable retention capacity wording, persistent facilitator idle reset opt-out across Public Reset, responsive 720p layout constraints, and 44px minimum touch targets across viewports. No model mathematics, autograd, optimizer schedules, evidence schemas, archive formats, or durability semantics were modified. Representative workbench regressions (`m3-d-integration.spec.ts`, `m4-b2-portable-archive.spec.ts`, `m4-e-integrated-browser.spec.ts`) pass without regression. Independent M5 foundation review, M6 workshop/release readiness, and full unfamiliar-user testing remain ungranted and NOT_RUN.
+```text
+P0-R1/R1a engineering closure = COMPLETE / ENGINEERING-QUALIFIED
+P0 final visual/product disposition = PENDING
+M5 = NOT_RUN
+M6 = NOT_RUN
+```
+
+Engineering closure is complete for the exact candidate. Promotion remains gated by the independent P0-R2 final visual/product disposition using the candidate-bound rendered evidence set. This gate qualifies bounded presentation and kiosk walk-up stabilization on `pre-m5-abq-experience`. It establishes progressive disclosure, 3 distinct experience profiles (`visitor`, `facilitator`, `workbench`), persistent profile DOM identification, clean DOM control omissions in visitor mode, a 5-stop sequential short route with detour resumption, paced stepped training with explicit accept/discard choices, authoritative durable retention capacity wording, operational eventSafety on links and drag-and-drop, operational configurableIdleReset gating facilitator opt-out controls, persistent facilitator idle reset opt-out across Public Reset, responsive 720p layout constraints, and directly measured 44px minimum touch targets across viewports (including visitor and facilitator execution controls). No model mathematics, autograd, optimizer schedules, evidence schemas, archive formats, or durability semantics were modified. Representative workbench regressions (`m3-d-integration.spec.ts`, `m4-b2-portable-archive.spec.ts`, `m4-e-integrated-browser.spec.ts` Routes A, B, and D) pass without regression. Independent M5 foundation review, M6 workshop/release readiness, and full unfamiliar-user testing remain ungranted and NOT_RUN.
 
 ---
 
@@ -95,11 +102,12 @@ Stepped training provides walk-up visitors with a calm, paced learning experienc
   - **Run to next gradient contribution** (`#execution-pin`) advances execution to the next matching backward node for the pinned parameter.
   - **Continue** (`#execution-continue`) executes through remaining forward/backward nodes to the candidate completion phase.
   - Diagnostic controls (`#execution-next`, `#execution-pause`, `#execution-follow`) are completely absent from the DOM in visitor mode.
+- **Truthful Guidance:** Stale learning guidance (`"Manual Next step remains available."`) was eliminated from visitor and facilitator stepped training guidance panels, preserving truthful disclosure since diagnostic stepping controls (`#execution-next`) are deliberately omitted.
 - **Explicit Candidate Decision:**
   - When the proposal reaches **Candidate ready — not accepted**, two unambiguous choices are presented:
     - **Accept update** (`#execution-accept`): Commits the candidate weights into the live accepted model.
     - **Discard candidate** (`#execution-cancel`): Dispatches a cancel command to the worker. The provisional candidate is discarded without updating the accepted model, restoring the prior execution view cleanly.
-  - Screenshots: `08-stepped-training-ready.png` (Candidate ready), `09-candidate-discarded.png` (Candidate discarded).
+  - Screenshots: `08-gradient-contribution-1920.png` (Pinned contribution), `09-candidate-ready-1920.png` (Candidate ready), `10-post-accept-1920.png` (Candidate accepted), `11-post-discard-1920.png` (Candidate discarded).
 
 ---
 
@@ -128,6 +136,9 @@ Walk-up kiosk safety requires strict inactivity resets, while live facilitator p
 
 - **State Separation:** Exhibit mode / event safety (`exhibitEntry`) is decoupled from the idle reset timer (`idleResetEnabled`).
 - **Facilitator Opt-Out:** Clicking **Disable idle reset · facilitated session** (`#exhibit-opt-out`) suspends the 300-second inactivity timer while keeping the kiosk safety boundary active (preventing link navigation and file drop).
+- **Capability Enforcement (`eventSafety` and `configurableIdleReset`):**
+  - `capabilities.eventSafety` is made operational on external link clicks (intercepting outbound navigation) and document dragover/drop handlers (preventing file drop onto the kiosk presentation).
+  - `capabilities.configurableIdleReset` operationally gates rendering of the `#exhibit-opt-out` button in `app/spatial/presenter.ts`, ensuring the opt-out affordance is only exposed when permitted by the active profile capabilities (`facilitator` and `workbench`, never unguided `visitor`).
 - **Persistence Across Public Reset:** When **Public Reset** (`#clear-session`) is invoked by a visitor, the session resets to the canonical baseline model and clears visitor history, **while preserving the facilitator's idle reset opt-out configuration**. The button remains in the opt-out state (`"Enable idle reset · 300 seconds"`) until explicitly toggled by an operator.
 - Verified in `abq-overnight.spec.ts` (`Q02 facilitated opt-out`) and `pre-m5-abq-experience.spec.ts` (Test 4).
 
@@ -142,16 +153,19 @@ The stabilized experience was qualified across 1920x1080 and 1280x720 viewports:
   - `.scene-construction` maintains a minimum height of 155px (exceeding the 150px floor) and strictly satisfies `y + height <= 720px` without vertical viewport overflow.
 - **Measured 44px Minimum Touch Targets:**
   - Verified across 1920x1080 and 1280x720 viewports in both visitor and facilitator modes.
+  - In addition to standard navigation buttons, direct measurements in 1280x720 explicitly verify visitor execution controls (`#execution-pin`, `#execution-continue`, `#execution-cancel`, `#execution-accept`) and facilitator execution controls satisfy `boundingBox.height >= 44px` across stopped and candidate-ready states.
   - All primary interactive elements (`#short-continue`, `#short-teach`, `#visitor-explore-toggle`, `#clear-session`, `#execution-pin`, `#execution-continue`, `#execution-cancel`, `#execution-accept`, `.facilitator-landmarks button`, `#operator-controls`, `#exhibit-opt-out`) satisfy `boundingBox.height >= 44px`.
 - **Keyboard & Motion Conformance:**
-  - Full keyboard accessibility via `Tab` and `Enter` verified. (Screenshot: `12-keyboard-accessible.png`)
-  - Reduced motion (`prefers-reduced-motion: reduce`) verified without animation stalls or camera jump artifacts. (Screenshots: `13-entry-1280.png`, `14-route-1280-reduced-motion.png`)
-- **Visual Review Disposition (`ENGINEERING VISUAL PASS`):**
-  - Engineering visual inspection confirms layout integrity, typography (Instrument Graphite / Plex), contrast, and 720p bounds without clipping. Full unfamiliar-user testing and human visual sign-off remain scheduled for M6 following M5 foundation acceptance.
+  - Full keyboard accessibility via `Tab` and `Enter` verified.
+  - Reduced motion (`prefers-reduced-motion: reduce`) verified without animation stalls or camera jump artifacts. (Screenshot: `21-reduced-motion-1280.png`)
+- **Visual Review Disposition (`ENGINEERING LAYOUT / RENDERING PASS` · `P0-R2 VISUAL / PRODUCT DISPOSITION PENDING`):**
+  - Engineering visual inspection confirms layout integrity, typography (Instrument Graphite / Plex), contrast, and 720p bounds without clipping, as well as measured 44px touch targets across viewports for all interactive controls (including visitor and facilitator stepped training execution controls). Full unfamiliar-user testing, visual hierarchy, spectator readability, teaching effectiveness, and human visual sign-off remain separated for the independent P0-R2 visual/product disposition and subsequent M6 qualification following M5 foundation acceptance.
 
 ---
 
 ## 8. Verification Results and Automated Conformance
+
+### Rerun successfully on the P0 exact candidate
 
 | Test Suite | Command | Result | Conformance Details |
 |---|---|---|---|
@@ -160,41 +174,56 @@ The stabilized experience was qualified across 1920x1080 and 1280x720 viewports:
 | **TypeScript Typecheck** | `npm run typecheck` | **PASS (0 errors)** | Full compilation clean; revision hash generated |
 | **Unit & Integration Suite** | `npm test` | **PASS (247/247)** | 247 passed, 0 skipped, 0 failures (with required witnesses and loopback permissions; 245 pass, 2 fail under standard sandbox due to loopback connect EPERM in `abq-launcher.test.mjs` and `runtime-identity.test.mjs`) |
 | **Reference Example** | `npm run example` | **PASS (exit 0)** | MicroGPT forward pass, loss, and 896 parameter updates exact |
-| **Production Build** | `npm run build` | **PASS (exit 0)** | Vite production bundle built in 166ms |
-| **ABQ Overnight Spec** | `playwright test tests/browser/abq-overnight.spec.ts` | **PASS (7/7)** | 7/7 tests passing in 1.6m covering Q01–Q08 overnight matrix, budget fixtures, and opt-out persistence |
-| **Pre-M5 Qualification Spec** | `playwright test tests/browser/pre-m5-abq-experience.spec.ts` | **PASS (8/8)** | 8/8 qualification tests passing in 1.8m covering DOM omissions, free explore, 5 stops, detour, Visitor Discard, Visitor Accept, facilitator opt-out, 44px touch targets, and 720p constraints |
-| **M3-D Integration Regression** | `playwright.slice.config.ts tests/browser/m3-d-integration.spec.ts` | **PASS (3/3)** | 3/3 tests passing in 15.5s verifying workbench experiment families, stale work cancellation, and canonical state return |
-| **M4-B2 Portable Archive Regression** | `playwright.slice.config.ts tests/browser/m4-b2-portable-archive.spec.ts` | **PASS (1/1)** | 1/1 test passing in 18.1s verifying mixed historical archive export, inert import, and tamper refusal |
-| **M4-E Integrated Browser Regression** | `playwright.slice.config.ts tests/browser/m4-e-integrated-browser.spec.ts` | **PASS (1/1)** | 1/1 test passing in 44.5s across Routes A, B, and D verifying canonical predictions, oblique projections, head ablation provenance, Pythia inspection, and stepped learning |
+| **Production Build** | `npm run build` | **PASS (exit 0)** | Vite production bundle built in 167ms |
+| **ABQ Overnight Spec** | `playwright test tests/browser/abq-overnight.spec.ts` | **PASS (7/7)** | 7/7 tests passing in 1.5m covering Q01–Q08 overnight matrix, budget fixtures, and opt-out persistence |
+| **Pre-M5 Qualification Spec** | `playwright test tests/browser/pre-m5-abq-experience.spec.ts` | **PASS (8/8)** | 8/8 qualification tests passing in 2.8m covering DOM omissions, free explore, 5 stops, detour, Visitor Discard, Visitor Accept, facilitator opt-out, 44px touch targets across 1080p and 720p (including visitor and facilitator execution controls), and 720p constraints |
+| **M3-D Integration Regression** | `playwright.slice.config.ts tests/browser/m3-d-integration.spec.ts` | **PASS (3/3)** | 3/3 tests passing in 14.1s verifying workbench experiment families, stale work cancellation, and canonical state return |
+| **M4-B2 Portable Archive Regression** | `playwright.slice.config.ts tests/browser/m4-b2-portable-archive.spec.ts` | **PASS (1/1)** | 1/1 test passing in 16.4s verifying mixed historical archive export, inert import, and tamper refusal |
+| **M4-E Integrated Browser Regression** | `playwright.slice.config.ts tests/browser/m4-e-integrated-browser.spec.ts` | **PASS (1/1)** | 1/1 test passing in 41.9s across Routes A, B, and D verifying canonical predictions, oblique projections, head ablation provenance, Pythia inspection, and stepped learning |
+
+### NOT RUN in P0-R1 / P0-R1a
+
+- **Exact M4-C1 Near-Limit Browser Regression:** `tests/browser/m4-c1-retention.spec.ts`
+- **M4-C2 Near-Limit Retained-Work Browser Regression:** `tests/browser/m4-c2-render-work.spec.ts`
+- **M4-E Route C (Capacity Refusal Near Limit):** Guarded in `tests/browser/m4-e-integrated-browser.spec.ts`
+- **Reason:** The exact previously qualified near-limit archive artifact (`15,246,474` bytes, `sha256:97cc5303b66d50130a8862b9e72f2b4428ce21b75c2e356eb2ffc247a2940cf8`) was not available locally. In strict accordance with Model Lab rules, no replacement witness was invented or approximated to manufacture a green test pass. M4's historical qualification remains attached to its original candidate and evidence; P0 changes did not modify retention, capacity, or archive semantics; and M5 remains responsible for its own independent foundation review.
 
 ---
 
 ## 9. Visual Evidence and Artifact Inventory
 
-All visual screenshots and machine-readable summaries were captured during the qualification run and archived under `test-results/scratch/pre-m5-evidence-20260917-08/`:
+All visual screenshots and machine-readable summaries were captured during the qualification run and archived under `test-results/scratch/p0-r2-review-evidence-20260917-01/`:
 
 | Artifact | Dimensions | Verification Scope |
 |---|---|---|
-| `01-visitor-dom-omissions.png` | 1920x1080 | Complete absence of shared inspector, archive, variant, and toolbar controls |
-| `02-stop1-prediction.png` | 1920x1080 | Stop 0 (Prediction): probability distribution and top token |
-| `03-stop2-scores.png` | 1920x1080 | Stop 1 (Q/K scores): query/key scores and projection arithmetic |
-| `04-stop3-softmax.png` | 1920x1080 | Stop 2 (Softmax): causal attention normalization and probabilities |
-| `05-stop4-mixture.png` | 1920x1080 | Stop 3 (Value mixture): attention-weighted value combination $\Sigma \alpha V$ |
-| `06-stop5-residual.png` | 1920x1080 | Stop 4 (Residual): output projection and residual addition with `#short-teach` |
-| `07-detour-exploration.png` | 1920x1080 | Detour detection and `#short-resume` button |
-| `08-stepped-training-ready.png` | 1920x1080 | Stepped learning candidate ready with Accept/Discard buttons |
-| `09-candidate-discarded.png` | 1920x1080 | Post-discard state restoring prior execution without updating accepted weights |
-| `10-facilitator-panel.png` | 1920x1080 | Facilitator panel with authoritative retention string and landmark buttons |
-| `11-workbench-preserved.png` | 1920x1080 | Workbench profile at `/?presentation=spatial` with all controls intact |
-| `12-keyboard-accessible.png` | 1920x1080 | Keyboard focus ring and activation on `#short-continue` |
-| `13-entry-1280.png` | 1280x720 | 720p entry layout with 44px touch targets |
-| `14-route-1280-reduced-motion.png` | 1280x720 | 720p 5-stop route under `prefers-reduced-motion: reduce` |
+| `01-attract-1920.png` | 1920x1080 | Attract mode / exhibit entry state |
+| `02-prediction-1920.png` | 1920x1080 | Stop 0 (Prediction): probability distribution and top token |
+| `03-qk-1920.png` | 1920x1080 | Stop 1 (Q/K scores): query/key scores and projection arithmetic |
+| `04-softmax-1920.png` | 1920x1080 | Stop 2 (Softmax): causal attention normalization and probabilities |
+| `05-value-mixture-1920.png` | 1920x1080 | Stop 3 (Value mixture): attention-weighted value combination $\Sigma \alpha V$ |
+| `06-residual-1920.png` | 1920x1080 | Stop 4 (Residual): output projection and residual addition with `#short-teach` |
+| `07-learning-entry-1920.png` | 1920x1080 | Stepped learning initial entry state |
+| `08-gradient-contribution-1920.png` | 1920x1080 | Stepped learning stopped at pinned parameter gradient contribution node |
+| `09-candidate-ready-1920.png` | 1920x1080 | Stepped learning candidate ready with Accept and Discard options |
+| `10-post-accept-1920.png` | 1920x1080 | Post-accept settled state showing training step 1 live update |
+| `11-post-discard-1920.png` | 1920x1080 | Post-discard state restoring prior execution without updating accepted weights |
+| `12-free-explore-1920.png` | 1920x1080 | Free explore mode enabled in visitor profile without workbench affordances |
+| `13-facilitator-1920.png` | 1920x1080 | Facilitator panel with authoritative retention string, landmarks, and idle reset toggle |
+| `14-attract-1280.png` | 1280x720 | Attract mode entry layout at 720p |
+| `15-prediction-1280.png` | 1280x720 | Stop 0 (Prediction) layout at 720p |
+| `16-scene-math-1280.png` | 1280x720 | Scene math construction layout at 720p |
+| `17-gradient-contribution-1280.png` | 1280x720 | Stopped gradient contribution state at 720p with 44px execution controls |
+| `18-candidate-ready-1280.png` | 1280x720 | Candidate ready state at 720p with 44px Accept and Discard controls |
+| `19-post-accept-1280.png` | 1280x720 | Post-accept settled state at 720p |
+| `20-facilitator-1280.png` | 1280x720 | Facilitator panel layout at 720p within viewport height bounds |
+| `21-reduced-motion-1280.png` | 1280x720 | Reduced motion route presentation at 720p |
 | `qualification-summary.json` | JSON | Machine-readable qualification descriptor and verified property list |
+| `review-manifest.json` | JSON | Untracked candidate binding manifest mapping screenshots to implementation commit |
 
 ---
 
 ## 10. Summary and Gate Closure Recommendation
 
-Pre-M5 ABQ Visitor Experience Stabilization achieves full stabilization of the walk-up visitor experience without altering Model Lab's foundational architecture, model math, or durability guarantees. All qualification criteria have been verified with zero regressions across the entire test suite.
+Pre-M5 ABQ Visitor Experience Stabilization achieves engineering qualification of the walk-up visitor experience without altering Model Lab's foundational architecture, model math, or durability guarantees. All qualification criteria have been verified with zero regressions across the representative test suite.
 
-The branch `pre-m5-abq-experience` is fully qualified and ready for integration. M5 independent foundation review and M6 release readiness remain the governing future milestones.
+Engineering closure is complete for the exact candidate. Promotion remains gated by the independent P0-R2 final visual/product disposition using the candidate-bound rendered evidence set. The branch `pre-m5-abq-experience` is not authorized for `foundation-v2` integration until P0-R2 review concludes. M5 independent foundation review and M6 release readiness remain ungranted and NOT_RUN.
