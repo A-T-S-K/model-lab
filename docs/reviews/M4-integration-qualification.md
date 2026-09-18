@@ -29,7 +29,9 @@
 ## 1. Candidate Repairs: MLR-01 and MLR-02
 
 ### MLR-01: Projection Terminology and Geometric Disclosures
-- **Defect:** Prior documentation and scene math labelled the 3D-to-2D projection in `project3` and `simplexGlyph` as "orthographic", which is mathematically inaccurate because the projection uses fixed oblique linear cabinet/cavalier axes ($x' = x + z \cos \theta$, $y' = y + z \sin \theta$) rather than orthogonal projection onto a principal plane.
+- **Defect:** Prior documentation and scene math labelled the 3D-to-2D projection in `project3` and `simplexGlyph` as "orthographic", which is mathematically inaccurate. The actual transform is a fixed oblique linear screen projection:
+  $$x' = x - 0.55z$$
+  $$y' = -y + 0.35z$$
 - **Repair:**
   - `app/spatial/geometry.ts`: Updated `project3` docstrings to explicitly state "Fixed oblique linear screen projection" and disclose that screen geometry is a display transform where screen distances and angles may be distorted, while original-space values and arithmetic remain authoritative.
   - `app/spatial/scene.ts`: Updated `simplexGlyph` docstrings and aria/rendered notes to state "Regular 3D tetrahedron, fixed oblique linear screen projection" along with the geometric transform disclosures.
@@ -39,7 +41,7 @@
 ### MLR-02: Pre-Ablation Provenance and Verification
 - **Defect:** In head ablation inspections, pre-ablation arithmetic conflated derived linear reconstructions ($\Sigma \alpha V$) with observed pre-ablation tensor artifacts, and lacked an explicit provenance breakdown.
 - **Repair:**
-  - `app/spatial/forward.ts`: `explain()` now resolves both the pre-ablation observed tensor artifact (`headOutputBeforeAblation`) from the baseline run and the derived reconstruction ($\Sigma \alpha V$). Provenance for $\Sigma \alpha V$ is explicitly declared as `DERIVED`, even when numerically verified against observed values. Verification uses the live canonical float64 policy:
+  - `app/spatial/forward.ts`: `explain()` resolves the pre-ablation observed tensor artifact (`headOutputBeforeAblation`), which is an OBSERVED artifact captured in the intervention run immediately before the declared zero replacement. The baseline run's ordinary `headOutput` provides an independent matched-arm value used to establish that the pre-intervention output agrees with baseline. Provenance for $\Sigma \alpha V$ is explicitly declared and retained as `DERIVED`, even when numerically verified against the OBSERVED `headOutputBeforeAblation` artifact. Verification uses the live canonical float64 policy:
     $$\Delta = |\text{reconstruction} - \text{observed}| \le 10^{-30} + 10^{-12} \times |\text{observed}|$$
     If the pre-ablation artifact is absent (e.g. historical partial recording), provenance gracefully reports `UNAVAILABLE` and indicates that pre-ablation observation is unavailable while derived reconstruction remains available as DERIVED evidence.
   - `app/spatial/inspector.ts`: Renders an explicit provenance table (`data-testid="pre-ablation-provenance"`) separating Attention probabilities (OBSERVED), V head vectors (OBSERVED), Derived $\Sigma \alpha V$ reconstruction (DERIVED), `headOutputBeforeAblation` (OBSERVED), and replacement-zero `headOutput` (OBSERVED treatment result), accompanied by the canonical verification note (`data-testid="pre-ablation-verification"`).
@@ -69,7 +71,7 @@ The candidate was qualified across cross-slice sequences without duplicating mon
 |---|---|---|---|
 | **Portable Reference** | `npm run test:reference` | **PASS (17/17)** | Strict numerical conformance, differing floats = 0, max abs/rel error = 0.0 |
 | **Canonical Reference** | `npm run test:reference:canonical` | **PASS (1/1)** | Byte-exact canonical regeneration against golden reference |
-| **Native Pythia Qualify** | `python3 native/pythia/qualify.py` | **PASS (1/1)** | Max error 0.0 against qualified Pythia-14M native weights |
+| **Native Pythia Qualify** | `NATIVE_EVIDENCE_DIR=test-results/scratch/m4e-native-qualify-20260917-03 research/pythia/.venv/bin/python research/pythia/qualify.py` | **PASS (1/1)** | Max error 0.0 against qualified Pythia-14M native weights |
 | **TypeScript Typecheck** | `npm run typecheck` | **PASS (0 errors)** | Pretypecheck generates revision matching candidate hash |
 | **Example Run** | `npm run example` | **PASS** | Canonical predictions, loss, and 896 parameter updates |
 | **Unit & Integration Suite** | `npm test` | **PASS (242/242)** | 0 failures, 0 skipped. Meets and exceeds candidate floor (236 candidate + 6 new tests) |
