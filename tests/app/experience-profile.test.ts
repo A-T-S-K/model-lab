@@ -39,11 +39,11 @@ test("visitor capabilities enforce safety and low-clutter disclosure", () => {
   assert.equal(visitor.configurableIdleReset, false, "visitor cannot configure idle reset");
 });
 
-test("visitor exploring freely reveals semantic and teaching navigation without enabling research", () => {
+test("visitor exploring freely reveals semantic navigation without enabling teaching selectors or research", () => {
   const exploring = experienceCapabilities("visitor", true);
   assert.equal(exploring.eventSafety, true, "event safety remains active");
   assert.equal(exploring.defaultSemanticSelectors, true, "semantic selectors become available");
-  assert.equal(exploring.teachingSelectors, true, "teaching selectors become available");
+  assert.equal(exploring.teachingSelectors, false, "teaching selectors must remain false during free explore");
   assert.equal(exploring.headAblation, true, "head ablation remains available");
 
   // Research and workbench affordances MUST stay false

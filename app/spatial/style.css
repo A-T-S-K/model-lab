@@ -247,7 +247,7 @@ body.spatial-mode { background:#0B0F12; color:#F2F5F7; font-family:Plex,sans-ser
 .spatial-attract .spatial-header>button:not(#clear-session),.spatial-attract .spatial-header>label { visibility:hidden; }
 @media(max-width:1400px) { .scene-construction { font-size:16px; padding:8px 10px; }.scene-construction .geometry { font-size:13px; }.construction-products { font-size:14px; }.exhibit-entry {font-size:16px;padding:10px 14px}.exhibit-entry h1{font-size:21px}.short-guide p{font-size:16px} }
 @media(max-width:850px) { .construction-columns {grid-template-columns:1fr}.exhibit-entry{flex-direction:column}.construction-handoff{flex-direction:column}.scene-construction{max-height:65%} }
-.visitor-controls>.learning-toolbar,.visitor-controls>.explanation { display:none; }
+.visitor-controls>.learning-toolbar,.visitor-controls>.explanation:not(.execution) { display:none; }
 .world-pane.has-construction>.spatial-world { flex:0 0 32%; min-height:100px; height:32%; }
 .has-construction .selection-card { flex-direction:row; font-size:12px; }
 .has-construction .selection-card strong {font-size:14px}
@@ -264,17 +264,42 @@ body.spatial-mode { background:#0B0F12; color:#F2F5F7; font-family:Plex,sans-ser
 .facilitator-panel { margin-top:8px; padding:10px 14px; background:#151d24; border:1px solid #3b454d; border-radius:3px; display:flex; flex-direction:column; gap:8px; }
 .facilitator-retention { color:#A7B2BC; font-size:13px; margin:0; font-family:PlexMono,monospace; }
 .facilitator-landmarks { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-.facilitator-landmarks button { min-height:36px; padding:5px 9px; font-size:12px; }
+.facilitator-landmarks button { min-height:44px; padding:5px 9px; font-size:12px; box-sizing:border-box; }
 @media(max-height:800px) {
   .world-pane.has-construction>.spatial-world { flex:0 0 14%; min-height:45px; height:14%; }
   .scene-construction { min-height:155px; }
   .facilitator-panel { padding:4px 8px; gap:2px; margin-top:2px; }
   .facilitator-landmarks { gap:4px; }
-  .facilitator-landmarks button { min-height:28px; padding:2px 6px; font-size:11px; }
+  .facilitator-landmarks button { min-height:44px; padding:2px 6px; font-size:11px; box-sizing:border-box; }
   .visitor-guide-bar { padding:2px 0; gap:4px; }
   .short-guide p { margin:2px 0; font-size:13px; }
   .spatial-status { padding:3px 12px; }
   .spatial-header { padding:4px 10px; }
+}
+[data-experience-profile="visitor"] button,
+[data-experience-profile="facilitator"] button {
+  box-sizing: border-box;
+}
+[data-experience-profile="visitor"] #exhibit-start,
+[data-experience-profile="visitor"] #clear-session,
+[data-experience-profile="visitor"] #short-continue,
+[data-experience-profile="visitor"] #short-teach,
+[data-experience-profile="visitor"] #visitor-explore-toggle,
+[data-experience-profile="visitor"] #short-resume,
+[data-experience-profile="visitor"] #operator-controls,
+[data-experience-profile="visitor"] #execution-controls button,
+[data-experience-profile="visitor"] #scene-construction,
+[data-experience-profile="facilitator"] #exhibit-start,
+[data-experience-profile="facilitator"] #clear-session,
+[data-experience-profile="facilitator"] #operator-controls,
+[data-experience-profile="facilitator"] #short-sample,
+[data-experience-profile="facilitator"] [data-short-stop],
+[data-experience-profile="facilitator"] #short-resume,
+[data-experience-profile="facilitator"] #exhibit-opt-out,
+[data-experience-profile="facilitator"] #execution-controls button,
+[data-experience-profile="facilitator"] #scene-construction {
+  min-height: 44px;
+  box-sizing: border-box;
 }
 body.spatial-mode #exhibit-warning { left:15%; right:15%; top:8px; font-size:16px; padding:8px 12px; }
 body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font-size:16px; }

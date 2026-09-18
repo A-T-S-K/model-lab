@@ -37,6 +37,9 @@ test('1. Visitor profile DOM omissions hide unneeded workbench controls', async 
   await page.locator('#exhibit-start').click();
   await expect(page.getByTestId('status')).toContainText('Live prediction complete');
 
+  // Verify persistent profile marker
+  await expect(page.locator('.spatial-shell')).toHaveAttribute('data-experience-profile', 'visitor');
+
   // DOM omissions check in visitor profile
   await expect(page.locator('#open-shared-inspector')).toHaveCount(0);
   await expect(page.locator('#presentation-toggle')).toHaveCount(0);
@@ -58,6 +61,16 @@ test('1. Visitor profile DOM omissions hide unneeded workbench controls', async 
   await expect(page.locator('#short-continue')).toBeVisible();
   await expect(page.locator('#visitor-explore-toggle')).toBeVisible();
   await expect(page.locator('#operator-controls')).toBeVisible();
+
+  // Free exploration reveals semantic selectors but preserves teaching/stepping omissions
+  await page.locator('#visitor-explore-toggle').click();
+  await expect(page.locator('.spatial-shell')).toHaveAttribute('data-experience-profile', 'visitor');
+  await expect(page.locator('.spatial-selection')).toBeVisible();
+  await expect(page.locator('.learning-toolbar')).toHaveCount(0);
+  await expect(page.locator('#step-prediction')).toHaveCount(0);
+  await expect(page.locator('#step-learning')).toHaveCount(0);
+  await expect(page.locator('#spatial-learn')).toHaveCount(0);
+  await page.locator('#visitor-explore-toggle').click();
 
   await page.screenshot({ path: `${evidenceDir}/01-visitor-dom-omissions.png` });
 });
@@ -137,6 +150,7 @@ test('3. Stepped training, candidate discard, and authority preservation', async
   // Launch stepped training from short route
   await page.locator('#short-teach').click();
   await expect(page.locator('#execution-controls')).toBeVisible();
+  await expect(page.locator('.spatial-shell')).toHaveAttribute('data-experience-profile', 'visitor');
 
   // Verify diagnostic stepping buttons are omitted in visitor profile
   await expect(page.locator('#execution-next')).toHaveCount(0);
@@ -163,14 +177,66 @@ test('3. Stepped training, candidate discard, and authority preservation', async
   await page.locator('#execution-cancel').click();
   await expect(page.locator('#execution-controls')).toHaveCount(0);
 
-  // Verify acceptTraining was NOT called and cancel command was sent
+  // Verify acceptTraining was NOT called, cancel command was sent, and optimizer step is unchanged
   const a = await page.evaluate(() => (window as any).abq);
   expect(a.commands.filter((c: any) => c.command === 'acceptTraining')).toHaveLength(0);
   expect(a.commands[a.commands.length - 1].command).toMatch(/cancel/i);
+  expect(a.lastReady?.state.optimizer.step ?? 0).toBe(0);
   await page.screenshot({ path: `${evidenceDir}/09-candidate-discarded.png` });
 });
 
-test('4. Facilitator panel, authoritative retention text, and opt-out persistence', async ({ page }) => {
+test('3b. Stepped training, candidate accept, live step advancement, and public reset restoration', async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await audit(page);
+  await page.goto('/?presentation=spatial&kiosk=1');
+  await page.locator('#exhibit-start').click();
+  await expect(page.getByTestId('status')).toContainText('Live prediction complete');
+
+  // Navigate to stop 5
+  for (let i = 0; i < 4; i++) {
+    await page.locator('#short-continue').click();
+  }
+  await expect(page.locator('#short-teach')).toBeVisible();
+
+  // Launch stepped training from short route
+  await page.locator('#short-teach').click();
+  await expect(page.locator('#execution-controls')).toBeVisible();
+  await expect(page.locator('.spatial-shell')).toHaveAttribute('data-experience-profile', 'visitor');
+
+  // Advance via pin to gradient contribution
+  await page.locator('#execution-pin').click();
+  await expect(page.getByTestId('execution-frontier')).toContainText('seeking pinned contribution');
+
+  // Advance to Candidate ready
+  await page.locator('#execution-continue').click();
+  await expect(page.locator('#execution-controls')).toHaveAttribute('data-training-phase', 'ready', { timeout: 60000 });
+  await expect(page.locator('#execution-accept')).toBeVisible();
+  await expect(page.locator('#execution-accept')).toBeEnabled();
+
+  // Accept candidate update
+  await page.locator('#execution-accept').click();
+  await expect(page.locator('#execution-controls')).toHaveCount(0);
+
+  // Verify exactly 1 acceptTraining command posted and trainingStep advanced to 1
+  const a = await page.evaluate(() => (window as any).abq);
+  const acceptCommands = a.commands.filter((c: any) => c.command === 'acceptTraining');
+  expect(acceptCommands).toHaveLength(1);
+  expect(a.lastResult?.trainingStep).toBe(1);
+
+  // Subsequent operation uses accepted model (training step 1)
+  await expect(page.getByTestId('status')).toContainText('Live update complete · training step 1');
+
+  // Public Reset restores baseline model and clears session
+  await page.locator('#clear-session').click();
+  await expect(page.locator('#exhibit-start')).toBeEnabled();
+  await page.locator('#exhibit-start').click();
+  await expect(page.getByTestId('status')).toContainText('Live prediction complete');
+  const a2 = await page.evaluate(() => (window as any).abq);
+  expect(a2.lastReady?.state.optimizer.step).toBe(0);
+});
+
+test('4. Facilitator panel, authoritative retention text, execution omissions, and opt-out persistence', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await audit(page);
   await page.goto('/?presentation=spatial&kiosk=1');
@@ -180,10 +246,24 @@ test('4. Facilitator panel, authoritative retention text, and opt-out persistenc
   // Open facilitator / operator controls
   await page.locator('#operator-controls').click();
   await expect(page.getByTestId('facilitator-panel')).toBeVisible();
+  await expect(page.locator('.spatial-shell')).toHaveAttribute('data-experience-profile', 'facilitator');
 
   // Authoritative retention text check
   const retentionText = await page.locator('.facilitator-retention').textContent();
   expect(retentionText).toMatch(/^\d+ retained runs · \d+(\.\d+)? MiB retained of 32 MiB durable archive limit; this is durable retained evidence capacity, not total page\/process memory\.$/);
+
+  // Verify facilitator stepped execution controls eliminate diagnostic leak
+  await page.locator('#step-learning').click();
+  await expect(page.locator('#execution-controls')).toBeVisible();
+  await expect(page.locator('#execution-next')).toHaveCount(0);
+  await expect(page.locator('#execution-pause')).toHaveCount(0);
+  await expect(page.locator('#execution-follow')).toHaveCount(0);
+  await expect(page.locator('#execution-controls details')).toHaveCount(0);
+  await expect(page.locator('#execution-continue')).toBeVisible();
+  await expect(page.locator('#execution-pin')).toBeVisible();
+  await expect(page.locator('#execution-cancel')).toBeVisible();
+  await page.locator('#execution-cancel').click();
+  await expect(page.locator('#execution-controls')).toHaveCount(0);
 
   // Toggle idle reset opt-out
   await expect(page.locator('#exhibit-opt-out')).toContainText('Disable idle reset · facilitated session');
@@ -208,6 +288,9 @@ test('5. Workbench profile preservation at /?presentation=spatial', async ({ pag
   await page.locator('#predict').click();
   await expect(page.getByTestId('status')).toContainText('Live prediction complete');
 
+  // Verify persistent profile marker
+  await expect(page.locator('.spatial-shell')).toHaveAttribute('data-experience-profile', 'workbench');
+
   // Workbench controls MUST be present
   await expect(page.locator('#open-shared-inspector')).toBeVisible();
   await expect(page.locator('#presentation-toggle')).toBeVisible();
@@ -220,36 +303,81 @@ test('5. Workbench profile preservation at /?presentation=spatial', async ({ pag
   await page.screenshot({ path: `${evidenceDir}/11-workbench-preserved.png` });
 });
 
-test('6. 44px minimum touch targets and keyboard accessibility', async ({ page }) => {
+test('6. 44px minimum touch targets and keyboard accessibility across qualified viewports', async ({ page }) => {
+  test.setTimeout(120_000);
+  async function assertMin44(selector: string, desc?: string) {
+    const el = page.locator(selector).first();
+    await expect(el).toBeVisible();
+    const box = await el.boundingBox();
+    expect(box, `Bounding box for ${selector}`).not.toBeNull();
+    expect(box!.height, `Height for ${desc ?? selector} must be >= 44px (got ${box!.height})`).toBeGreaterThanOrEqual(44);
+  }
+
+  // 1. 1920x1080 Visitor Mode
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto('/?presentation=spatial&kiosk=1');
-  await expect(page.locator('#exhibit-start')).toBeEnabled();
-
-  // Entry start button touch target
-  const startBox = await page.locator('#exhibit-start').boundingBox();
-  expect(startBox).not.toBeNull();
-  expect(startBox!.height).toBeGreaterThanOrEqual(44);
+  await assertMin44('#exhibit-start', 'Entry Start button');
 
   // Keyboard entry
   await page.locator('#exhibit-start').focus();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('status')).toContainText('Live prediction complete');
 
-  // Short route primary action touch target
-  await expect(page.locator('#short-continue')).toBeVisible();
-  const continueBox = await page.locator('#short-continue').boundingBox();
-  expect(continueBox).not.toBeNull();
-  expect(continueBox!.height).toBeGreaterThanOrEqual(44);
-
-  // Public reset touch target
-  const resetBox = await page.locator('#clear-session').boundingBox();
-  expect(resetBox).not.toBeNull();
-  expect(resetBox!.height).toBeGreaterThanOrEqual(44);
+  // Stop 1 visitor buttons
+  await assertMin44('#short-continue', 'Stop 1 Continue button');
+  await assertMin44('#visitor-explore-toggle', 'Visitor Explore Toggle');
+  await assertMin44('#operator-controls', 'Operator Controls button');
+  await assertMin44('#clear-session', 'Public Reset button');
+  await assertMin44('#scene-construction', 'Scene math toggle button');
 
   // Keyboard navigation through short route
   await page.locator('#short-continue').focus();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('lesson-progress')).toContainText('Step 2 of 5 · Q/K scores');
+
+  // Advance to stop 5
+  for (let i = 2; i < 5; i++) {
+    await page.locator('#short-continue').click();
+  }
+  await assertMin44('#short-teach', 'Teach button at Stop 5');
+
+  // Launch stepped training
+  await page.locator('#short-teach').click();
+  await expect(page.locator('#execution-controls')).toBeVisible();
+  await assertMin44('#execution-continue', 'Execution Continue button');
+  await assertMin44('#execution-pin', 'Execution Pin button');
+  await assertMin44('#execution-cancel', 'Execution Cancel button');
+
+  // Advance to Ready
+  await page.locator('#execution-pin').click();
+  await expect(page.getByTestId('execution-frontier')).toContainText('seeking pinned contribution');
+  await page.locator('#execution-continue').click();
+  await expect(page.locator('#execution-controls')).toHaveAttribute('data-training-phase', 'ready', { timeout: 60000 });
+  await assertMin44('#execution-accept', 'Execution Accept button');
+  await assertMin44('#execution-cancel', 'Discard Candidate button');
+  await page.locator('#execution-cancel').click();
+
+  // 2. Facilitator Mode touch targets (1920x1080)
+  await page.locator('#operator-controls').click();
+  await expect(page.getByTestId('facilitator-panel')).toBeVisible();
+  await assertMin44('#short-sample', 'Facilitator Sample button');
+  for (const stop of [0, 1, 2, 3, 4]) {
+    await assertMin44(`[data-short-stop="${stop}"]`, `Facilitator stop ${stop} button`);
+  }
+  await assertMin44('#exhibit-opt-out', 'Facilitator Idle Reset Opt-out button');
+
+  // 3. 1280x720 Viewport Touch Targets
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await assertMin44('#short-sample', '720p Facilitator Sample button');
+  await assertMin44('[data-short-stop="0"]', '720p Facilitator stop 0 button');
+  await assertMin44('#exhibit-opt-out', '720p Facilitator Opt-out button');
+  await assertMin44('#clear-session', '720p Public Reset button');
+
+  // Close operator controls and check visitor buttons in 1280x720
+  await page.locator('#operator-controls').click();
+  await assertMin44('#short-continue', '720p Visitor Continue button');
+  await assertMin44('#visitor-explore-toggle', '720p Visitor Explore Toggle');
+  await assertMin44('#scene-construction', '720p Scene math button');
 
   await page.screenshot({ path: `${evidenceDir}/12-keyboard-accessible.png` });
 });
@@ -272,6 +400,16 @@ test('7. 1280x720 layout and reduced motion visual captures', async ({ page }) =
   expect(box!.height).toBeGreaterThanOrEqual(150);
   expect(box!.y + box!.height).toBeLessThanOrEqual(720);
 
+  // Check facilitator mode layout at 1280x720
+  await page.locator('#operator-controls').click();
+  await expect(page.getByTestId('facilitator-panel')).toBeVisible();
+  await page.locator('[data-short-stop="1"]').click();
+  await expect(page.getByTestId('scene-construction')).toBeVisible();
+  const fBox = await page.getByTestId('scene-construction').boundingBox();
+  expect(fBox).not.toBeNull();
+  expect(fBox!.height).toBeGreaterThanOrEqual(150);
+  expect(fBox!.y + fBox!.height).toBeLessThanOrEqual(720);
+
   await page.screenshot({ path: `${evidenceDir}/14-route-1280-reduced-motion.png` });
 
   // Write visual verification audit summary
@@ -290,7 +428,9 @@ test('7. 1280x720 layout and reduced motion visual captures', async ({ page }) =
       '#step-learning',
       '#spatial-learn',
       '#execution-next',
+      '#execution-pause',
       '#execution-follow',
+      '#execution-controls details',
       'research variants'
     ],
     routeStopsVerified: 5,

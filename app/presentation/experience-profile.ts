@@ -30,7 +30,7 @@ export function experienceCapabilities(
         classicToggle: false,
         executionDiagnostics: false,
         defaultSemanticSelectors: exploringFreely,
-        teachingSelectors: exploringFreely,
+        teachingSelectors: false,
         headAblation: true,
         donorPatch: false,
         configurableIdleReset: false,
