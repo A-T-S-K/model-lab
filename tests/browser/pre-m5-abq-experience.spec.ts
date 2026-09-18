@@ -59,7 +59,10 @@ test('1. Visitor profile DOM omissions hide unneeded workbench controls', async 
   await expect(page.locator('#clear-session')).toContainText('Public Reset');
   await expect(page.locator('#spatial-home')).toBeVisible();
   await expect(page.getByTestId('lesson-progress')).toBeVisible();
+  await expect(page.getByTestId('lesson-progress')).toContainText('Prediction payoff');
+  await expect(page.getByTestId('lesson-progress')).not.toContainText('Step 1');
   await expect(page.locator('#short-continue')).toBeVisible();
+  await expect(page.locator('#short-continue')).toContainText('See how it got there');
   await expect(page.locator('#visitor-explore-toggle')).toBeVisible();
   await expect(page.locator('#operator-controls')).toBeVisible();
 
@@ -75,62 +78,129 @@ test('1. Visitor profile DOM omissions hide unneeded workbench controls', async 
   await page.locator('#visitor-explore-toggle').click();
 });
 
-test('2. 5-stop short route traversal, primary actions, and detour resume', async ({ page }) => {
+test('2. 5-stop causal forward spine traversal, primary actions, zero-execution guarantee, and detour resume', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await audit(page);
   await page.goto('/?presentation=spatial&kiosk=1');
   await page.locator('#exhibit-start').click();
   await expect(page.getByTestId('status')).toContainText('Live prediction complete');
 
-  // Stop 1: Prediction
+  // Payoff: Prediction Payoff (not Step 1)
   await expect(page.locator('#short-resume')).toHaveCount(0);
-  await expect(page.getByTestId('lesson-progress')).toContainText('Step 1 of 5 · Prediction');
+  await expect(page.getByTestId('lesson-progress')).toContainText('Prediction payoff');
+  await expect(page.getByTestId('lesson-progress')).not.toContainText('Step 1');
   await expect(page.getByTestId('route-purpose')).toContainText('What does the model predict comes next?');
-  await expect(page.locator('#short-continue')).toContainText('Continue: Q/K scores');
+  await expect(page.locator('#short-continue')).toContainText('See how it got there');
+  await expect(page.getByTestId('scene-construction')).toBeVisible();
+  await expect(page.getByTestId('scene-construction')).toContainText('Known target: a');
+  await expect(page.getByTestId('scene-construction')).toContainText('Highest-probability token: a');
   await page.screenshot({ path: `${evidenceDir}/02-prediction-1920.png` });
 
-  // Advance to Stop 2: Q/K scores
+  // Record command baseline: explanation navigation must NOT send any Worker commands
+  const initialCommands = await page.evaluate(() => (window as any).abq.commands.length);
+  const payoffRunId = await page.locator('[data-testid="landmark-occurrence"]').getAttribute('data-run-id');
+  expect(payoffRunId).toBeTruthy();
+
+  // Verify Payoff occurrence attributes
+  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-semantic-anchor', 'probabilities');
+  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-position', '3');
+  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-layer', '');
+
+  // Advance to Stop 1: REPRESENT (preAttentionNorm · p3 · L0)
   await page.locator('#short-continue').click();
   await expect(page.locator('#short-resume')).toHaveCount(0);
-  await expect(page.getByTestId('lesson-progress')).toContainText('Step 2 of 5 · Q/K scores');
-  await expect(page.getByTestId('route-purpose')).toContainText("Compare this position's query with allowed earlier keys");
-  await expect(page.locator('#short-continue')).toContainText('Continue: Softmax');
+  await expect(page.getByTestId('lesson-progress')).toContainText('Step 1 of 5 · REPRESENT');
+  await expect(page.getByTestId('route-purpose')).toContainText("Turn the token and its position into the model's working representation");
+  await expect(page.locator('#short-continue')).toContainText('Continue: MIX CONTEXT');
   await expect(page.getByTestId('scene-construction')).toBeVisible();
-  await expect(page.getByTestId('scene-construction')).toContainText('Attention scores');
-  await expect(page.locator('.construction-purpose')).toContainText("Compare this position's query with allowed earlier keys");
-  await page.screenshot({ path: `${evidenceDir}/03-qk-1920.png` });
+  // Occurrence verification
+  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-semantic-anchor', 'preAttentionNorm');
+  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-position', '3');
+  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-layer', '0');
+  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-run-id', payoffRunId!);
+  // Distinct normalizations check
+  await expect(page.getByTestId('scene-construction')).toContainText('embeddingNorm');
+  await expect(page.getByTestId('scene-construction')).toContainText('preAttentionNorm');
+  await expect(page.getByTestId('scene-construction')).toContainText('Two distinct normalizations are preserved');
+  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
+  await page.screenshot({ path: `${evidenceDir}/03-represent-1920.png` });
 
-  // Advance to Stop 3: Softmax
+  // Advance to Stop 2: MIX CONTEXT (attentionResidual · p3 · L0)
   await page.locator('#short-continue').click();
   await expect(page.locator('#short-resume')).toHaveCount(0);
-  await expect(page.getByTestId('lesson-progress')).toContainText('Step 3 of 5 · Softmax');
-  await expect(page.getByTestId('route-purpose')).toContainText('Turn the causal scores into normalized attention weights');
-  await expect(page.locator('#short-continue')).toContainText('Continue: Value mixture');
-  await expect(page.getByTestId('scene-construction')).toContainText('Attention softmax');
-  await expect(page.locator('.construction-purpose')).toContainText('Turn the causal scores into normalized attention weights');
-  await page.screenshot({ path: `${evidenceDir}/04-softmax-1920.png` });
+  await expect(page.getByTestId('lesson-progress')).toContainText('Step 2 of 5 · MIX CONTEXT');
+  await expect(page.getByTestId('route-purpose')).toContainText('Use causally available earlier information to update this position');
+  await expect(page.locator('#short-continue')).toContainText('Continue: TRANSFORM');
+  await expect(page.locator('#attention-drill-down')).toBeVisible();
+  await expect(page.locator('#attention-drill-down')).toContainText('How does attention work?');
+  await expect(page.getByTestId('scene-construction')).toBeVisible();
+  // Occurrence verification
+  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-semantic-anchor', 'attentionResidual');
+  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-position', '3');
+  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-layer', '0');
+  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-run-id', payoffRunId!);
+  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
+  await page.screenshot({ path: `${evidenceDir}/04-mix-context-1920.png` });
 
-  // Advance to Stop 4: Value mixture
+  // Advance to Stop 3: TRANSFORM (mlpResidual · p3 · L0)
   await page.locator('#short-continue').click();
   await expect(page.locator('#short-resume')).toHaveCount(0);
-  await expect(page.getByTestId('lesson-progress')).toContainText('Step 4 of 5 · Value mixture');
-  await expect(page.getByTestId('route-purpose')).toContainText('combine information from the allowed value vectors');
-  await expect(page.locator('#short-continue')).toContainText('Continue: Residual');
-  await expect(page.getByTestId('scene-construction')).toContainText('Weighted values');
-  await expect(page.locator('.construction-purpose')).toContainText('combine information from allowed value vectors');
-  await page.screenshot({ path: `${evidenceDir}/05-value-mixture-1920.png` });
+  await expect(page.getByTestId('lesson-progress')).toContainText('Step 3 of 5 · TRANSFORM');
+  await expect(page.getByTestId('route-purpose')).toContainText('Transform the context-enriched representation before scoring possible next tokens');
+  await expect(page.locator('#short-continue')).toContainText('Continue: SCORE');
+  await expect(page.getByTestId('scene-construction')).toBeVisible();
+  // Occurrence verification
+  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-semantic-anchor', 'mlpResidual');
+  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-position', '3');
+  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-layer', '0');
+  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-run-id', payoffRunId!);
+  // Canonical 5-op MLP pipeline check
+  await expect(page.getByTestId('scene-construction')).toContainText('preMlpNorm');
+  await expect(page.getByTestId('scene-construction')).toContainText('mlpUp');
+  await expect(page.getByTestId('scene-construction')).toContainText('ReLU');
+  await expect(page.getByTestId('scene-construction')).toContainText('mlpDown');
+  await expect(page.getByTestId('scene-construction')).toContainText('mlpResidual');
+  await expect(page.getByTestId('scene-construction')).toContainText('Canonical MLP pipeline');
+  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
+  await page.screenshot({ path: `${evidenceDir}/05-transform-1920.png` });
 
-  // Advance to Stop 5: Residual
+  // Advance to Stop 4: SCORE (logits · p3)
   await page.locator('#short-continue').click();
   await expect(page.locator('#short-resume')).toHaveCount(0);
-  await expect(page.getByTestId('lesson-progress')).toContainText('Step 5 of 5 · Residual');
-  await expect(page.getByTestId('route-purpose')).toContainText('Project the attention result and add it back to the saved residual stream');
+  await expect(page.getByTestId('lesson-progress')).toContainText('Step 4 of 5 · SCORE');
+  await expect(page.getByTestId('route-purpose')).toContainText('Give each possible next token a raw score');
+  await expect(page.locator('#short-continue')).toContainText('Continue: PREDICT');
+  await expect(page.getByTestId('scene-construction')).toBeVisible();
+  // Occurrence verification
+  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-semantic-anchor', 'logits');
+  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-position', '3');
+  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-layer', '');
+  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-run-id', payoffRunId!);
+  // Raw score vs probability distinction check
+  await expect(page.getByTestId('scene-construction')).toContainText('Raw unnormalized scores');
+  await expect(page.getByTestId('scene-construction')).toContainText('Raw token scores are unnormalized logits, not probabilities');
+  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
+  await page.screenshot({ path: `${evidenceDir}/06-score-1920.png` });
+
+  // Advance to Stop 5: PREDICT (probabilities · p3)
+  await page.locator('#short-continue').click();
+  await expect(page.locator('#short-resume')).toHaveCount(0);
+  await expect(page.getByTestId('lesson-progress')).toContainText('Step 5 of 5 · PREDICT');
+  await expect(page.getByTestId('route-purpose')).toContainText('Turn the raw token scores into a probability distribution');
   await expect(page.locator('#short-continue')).toHaveCount(0);
   await expect(page.locator('#short-teach')).toBeVisible();
   await expect(page.locator('#short-teach')).toContainText('Teach: step through learning');
-  await expect(page.getByTestId('scene-construction')).toContainText(/residual/i);
-  await expect(page.locator('.construction-purpose')).toContainText('Project the attention result and add it back to the saved residual stream');
-  await page.screenshot({ path: `${evidenceDir}/06-residual-1920.png` });
+  await expect(page.getByTestId('scene-construction')).toBeVisible();
+  // Occurrence verification
+  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-semantic-anchor', 'probabilities');
+  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-position', '3');
+  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-layer', '');
+  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-run-id', payoffRunId!);
+  // Endpoint identity matches payoff identity
+  await expect(page.getByTestId('scene-construction')).toContainText('Known target: a');
+  await expect(page.getByTestId('scene-construction')).toContainText('Highest-probability token: a');
+  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
+  await page.screenshot({ path: `${evidenceDir}/06b-predict-1920.png` });
 
   // Detour via Free Exploration: changing operation sets shortDetour = true
   await page.locator('#visitor-explore-toggle').click();
@@ -142,10 +212,75 @@ test('2. 5-stop short route traversal, primary actions, and detour resume', asyn
 
   // Resume short route: clears detour state, returns to stop 5, hides resume button
   await page.locator('#short-resume').click();
-  await expect(page.getByTestId('lesson-progress')).toContainText('Step 5 of 5 · Residual');
+  await expect(page.getByTestId('lesson-progress')).toContainText('Step 5 of 5 · PREDICT');
   await expect(page.locator('.short-guide')).not.toContainText('Exploring a detour');
   await expect(page.locator('#short-resume')).toHaveCount(0);
-  await expect(page.getByTestId('scene-construction')).toContainText(/residual/i);
+  await expect(page.getByTestId('scene-construction')).toContainText('Highest-probability token: a');
+  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
+});
+
+test('2b. Optional attention drill-down from MIX CONTEXT, zero-execution traversal, and route return', async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await audit(page);
+  await page.goto('/?presentation=spatial&kiosk=1');
+  await page.locator('#exhibit-start').click();
+  await expect(page.getByTestId('status')).toContainText('Live prediction complete');
+
+  // Advance to Stop 2: MIX CONTEXT
+  await page.locator('#short-continue').click(); // to Represent
+  await page.locator('#short-continue').click(); // to Mix Context
+  await expect(page.getByTestId('lesson-progress')).toContainText('Step 2 of 5 · MIX CONTEXT');
+  await expect(page.locator('#attention-drill-down')).toBeVisible();
+
+  const cmdBaseline = await page.evaluate(() => (window as any).abq.commands.length);
+
+  // Click drill-down: Enter attention sub-route
+  await page.locator('#attention-drill-down').click();
+  await expect(page.getByTestId('lesson-progress')).toContainText('Attention detail · Step 1 of 4 · Compare positions');
+  await expect(page.locator('#attention-return')).toBeVisible();
+  await expect(page.locator('#short-continue')).toContainText('Continue: Turn scores into normalized weights');
+  await expect(page.getByTestId('scene-construction')).toContainText('Attention scores');
+  await page.screenshot({ path: `${evidenceDir}/04b-attention-drilldown-1920.png` });
+  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(cmdBaseline);
+
+  // Advance substep 2: Softmax
+  await page.locator('#short-continue').click();
+  await expect(page.getByTestId('lesson-progress')).toContainText('Attention detail · Step 2 of 4 · Turn scores into normalized weights');
+  await expect(page.locator('#short-continue')).toContainText('Continue: Combine carried information');
+  await expect(page.getByTestId('scene-construction')).toContainText('Attention softmax');
+  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(cmdBaseline);
+
+  // Advance substep 3: Value mixture
+  await page.locator('#short-continue').click();
+  await expect(page.getByTestId('lesson-progress')).toContainText('Attention detail · Step 3 of 4 · Combine carried information');
+  await expect(page.locator('#short-continue')).toContainText('Continue: Combine/project and add it back');
+  await expect(page.getByTestId('scene-construction')).toContainText('Weighted values');
+  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(cmdBaseline);
+
+  // Advance substep 4: Residual
+  await page.locator('#short-continue').click();
+  await expect(page.getByTestId('lesson-progress')).toContainText('Attention detail · Step 4 of 4 · Combine/project and add it back');
+  await expect(page.locator('#short-continue')).toContainText('Return to Mix Context');
+  await expect(page.getByTestId('scene-construction')).toContainText('Project the attention result and add it back');
+  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(cmdBaseline);
+
+  // Return to Mix Context via continue button
+  await page.locator('#short-continue').click();
+  await expect(page.getByTestId('lesson-progress')).toContainText('Step 2 of 5 · MIX CONTEXT');
+  await expect(page.locator('#short-continue')).toContainText('Continue: TRANSFORM');
+  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(cmdBaseline);
+
+  // Also test Return button from drill-down
+  await page.locator('#attention-drill-down').click();
+  await expect(page.getByTestId('lesson-progress')).toContainText('Attention detail · Step 1 of 4');
+  await page.locator('#attention-return').click();
+  await expect(page.getByTestId('lesson-progress')).toContainText('Step 2 of 5 · MIX CONTEXT');
+  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(cmdBaseline);
+
+  // Continue to Stop 3: TRANSFORM without any re-execution
+  await page.locator('#short-continue').click();
+  await expect(page.getByTestId('lesson-progress')).toContainText('Step 3 of 5 · TRANSFORM');
+  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(cmdBaseline);
 });
 
 test('3. Stepped training, candidate discard, and authority preservation', async ({ page }) => {
@@ -157,7 +292,7 @@ test('3. Stepped training, candidate discard, and authority preservation', async
   await expect(page.getByTestId('status')).toContainText('Live prediction complete');
 
   // Navigate to stop 5
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 5; i++) {
     await page.locator('#short-continue').click();
   }
   await expect(page.locator('#short-teach')).toBeVisible();
@@ -227,7 +362,7 @@ test('3b. Stepped training, candidate accept, live step advancement, and public 
   await expect(page.getByTestId('status')).toContainText('Live prediction complete');
 
   // Navigate to stop 5
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 5; i++) {
     await page.locator('#short-continue').click();
   }
   await expect(page.locator('#short-teach')).toBeVisible();
@@ -357,8 +492,8 @@ test('6. 44px minimum touch targets and keyboard accessibility across qualified 
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('status')).toContainText('Live prediction complete');
 
-  // Stop 1 visitor buttons
-  await assertMin44('#short-continue', 'Stop 1 Continue button');
+  // Payoff visitor buttons
+  await assertMin44('#short-continue', 'Payoff Continue button');
   await assertMin44('#visitor-explore-toggle', 'Visitor Explore Toggle');
   await assertMin44('#operator-controls', 'Operator Controls button');
   await assertMin44('#clear-session', 'Public Reset button');
@@ -367,12 +502,23 @@ test('6. 44px minimum touch targets and keyboard accessibility across qualified 
   // Keyboard navigation through short route
   await page.locator('#short-continue').focus();
   await page.keyboard.press('Enter');
-  await expect(page.getByTestId('lesson-progress')).toContainText('Step 2 of 5 · Q/K scores');
+  await expect(page.getByTestId('lesson-progress')).toContainText('Step 1 of 5 · REPRESENT');
+
+  // Advance to stop 2 and verify attention drill-down touch targets
+  await page.locator('#short-continue').click();
+  await expect(page.getByTestId('lesson-progress')).toContainText('Step 2 of 5 · MIX CONTEXT');
+  await assertMin44('#attention-drill-down', 'Attention drill-down button');
+  await page.locator('#attention-drill-down').click();
+  await expect(page.getByTestId('lesson-progress')).toContainText('Attention detail · Step 1 of 4');
+  await assertMin44('#attention-return', 'Attention return button');
+  await page.locator('#attention-return').click();
+  await expect(page.getByTestId('lesson-progress')).toContainText('Step 2 of 5 · MIX CONTEXT');
 
   // Advance to stop 5
   for (let i = 2; i < 5; i++) {
     await page.locator('#short-continue').click();
   }
+  await expect(page.getByTestId('lesson-progress')).toContainText('Step 5 of 5 · PREDICT');
   await assertMin44('#short-teach', 'Teach button at Stop 5');
 
   // Launch stepped training
@@ -395,9 +541,10 @@ test('6. 44px minimum touch targets and keyboard accessibility across qualified 
   await page.locator('#operator-controls').click();
   await expect(page.getByTestId('facilitator-panel')).toBeVisible();
   await assertMin44('#short-sample', 'Facilitator Sample button');
-  for (const stop of [0, 1, 2, 3, 4]) {
+  for (const stop of [0, 1, 2, 3, 4, 5]) {
     await assertMin44(`[data-short-stop="${stop}"]`, `Facilitator stop ${stop} button`);
   }
+  await assertMin44('#facilitator-attention-detail', 'Facilitator attention detail button');
   await assertMin44('#exhibit-opt-out', 'Facilitator Idle Reset Opt-out button');
 
   // 3. 1280x720 Viewport Touch Targets: Facilitator Mode
@@ -430,16 +577,16 @@ test('6. 44px minimum touch targets and keyboard accessibility across qualified 
   await page.locator('#operator-controls').click();
   await expect(page.locator('.spatial-shell')).toHaveAttribute('data-experience-profile', 'visitor');
 
-  // Reset to entry to follow exact visitor sequence: Start → reach Residual → Teach
+  // Reset to entry to follow exact visitor sequence: Start → reach PREDICT (stop 5) → Teach
   await page.locator('#clear-session').click();
   await expect(page.locator('#exhibit-start')).toBeEnabled();
   await assertMin44('#exhibit-start', '720p Visitor Start button');
   await page.locator('#exhibit-start').click();
   await expect(page.getByTestId('status')).toContainText('Live prediction complete');
 
-  // Advance through 5 stops to Residual (stop 5)
-  for (let i = 0; i < 4; i++) {
-    await assertMin44('#short-continue', `720p Visitor Stop ${i + 1} Continue button`);
+  // Advance through 5 stops to PREDICT (stop 5)
+  for (let i = 0; i < 5; i++) {
+    await assertMin44('#short-continue', `720p Visitor Stop ${i} Continue button`);
     await page.locator('#short-continue').click();
   }
   await assertMin44('#short-teach', '720p Visitor Teach button at Stop 5');
@@ -494,10 +641,10 @@ test('7. 1280x720 layout and reduced motion visual captures', async ({ page }) =
   await page.locator('#exhibit-start').click();
   await expect(page.getByTestId('status')).toContainText('Live prediction complete');
 
-  // 16: Prediction (Stop 1)
+  // 16: Prediction (Payoff)
   await page.screenshot({ path: `${evidenceDir}/16-prediction-1280.png` });
 
-  // 17: Scene math (Stop 2: Q/K scores)
+  // 17: Scene math (Stop 1: REPRESENT)
   await page.locator('#short-continue').click();
   await expect(page.getByTestId('scene-construction')).toBeVisible();
   const box = await page.getByTestId('scene-construction').boundingBox();
@@ -506,8 +653,8 @@ test('7. 1280x720 layout and reduced motion visual captures', async ({ page }) =
   expect(box!.y + box!.height).toBeLessThanOrEqual(720);
   await page.screenshot({ path: `${evidenceDir}/17-scene-math-1280.png` });
 
-  // Advance to Stop 5: Residual
-  for (let i = 2; i < 5; i++) {
+  // Advance to Stop 5: PREDICT
+  for (let i = 1; i < 5; i++) {
     await page.locator('#short-continue').click();
   }
   await expect(page.locator('#short-teach')).toBeVisible();
@@ -545,7 +692,7 @@ test('7. 1280x720 layout and reduced motion visual captures', async ({ page }) =
   await expect(page.locator('#exhibit-start')).toBeEnabled();
   await page.locator('#exhibit-start').click();
   await expect(page.getByTestId('status')).toContainText('Live prediction complete');
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 5; i++) {
     await page.locator('#short-continue').click();
   }
   await page.locator('#short-teach').click();

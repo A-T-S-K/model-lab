@@ -16,21 +16,31 @@ import { forwardInspector, addressLabel } from "./inspector.js";
 import { escapeHtml as esc } from "../views/evidence.js";
 import { experienceCapabilities, type ExperienceProfile } from "../presentation/experience-profile.js";
 export const waypoints=["tokenEmbedding","positionEmbedding","embeddingSum","embeddingNorm","preAttentionNorm","q","k","v","attentionLogits","attentionProbabilities","headOutput","attentionOutput","attentionProjection","attentionResidual","preMlpNorm","mlpUp","mlpRelu","mlpDown","mlpResidual","logits","probabilities"];
-export interface RouteLandmark { readonly name: string; readonly purpose: string; }
-export const ROUTE_LANDMARKS: readonly RouteLandmark[] = [
-  { name: 'Prediction', purpose: 'What does the model predict comes next? Compare token probabilities with the known target.' },
-  { name: 'Q/K scores', purpose: "Compare this position's query with allowed earlier keys to produce attention scores." },
-  { name: 'Softmax', purpose: 'Turn the causal scores into normalized attention weights.' },
-  { name: 'Value mixture', purpose: "Use those attention weights to combine information from the allowed value vectors." },
-  { name: 'Residual', purpose: 'Project the attention result and add it back to the saved residual stream.' },
+export interface RouteLandmark { readonly name: string; readonly purpose: string; readonly kind: string; readonly layer?: number; }
+export const TOP_LEVEL_LANDMARKS: readonly RouteLandmark[] = [
+  { name: 'Prediction payoff', purpose: "What does the model predict comes next? Compare token probabilities with the known target. We already know the next character, so we can compare the model's prediction with the real answer.", kind: 'probabilities' },
+  { name: 'REPRESENT', purpose: "Turn the token and its position into the model's working representation and prepare it for attention.", kind: 'preAttentionNorm', layer: 0 },
+  { name: 'MIX CONTEXT', purpose: 'Use causally available earlier information to update this position.', kind: 'attentionResidual', layer: 0 },
+  { name: 'TRANSFORM', purpose: 'Transform the context-enriched representation before scoring possible next tokens.', kind: 'mlpResidual', layer: 0 },
+  { name: 'SCORE', purpose: 'Give each possible next token a raw score.', kind: 'logits' },
+  { name: 'PREDICT', purpose: 'Turn the raw token scores into a probability distribution.', kind: 'probabilities' },
 ];
+export interface AttentionSubstep { readonly name: string; readonly technical: string; readonly purpose: string; readonly kind: string; }
+export const ATTENTION_SUBSTEPS: readonly AttentionSubstep[] = [
+  { name: 'Compare positions', technical: 'Q/K scores', purpose: "Compare this position's query with allowed earlier keys to produce attention scores.", kind: 'attentionLogits' },
+  { name: 'Turn scores into normalized weights', technical: 'Softmax', purpose: 'Turn the causal scores into normalized attention weights across allowed earlier keys.', kind: 'attentionProbabilities' },
+  { name: 'Combine carried information', technical: 'Value mixture', purpose: "Use normalized attention weights to combine information from allowed value vectors into this head's output.", kind: 'headOutput' },
+  { name: 'Combine/project and add it back', technical: 'Residual', purpose: 'Project the attention result and add it back to the saved residual stream.', kind: 'attentionResidual' },
+];
+export const ROUTE_LANDMARKS: readonly RouteLandmark[] = TOP_LEVEL_LANDMARKS;
 interface Location {selection:MicrogptSelection;kind:string;element:number;parameter?:string;row:number;column:number;lens:boolean;learningStage?:LearningStage;box:CameraBox}
 export interface PresentationState {profile?:ExperienceProfile;idleResetEnabled?:boolean;idleResetSeconds?:number;retention?:{bytes:number;runs:number;snapshots:number;experiments:number;hardLimitBytes?:number};attract?:boolean;exhibit?:boolean;interventionPending?:boolean;inspectedArm?:string;intervention?:{snapshot:string;arm:string;summary:string;receipt?:{policy:string;donor:readonly number[];original:readonly number[];replacement:readonly number[];noOp:boolean}};patchDonor?:{head:number;token:number};comparison?:{before:ForwardModel;after:ForwardModel}; outputPair?:OutputPair; comparisonLabels?:[string,string]; execution?:ForwardDriver;document:string;busy:boolean;ready:boolean;status:string;error:string;scalar:string; learning?:LearningModel; experiments?:readonly {id:string;step:number}[]; experimentsWindow?:{offset:number;end:number;total:number;hasPrevious:boolean;hasNext:boolean}; experimentId?:string; liveStep?:number; canLearn?:boolean; evidenceWorld?:{label:string;replay:boolean}}
 export class SpatialPresenter {
   construction=false;
   operatorControls=false;
   freeExplore=false;
-  private shortStop=-1;
+  shortStop=-1;
+  attentionSubstep?:number;
   private shortSelection?:MicrogptSelection;
   private shortMessage="";
   private shortDetour=false;
@@ -42,7 +52,7 @@ export class SpatialPresenter {
     this.kind='attentionLogits'; this.element=0; this.parameter=undefined;
     this.row=0; this.column=0; this.pin={name:'wte',row:0,column:0};
     this.learningStage=undefined; this.lens=false; this.expanded=false;
-    this.operatorControls=false; this.construction=false; this.shortStop=-1; this.shortDetour=false; this.shortSelection=undefined; this.shortMessage="";
+    this.operatorControls=false; this.construction=false; this.shortStop=-1; this.attentionSubstep=undefined; this.shortDetour=false; this.shortSelection=undefined; this.shortMessage="";
     this.freeExplore=false;
   }
   startVisitorSample(){
@@ -51,9 +61,17 @@ export class SpatialPresenter {
     this.shortRoute(0);
   }
   private shortRoute(index:number){
-    const kinds=['probabilities','attentionLogits','attentionProbabilities','headOutput','attentionResidual'];
-    this.go({kind:kinds[index],token:this.selection.query,...(headKinds.has(kinds[index])?{head:this.selection.head}:{})});
+    this.attentionSubstep=undefined;
+    const landmark=TOP_LEVEL_LANDMARKS[index]??TOP_LEVEL_LANDMARKS[0];
+    this.go({kind:landmark.kind,token:this.selection.query,...(landmark.layer!==undefined?{layer:landmark.layer}:{}),...(headKinds.has(landmark.kind)?{head:this.selection.head}:{})});
     this.shortStop=index; this.shortSelection={...this.selection}; this.shortMessage=""; this.shortDetour=false; this.construction=true; this.lens=false;
+  }
+  private attentionRoute(substep:number){
+    this.shortStop=2;
+    this.attentionSubstep=substep;
+    const step=ATTENTION_SUBSTEPS[substep]??ATTENTION_SUBSTEPS[0];
+    this.go({kind:step.kind,token:this.selection.query,layer:0,...(headKinds.has(step.kind)?{head:this.selection.head}:{})});
+    this.shortSelection={...this.selection}; this.shortMessage=""; this.shortDetour=false; this.construction=true; this.lens=false;
   }
   private redraw=()=>{};
   private guideApply=()=>{};
@@ -90,7 +108,7 @@ export class SpatialPresenter {
     const root=document.querySelector('.spatial-shell'),button=root?.querySelector('#explanation-play');if(button)button.textContent='Play';
     root?.querySelectorAll('.explanation-active,.explanation-input,.explanation-link').forEach(el=>el.classList.remove('explanation-active','explanation-input','explanation-link'));
   }
-  invalidate(){this.shortStop=-1;this.shortDetour=false;this.shortSelection=undefined;this.shortMessage="";this.playback.invalidate();this.guided=false;this.detour=false;this.step=0;this.camera.stop();this.pendingBox=undefined;}
+  invalidate(){this.shortStop=-1;this.attentionSubstep=undefined;this.shortDetour=false;this.shortSelection=undefined;this.shortMessage="";this.playback.invalidate();this.guided=false;this.detour=false;this.step=0;this.camera.stop();this.pendingBox=undefined;}
   private guide(){
     if(!this.boundSelection)return;
     Object.assign(this.selection,this.boundSelection);
@@ -208,15 +226,48 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
     const hardLimitMiB = ((state.retention?.hardLimitBytes ?? 32 * 1024 * 1024) / 1048576).toFixed(0);
     const retainedMiB = ((state.retention?.bytes ?? 0) / 1048576).toFixed(1);
     const retentionWording = `${state.retention?.runs??0} retained runs · ${retainedMiB} MiB retained of ${hardLimitMiB} MiB durable archive limit; this is durable retained evidence capacity, not total page/process memory.`;
-    const landmarks = ROUTE_LANDMARKS;
+    const isAttn = this.attentionSubstep !== undefined;
+    const currSubstep = this.attentionSubstep ?? 0;
+    const currentAttnStep = ATTENTION_SUBSTEPS[currSubstep];
     const currStop = this.shortStop < 0 ? 0 : this.shortStop;
-    const currentLandmark = landmarks[currStop];
+    const currentLandmark = TOP_LEVEL_LANDMARKS[currStop];
+
+    let lessonProgress = "";
+    let routePurpose = "";
+    let primaryAction = "";
+    let attentionAction = "";
+
+    if (isAttn) {
+      lessonProgress = `Attention detail · Step ${currSubstep + 1} of 4 · ${currentAttnStep.name}`;
+      routePurpose = currentAttnStep.purpose;
+      if (currSubstep < 3) {
+        primaryAction = `<button id="short-continue" class="primary-action">Continue: ${ATTENTION_SUBSTEPS[currSubstep + 1].name}</button>`;
+      } else {
+        primaryAction = `<button id="short-continue" class="primary-action">Return to Mix Context</button>`;
+      }
+      attentionAction = `<button id="attention-return">Return to Mix Context</button>`;
+    } else if (currStop === 0) {
+      lessonProgress = `Prediction payoff`;
+      routePurpose = currentLandmark.purpose;
+      primaryAction = `<button id="short-continue" class="primary-action">See how it got there</button>`;
+    } else {
+      lessonProgress = `Step ${currStop} of 5 · ${currentLandmark.name}`;
+      routePurpose = currentLandmark.purpose;
+      if (currStop < 5) {
+        primaryAction = `<button id="short-continue" class="primary-action">Continue: ${TOP_LEVEL_LANDMARKS[currStop + 1].name}</button>`;
+        if (currStop === 2) {
+          attentionAction = `<button id="attention-drill-down" class="secondary-action">How does attention work?</button>`;
+        }
+      } else {
+        primaryAction = `<button id="short-teach" class="primary-action">Teach: step through learning</button>`;
+      }
+    }
     return `<div data-retention="${esc(JSON.stringify(state.retention))}" class="spatial-shell ${state.attract?"spatial-attract":""} ${isVisitor&&!this.operatorControls?"visitor-controls":""}" data-experience-profile="${profile}"><header class="spatial-header"><div class="world-brand"><strong>MODEL LAB</strong><small>${esc(m?.forward.descriptor.label??"one tiny transformer")} · one connected computation</small></div>${state.evidenceWorld?`<strong>${esc(state.evidenceWorld.label)}</strong><button id="return-canonical-world">Return to canonical world</button>`:isVisitor?`${this.freeExplore?`<label>Input<input id="document" type="text" maxlength="7" value="${esc(state.document)}" ${state.busy?"disabled":""}></label><button id="predict" ${state.busy||state.execution||!state.ready?"disabled":""}>Predict</button>`:""}<button id="clear-session">Public Reset</button>`:`<label>Input<input id="document" type="text" maxlength="7" value="${esc(state.document)}" ${state.busy?"disabled":""}></label><button id="predict" ${state.busy||state.execution||!state.ready?"disabled":""}>Predict</button>${state.execution?"":`<button id="step-prediction" ${state.busy||!state.ready?"disabled":""}>Step through prediction</button><button id="step-learning" ${state.busy||!state.ready?"disabled":""}>Step through learning</button>`}<button id="spatial-learn" ${state.canLearn?"":"disabled"}>Learn · one update</button>${capabilities.classicToggle?`<button id="presentation-toggle">Classic presentation</button>`:""}<button id="clear-session">${isVisitor||state.exhibit?'Public Reset':'Clear session'}</button>`}<button id="spatial-home">⌂ Home</button><button id="spatial-back" ${!this.history.length?"disabled":""}>← Back</button>${showDeeperControls?`<button id="spatial-focus">◎ Focus</button><button id="spatial-lens">Q/K lens</button>`:""}<span class="spatial-badge">${state.evidenceWorld?(state.evidenceWorld.replay?"SAVED REPLAY · NO EXECUTION":"RETAINED EVIDENCE · READ ONLY"):state.attract?"RECORDED RUN · REPLAY":state.execution?(state.execution.progress?.training?"LIVE TRAINING · WAVE 2B":"LIVE FORWARD · WAVE 2A"):"COMPLETED EVIDENCE · WAVE 1D"}</span></header>
-      <div class="spatial-status"><span role="status" data-testid="status">${esc(state.status.replace(/ · [a-f0-9-]{36}:.*$/, ""))}</span>${state.interventionPending?'<button id="cancel-ablation">Cancel intervention</button>':""}<span data-testid="spatial-relationship">${m?`${state.execution?'ACTIVE EXECUTION':m.source.relationship} · captured input ${esc(m.source.capturedDocument)}`:"NO SELECTED RUN"}</span></div>${state.error?`<p role="alert">${esc(state.error)}</p>`:""}${!m&&state.execution?this.controls():""}${state.attract?`<section class="exhibit-entry"><div><strong>RECORDED RUN · REPLAY</strong><h1>How does a tiny model choose what comes next?</h1><p>Recorded real run. Not live. Start to make a fresh prediction, then follow the numbers through attention.</p></div><button id="exhibit-start" ${state.ready&&!state.busy?'':'disabled'}>Start · explore a real prediction</button></section>`:m&&!state.execution&&!state.intervention&&!state.evidenceWorld?`<details class="short-guide" ${state.exhibit?'open':''}><summary>Short teaching route · prediction → attention → learning</summary><div class="short-guide-body">${isKiosk?`${!this.operatorControls?`<div class="visitor-guide-bar"><span class="lesson-progress" data-testid="lesson-progress">Step ${currStop+1} of 5 · ${currentLandmark.name}</span><span class="route-purpose" data-testid="route-purpose">${esc(currentLandmark.purpose)}</span>${currStop<4?`<button id="short-continue" class="primary-action">Continue: ${landmarks[currStop+1].name}</button>`:`<button id="short-teach" class="primary-action">Teach: step through learning</button>`}<button id="visitor-explore-toggle">${this.freeExplore?'Close free exploration':'Explore freely'}</button>${this.shortDetour?'<button id="short-resume">Resume short route</button>':''}<button id="operator-controls">Show operator controls</button></div>`:`<div class="facilitator-panel" data-testid="facilitator-panel"><p class="facilitator-retention">${retentionWording}</p><p class="route-purpose" data-testid="route-purpose"><strong style="color:#F2F5F7;">${currentLandmark.name}:</strong> ${esc(currentLandmark.purpose)}</p><nav class="facilitator-landmarks" aria-label="Short teaching route"><button id="operator-controls">Hide operator controls</button><button id="short-sample">Sample abca · q3 / h0 / k0</button><button data-short-stop="0">Prediction</button><button data-short-stop="1">Q/K scores</button><button data-short-stop="2">Softmax</button><button data-short-stop="3">Value mixture</button><button data-short-stop="4">Residual</button>${this.shortDetour?'<button id="short-resume">Resume short route</button>':''}${capabilities.configurableIdleReset?`<button id="exhibit-opt-out">${state.idleResetEnabled?"Disable idle reset · facilitated session":`Enable idle reset · ${state.idleResetSeconds} seconds`}</button>`:""}</nav></div>`}`:`${this.operatorControls?`<div class="facilitator-panel" data-testid="facilitator-panel"><p class="facilitator-retention">${retentionWording}</p><p class="route-purpose" data-testid="route-purpose"><strong style="color:#F2F5F7;">${currentLandmark.name}:</strong> ${esc(currentLandmark.purpose)}</p></div>`:""}<nav aria-label="Short teaching route"><button id="operator-controls">${this.operatorControls?"Hide":"Show"} operator controls</button><button id="short-sample">Sample abca · q3 / h0 / k0</button><button data-short-stop="0">Prediction</button><button data-short-stop="1">Q/K scores</button><button data-short-stop="2">Softmax</button><button data-short-stop="3">Value mixture</button><button data-short-stop="4">Residual</button>${this.shortDetour?'<button id="short-resume">Resume short route</button>':''}</nav>`}<p role="status">${esc(this.shortMessage)} ${this.shortDetour?'Exploring a detour. Resume explicitly to return. ':''}${currStop<1?"Teacher-forced prediction · selected position and known target; learning uses all positions.":"Follow the selected operands → calculation → result. Exact values and source remain available."}</p></div></details>`:''}
+      <div class="spatial-status"><span role="status" data-testid="status">${esc(state.status.replace(/ · [a-f0-9-]{36}:.*$/, ""))}</span>${state.interventionPending?'<button id="cancel-ablation">Cancel intervention</button>':""}<span data-testid="spatial-relationship">${m?`${state.execution?'ACTIVE EXECUTION':m.source.relationship} · captured input ${esc(m.source.capturedDocument)}`:"NO SELECTED RUN"}</span></div>${state.error?`<p role="alert">${esc(state.error)}</p>`:""}${!m&&state.execution?this.controls():""}${state.attract?`<section class="exhibit-entry"><div><strong>RECORDED RUN · REPLAY</strong><h1>How does a tiny model choose what comes next?</h1><p>Recorded real run. Not live. Start to make a fresh prediction, then follow the numbers through attention.</p></div><button id="exhibit-start" ${state.ready&&!state.busy?'':'disabled'}>Start · explore a real prediction</button></section>`:m&&!state.execution&&!state.intervention&&!state.evidenceWorld?`<details class="short-guide" ${state.exhibit?'open':''}><summary>Short teaching route · causal prediction explanation</summary><div class="short-guide-body">${isKiosk?`${!this.operatorControls?`<div class="visitor-guide-bar"><span class="lesson-progress" data-testid="lesson-progress">${esc(lessonProgress)}</span><span class="route-purpose" data-testid="route-purpose">${esc(routePurpose)}</span>${primaryAction}${attentionAction}<button id="visitor-explore-toggle">${this.freeExplore?'Close free exploration':'Explore freely'}</button>${this.shortDetour?'<button id="short-resume">Resume short route</button>':''}<button id="operator-controls">Show operator controls</button></div>`:`<div class="facilitator-panel" data-testid="facilitator-panel"><p class="facilitator-retention">${retentionWording}</p><p class="route-purpose" data-testid="route-purpose"><strong style="color:#F2F5F7;">${isAttn ? currentAttnStep.name : currentLandmark.name}:</strong> ${esc(isAttn ? currentAttnStep.purpose : currentLandmark.purpose)}</p><nav class="facilitator-landmarks" aria-label="Short teaching route"><button id="operator-controls">Hide operator controls</button><button id="short-sample">Sample abca · q3 / h0 / k0</button><button data-short-stop="0">Prediction</button><button data-short-stop="1">Represent</button><button data-short-stop="2">Mix Context</button><button data-short-stop="3">Transform</button><button data-short-stop="4">Score</button><button data-short-stop="5">Predict</button><button id="facilitator-attention-detail">Attention detail</button>${this.shortDetour?'<button id="short-resume">Resume short route</button>':''}${capabilities.configurableIdleReset?`<button id="exhibit-opt-out">${state.idleResetEnabled?"Disable idle reset · facilitated session":`Enable idle reset · ${state.idleResetSeconds} seconds`}</button>`:""}</nav></div>`}`:`${this.operatorControls?`<div class="facilitator-panel" data-testid="facilitator-panel"><p class="facilitator-retention">${retentionWording}</p><p class="route-purpose" data-testid="route-purpose"><strong style="color:#F2F5F7;">${isAttn ? currentAttnStep.name : currentLandmark.name}:</strong> ${esc(isAttn ? currentAttnStep.purpose : currentLandmark.purpose)}</p></div>`:""}<nav aria-label="Short teaching route"><button id="operator-controls">${this.operatorControls?"Hide":"Show"} operator controls</button><button id="short-sample">Sample abca · q3 / h0 / k0</button><button data-short-stop="0">Prediction</button><button data-short-stop="1">Represent</button><button data-short-stop="2">Mix Context</button><button data-short-stop="3">Transform</button><button data-short-stop="4">Score</button><button data-short-stop="5">Predict</button><button id="facilitator-attention-detail">Attention detail</button>${this.shortDetour?'<button id="short-resume">Resume short route</button>':''}</nav>`}<p role="status">${esc(this.shortMessage)} ${this.shortDetour?'Exploring a detour. Resume explicitly to return. ':''}${currStop<1?"Teacher-forced prediction · selected position and known target; learning uses all positions.":"Follow the selected operands → calculation → result. Exact values and source remain available."}</p></div></details>`:''}
       ${m?`${showDeeperControls?`<nav class="spatial-selection" aria-label="Semantic selection"><label>Layer<select id="spatial-layer">${options(Array.from({length:m.forward.layers},(_,i)=>`Layer ${i}`),s.layer)}</select></label><label>Position<select id="spatial-query">${options(m.labels,s.query)}</select></label><label>Head<select id="spatial-head">${options(m.heads.map(h=>`Head ${h.head}`),s.head)}</select></label><label>Key<select id="spatial-key">${options(m.labels,s.key)}</select></label><label>Q feature<select id="spatial-feature">${options(Array.from({length:m.width},(_,i)=>String(i)),s.feature)}</select></label><label>${state.execution?.progress?.training?"Forward selection":"Operation"}<select id="spatial-operation">${m.forward.operations.map(o=>`<option value="${o.kind}" ${o.kind===this.kind?"selected":""}>${esc(o.title)}</option>`).join("")}</select></label><span class="scope-note">Full semantic identity · run / node / port / layer / position / head</span></nav>`:""}
       ${capabilities.teachingSelectors && (capabilities.profile === 'workbench' || (state.experiments?.length ?? 0) > 0) ? `<nav ${state.execution||state.intervention||state.evidenceWorld?'hidden':''} class="learning-toolbar" aria-label="Learning transition"><strong>Live model step <span data-testid="spatial-live-step">${state.liveStep??0}</span></strong><span>Pinned ${esc(parameterLabel(this.pin))}</span><button id="learning-owner">Owner</button><label>Transition<select id="spatial-experiment"><option value="">Choose completed transition</option>${state.experiments?.map(e=>`<option value="${esc(e.id)}" ${e.id===state.experimentId?"selected":""}>Update ${e.step}</option>`).join("")??""}</select></label><button id="spatial-experiment-prev" ${state.experimentsWindow?.hasPrevious?'':'disabled'}>Previous transitions</button><button id="spatial-experiment-next" ${state.experimentsWindow?.hasNext?'':'disabled'}>Next transitions</button><span>${state.experimentsWindow?`showing ${state.experimentsWindow.total?state.experimentsWindow.offset+1:0}–${state.experimentsWindow.end} of ${state.experimentsWindow.total} retained transitions`:''}</span><button data-learning-phase="before">Before</button><button data-learning-phase="training">Training</button><button data-learning-phase="after">After</button><button ${state.intervention?'':'id="spatial-current"'}>Return to current model</button><button data-learning-stage="gradient">Contributions</button><button data-learning-stage="adam">Adam</button><button data-learning-stage="compare">Compare</button></nav>`:""}
       ${state.intervention?`<details class="comparison-playback"><summary>Explanation playback · completed evidence</summary>${this.controls()}</details>`:this.controls()}${state.intervention?`<div class="intervention-banner" data-testid="spatial-intervention">READ-ONLY · ${esc(state.intervention.arm)} · ${esc(state.intervention.summary)}. Same checkpoint <code title="${esc(state.intervention.snapshot)}">${esc(state.intervention.snapshot.slice(0,19))}…</code>. The comparison policy is matched intervention; recorded values remain observed evidence.${state.intervention.receipt?`<details data-testid="intervention-receipt"><summary>Donor / target receipt</summary><p>Policy: ${esc(state.intervention.receipt.policy)} · ${state.intervention.receipt.noOp?'truthful no-op':'numerical replacement observed'}</p><p>Donor [${state.intervention.receipt.donor.join(', ')}]<br>Original target [${state.intervention.receipt.original.join(', ')}]<br>Effective replacement [${state.intervention.receipt.replacement.join(', ')}]</p></details>`:''}</div>`:""}${pair?`<div class="decision-summary">${state.inspectedArm?`<small data-testid="inspected-arm">Inspecting ${esc(state.inspectedArm)}${state.comparison?" · paired map enabled":""}</small>`:""}${outputSummary(pair,s.query,labels)}<nav>${state.intervention?`<span>Accepted model step ${state.liveStep??0}</span><button id="spatial-current">Return to current model</button>`:""}<button data-compare-arm="before">Inspect ${labels[0].toLowerCase()}</button><button data-compare-arm="after">Inspect ${labels[1].toLowerCase()}</button><button data-compare-arm="pair">Shared-scale comparison</button></nav></div>`:""}<div class="world-workspace ${this.lens?"has-lens":""}"><div class="world-pane ${sceneOpen?"has-construction":""}">${sceneSvg(m.forward,a,s.key,this.learningStage?this.pin.name:this.parameter,m.labels,s.query,state.comparison??(this.learningStage==="compare"&&state.learning?.available?state.learning.comparison:undefined),state.execution?.progress?.training ? liveLearningScene(state.execution.progress.training,this.pin) : learningScene(state.learning,this.learningStage,this.pin),state.execution?.progress,this.element)}<div class="camera-controls"><button id="zoom-in" aria-label="Zoom in">+</button><button id="zoom-out" aria-label="Zoom out">−</button><button data-pan="-1,0" aria-label="Pan left">←</button><button data-pan="1,0" aria-label="Pan right">→</button><button data-pan="0,-1" aria-label="Pan up">↑</button><button data-pan="0,1" aria-label="Pan down">↓</button></div>
-      <div class="selection-card"><small>SELECTED WORLD OBJECT</small><strong data-testid="selected-world-object">${esc(label)}</strong><span>layer ${a.layer??'model'} · position ${a.token} · query ${s.query} / key ${s.key} · head ${s.head}</span><span>${state.comparison?`${labels[0]}: neutral. ${labels[1]}: cyan. Shared scale per pair.`:this.learningStage==="compare"?"Before: neutral. After: cyan. Shared scale per pair.":"Signed strips: independent scales. Q/K lens: shared scale."}</span><div class="selection-actions"><button id="open-spatial-detail">Values / arithmetic / source</button><button id="scene-construction">${this.construction?"Close scene math":"Scene math"}</button></div>${this.kind==="headOutput"&&!state.evidenceWorld?`${capabilities.headAblation?`<button id="spatial-ablate" ${state.execution||state.busy?"disabled":""}>Test without this head</button>`:""}${capabilities.donorPatch?`<button id="spatial-patch" ${state.execution||state.busy?"disabled":""}>Patch from observed donor</button>`:""}<small class="head-action-scope">${state.execution?"Finish/cancel execution or accept/discard candidate first.":`Selected checkpoint ${esc((m.source.sourceSnapshotId??"unavailable").slice(0,19))}… · ablation: all positions; patch target: p${s.query}/h${s.head}, donor: p${state.patchDonor?.token??0}/h${state.patchDonor?.head??0}; after aggregation / before concat.`}</small>`:""}${!m.valid?'<p role="alert">Selection unavailable in this run. Choose valid indices; prior evidence is not rebound.</p>':""}</div>
+      <div class="selection-card" data-landmark-anchor="${a.kind}" data-landmark-token="${a.token}" data-landmark-layer="${a.layer ?? ''}" data-landmark-run="${esc(m?.source.sourceRunId ?? '')}"><div data-testid="landmark-occurrence" data-semantic-anchor="${a.kind}" data-position="${a.token}" data-layer="${a.layer !== undefined ? a.layer : ''}" data-run-id="${esc(m?.source.sourceRunId ?? '')}" style="display:none;" aria-hidden="true"></div><small>SELECTED WORLD OBJECT</small><strong data-testid="selected-world-object" data-semantic-anchor="${a.kind}" data-position="${a.token}" data-layer="${a.layer ?? ''}" data-run-id="${esc(m?.source.sourceRunId ?? '')}">${esc(label)}</strong><span>layer ${a.layer??'model'} · position ${a.token} · query ${s.query} / key ${s.key} · head ${s.head}</span><span>${state.comparison?`${labels[0]}: neutral. ${labels[1]}: cyan. Shared scale per pair.`:this.learningStage==="compare"?"Before: neutral. After: cyan. Shared scale per pair.":"Signed strips: independent scales. Q/K lens: shared scale."}</span><div class="selection-actions"><button id="open-spatial-detail">Values / arithmetic / source</button><button id="scene-construction">${this.construction?"Close scene math":"Scene math"}</button></div>${this.kind==="headOutput"&&!state.evidenceWorld?`${capabilities.headAblation?`<button id="spatial-ablate" ${state.execution||state.busy?"disabled":""}>Test without this head</button>`:""}${capabilities.donorPatch?`<button id="spatial-patch" ${state.execution||state.busy?"disabled":""}>Patch from observed donor</button>`:""}<small class="head-action-scope">${state.execution?"Finish/cancel execution or accept/discard candidate first.":`Selected checkpoint ${esc((m.source.sourceSnapshotId??"unavailable").slice(0,19))}… · ablation: all positions; patch target: p${s.query}/h${s.head}, donor: p${state.patchDonor?.token??0}/h${state.patchDonor?.head??0}; after aggregation / before concat.`}</small>`:""}${!m.valid?'<p role="alert">Selection unavailable in this run. Choose valid indices; prior evidence is not rebound.</p>':""}</div>
       <svg class="world-minimap" viewBox="0 0 ${m.forward.descriptor.presentation==='microgpt-canonical-curated'?4500:1250+m.forward.layers*2500} ${m.forward.descriptor.presentation==='microgpt-canonical-curated'?1700:Math.max(1500,420+m.forward.heads*270)}" aria-label="Same world camera footprint"><path d="M100 600 H${m.forward.descriptor.presentation==='microgpt-canonical-curated'?4300:1050+m.forward.layers*2500}"/>${m.forward.operations.map((o)=>{const t=stationForWorld(m.forward,o.kind,s.head,s.layer);return `<rect x="${t.x}" y="${t.y}" width="100" height="160" class="${o.kind===this.kind?"selected":""}"/>`;}).join("")}<rect id="camera-footprint"/></svg>${sceneOpen?sceneConstruction(m,a,this.element,state.execution?.progress):""}</div>
       <svg class="context-tether" aria-hidden="true"><path id="context-tether-path"/></svg><aside class="context-lens" ${this.lens?"":"hidden"} data-selection="${esc(JSON.stringify([this.kind,a.token,a.head,this.parameter,this.learningStage,state.experimentId,m.source.sourceRunId]))}" aria-label="Contextual arithmetic lens">${this.learningStage&&state.execution?.progress?.training?liveLearningInspector(state.execution.progress.training,this.pin,state.scalar):this.learningStage?learningInspector(state.learning,this.learningStage,this.pin,a,state.scalar,this.expanded):forwardInspector(m,a,this.element,this.parameter,this.row,this.column,state.scalar,state.execution?.progress,sceneOpen).replace('<details open><summary>Calculation and complete values</summary>',`${state.comparison?componentComparison(state.comparison,a,labels):""}<details open><summary>Calculation and complete values</summary>`)}</aside></div>`:`<section class="spatial-empty"><h1>One model, a complete forward computation</h1><p>Enter a, b or c, then Predict. Explore its actual operations and their sources.</p></section>`}</div>`;
   }
@@ -237,13 +288,48 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
     const on=(id:string,fn:()=>void)=>root.querySelector(id)?.addEventListener("click",fn);
     const change=()=>{if(this.shortStop>=0)this.shortDetour=true;this.interrupt(true);if(this.parameter&&!this.learningStage)this.pin={name:this.parameter,row:this.row,column:this.column};changed();render();};
     on('#short-continue',()=>{
+      if (this.attentionSubstep !== undefined) {
+        const next = this.attentionSubstep + 1;
+        if (next < ATTENTION_SUBSTEPS.length) {
+          this.attentionRoute(next);
+        } else {
+          this.shortRoute(2);
+        }
+        changed();
+        render();
+        return;
+      }
       const next=(this.shortStop<0?0:this.shortStop)+1;
-      if(next<=4){this.shortRoute(next);changed();render();}
+      if(next<=5){this.shortRoute(next);changed();render();}
+    });
+    on('#attention-drill-down', () => {
+      this.attentionRoute(0);
+      changed();
+      render();
+    });
+    on('#attention-return', () => {
+      this.shortRoute(2);
+      changed();
+      render();
+    });
+    on('#facilitator-attention-detail', () => {
+      this.attentionRoute(0);
+      changed();
+      render();
     });
     on('#visitor-explore-toggle',()=>{this.freeExplore=!this.freeExplore;changed();render();});
     root.querySelectorAll<HTMLElement>('[data-short-stop]').forEach(el=>el.addEventListener('click',()=>{this.shortRoute(Number(el.dataset.shortStop));changed();render();}));
     on('#operator-controls',()=>{this.operatorControls=!this.operatorControls;render();});
-    on('#short-resume',()=>{if(this.shortSelection)Object.assign(this.selection,this.shortSelection);this.shortRoute(Math.max(0,this.shortStop));changed();render();});
+    on('#short-resume',()=>{
+      if(this.shortSelection)Object.assign(this.selection,this.shortSelection);
+      if(this.attentionSubstep !== undefined) {
+        this.attentionRoute(this.attentionSubstep);
+      } else {
+        this.shortRoute(Math.max(0,this.shortStop));
+      }
+      changed();
+      render();
+    });
     on('#short-sample',()=>{
       if(m?.source.capturedDocument!=='abca'){this.shortMessage='The sample selection needs an abca prediction. Enter abca and explicitly Predict first.';render();return;}
       Object.assign(this.selection,{query:3,key:0,head:0,feature:0});this.shortRoute(0);changed();render();
@@ -287,7 +373,7 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
       if(token<0||token>=m.forward.input.length){root.querySelector("#parameter-output")?.insertAdjacentHTML("afterend",'<p role="status">This lookup row has no occurrence in the selected run; checkpoint values remain available.</p>');return;}
       this.go({kind,token,...(owner?.layer===undefined?{}:{layer:owner.layer})});this.element=name==="wte"||name==="wpe"?this.column:this.row;change();
     });
-    root.addEventListener('click',event=>{const el=(event.target as Element).closest<HTMLElement>('button,[data-world-kind],[data-learning-stage]');if(el&&!el.id.startsWith('explanation-')&&!el.id.startsWith('waypoint-')&&!el.id.startsWith('short-')&&el.dataset.shortStop===undefined&&el.id!=='visitor-explore-toggle'&&el.id!=='operator-controls'&&el.id!=='scene-construction'&&el.id!=='open-spatial-detail'&&el.id!=='close-spatial-lens'&&el.id!=='spatial-focus'&&!el.id.startsWith('zoom-')&&el.dataset.pan===undefined){this.interrupt();const status=root.querySelector('[data-testid="explanation-status"]');if(status&&this.playback.source)status.textContent=`Explore detour · ${this.playback.cursor+1}/${this.playback.length}`;}},{capture:true});
+    root.addEventListener('click',event=>{const el=(event.target as Element).closest<HTMLElement>('button,[data-world-kind],[data-learning-stage]');if(el&&!el.id.startsWith('explanation-')&&!el.id.startsWith('waypoint-')&&!el.id.startsWith('short-')&&!el.id.startsWith('attention-')&&el.id!=='facilitator-attention-detail'&&el.dataset.shortStop===undefined&&el.id!=='visitor-explore-toggle'&&el.id!=='operator-controls'&&el.id!=='scene-construction'&&el.id!=='open-spatial-detail'&&el.id!=='close-spatial-lens'&&el.id!=='spatial-focus'&&!el.id.startsWith('zoom-')&&el.dataset.pan===undefined){this.interrupt();const status=root.querySelector('[data-testid="explanation-status"]');if(status&&this.playback.source)status.textContent=`Explore detour · ${this.playback.cursor+1}/${this.playback.length}`;}},{capture:true});
     root.querySelector('#explanation-route')?.addEventListener('change',event=>{this.invalidate();this.routeChoice=(event.target as HTMLSelectElement).value as 'forward'|'learning';render();});
     root.querySelector('#explanation-follow')?.addEventListener('change',event=>{this.playback.follow=(event.target as HTMLInputElement).checked;this.interrupt();render();});
     on('#explanation-play',()=>{if(this.playback.playing){this.playback.pause();render();}else{if(!this.playback.source)this.start();this.playback.play();}});
