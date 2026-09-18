@@ -35,7 +35,7 @@ ambiguous acknowledgement handling and authoritative reconciliation with a simul
 surviving authority; and M4-E engineering-qualifies candidate repairs MLR-01 and MLR-02,
 cross-slice witness sequences A–I, and integrated browser routes A–D. Independent M5/foundation
 disposition remains pending. See [authority](README.md). Pre-M5 ABQ Visitor Experience
-Stabilization: P0-R1 engineering closure complete; P0 final visual/product disposition pending (see [Pre-M5 qualification](reviews/pre-M5-ABQ-experience-qualification.md)). M5 independent foundation review and M6 workshop/release readiness remain NOT_RUN.
+Stabilization: P0-R3 bounded teaching-hierarchy repair candidate qualified (`2f23353ca388c12f0939683ef1833e0430b8df49`); P0 final visual/product disposition pending (see [Pre-M5 qualification](reviews/pre-M5-ABQ-experience-qualification.md)). M5 independent foundation review and M6 workshop/release readiness remain NOT_RUN.
 
 The [repaired first-M1 qualification](reviews/M1-repair-qualification.md) retains its
 original scope and identity. The original historical preservation failure remains
