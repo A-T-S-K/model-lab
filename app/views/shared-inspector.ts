@@ -25,6 +25,7 @@ export class SharedInspector {
   #runOffset=0;#pointOffset=0;#dependencyOffset=0;
   #action='predict';#endpoint='http://127.0.0.1:4319/execute';#input='The cat sat';#replay=false;#rendering=false;#operation=0;
   #retention?:SharedEvidenceRetention;#pendingRetention?:SharedEvidenceTransaction;
+  #allowOpen=true;
   constructor(){
     this.#root.addEventListener('keydown',event=>{
       if(event.key==='Escape'&&this.#open){this.#open=false;this.render();this.#root.querySelector<HTMLButtonElement>('button')?.focus();}
@@ -36,8 +37,10 @@ export class SharedInspector {
       }
     });
     this.#root.id='shared-inspector';document.body.append(this.#root);}
-  sync(store:EvidenceStore,liveId:string|undefined,canSwitch:boolean,onCanonical:()=>Promise<CanonicalReceipt>,onWorld?:(runId:string,replay:boolean)=>void,worldAvailability?:(runId:string)=>string|undefined,retention?:SharedEvidenceRetention){
+  sync(store:EvidenceStore,liveId:string|undefined,canSwitch:boolean,onCanonical:()=>Promise<CanonicalReceipt>,onWorld?:(runId:string,replay:boolean)=>void,worldAvailability?:(runId:string)=>string|undefined,retention?:SharedEvidenceRetention,allowOpen=true){
     this.#retention=retention;
+    this.#allowOpen=allowOpen;
+    if(!allowOpen&&this.#open){this.#open=false;}
     if(this.#store!==store){this.#operation++;this.#executors.cancel();this.#pendingRetention?.cancel();this.#pendingRetention=undefined;this.#store=store;this.#player=undefined;this.#offset=0;this.#runOffset=0;this.#pointOffset=0;this.#dependencyOffset=0;this.#replay=false;}
     if(!this.#open&&liveId&&store.list().some(r=>r.id===liveId)&&this.#executors.get(this.#selected).inputLocation==='world'&&this.#player?.runId!==liveId)this.select(liveId,false);
     this.#canSwitch=canSwitch;this.#canonical=onCanonical;this.#onWorld=onWorld;this.#worldAvailability=worldAvailability;this.render();
@@ -61,7 +64,9 @@ export class SharedInspector {
     const focusId=active?.id,focusPoint=active?.dataset.point;
     try {
     if(!this.#store)return;
-    if(!this.#open){this.#root.innerHTML='<button id="open-shared-inspector">Models & saved evidence</button>';this.#root.querySelector('button')!.onclick=()=>{this.#open=true;this.render();this.#root.querySelector<HTMLElement>('#shared-model')?.focus();};return;}
+    if(!this.#open){
+      if(!this.#allowOpen){this.#root.innerHTML='';return;}
+      this.#root.innerHTML='<button id="open-shared-inspector">Models & saved evidence</button>';this.#root.querySelector('button')!.onclick=()=>{this.#open=true;this.render();this.#root.querySelector<HTMLElement>('#shared-model')?.focus();};return;}
     const player=this.#player,p=player?.current,run=player?.run;
     const list=this.#store.list(),binding=this.#executors.get(this.#selected);
     const selectedRunIndex=run?list.findIndex(item=>item.id===run.id):-1,runWindow=presentationWindow(list,this.#runOffset,PRESENTATION_WORK.sharedRuns);

@@ -32,21 +32,37 @@ Open **http://127.0.0.1:4173/?presentation=spatial&kiosk=1**. If the port is occ
 
 Confirm the connected model and **RECORDED RUN · REPLAY / Recorded real run. Not live.** Start produces a fresh prediction through the same model owner. Idle presentation is static, so it needs no motion loop or recurring model commands. The recording is numerical evidence from this runtime, not a live execution claim.
 
+## Experience profiles and operator procedures
+
+Model Lab presents three distinct experience profiles:
+- **Visitor (`visitor`)**: Default walk-up kiosk profile activated via `/?presentation=spatial&kiosk=1`. Applies progressive disclosure over the continuous spatial world. Unneeded workbench controls are omitted from the DOM: Shared Inspector, classic presentation toggle, portable archive host / import / export, research variants, `.learning-toolbar`, `#spatial-patch`, raw execution stepping controls (`#step-prediction`, `#step-learning`, `#spatial-learn`), and diagnostics stepping controls (`#execution-next`, `#execution-pause`, `#execution-follow`). Primary navigation is driven by the 5-stop short route (`#short-continue` for stops 0–3, `#short-teach` for stop 4) with optional Free Exploration toggle and detour resumption. Touch targets maintain a 44px minimum height.
+- **Facilitator (`facilitator`)**: Revealed when the operator clicks **Show operator controls** (`#operator-controls`). Exposes the facilitator panel with teaching landmarks (`#short-sample` and direct stop selectors `0`–`4`), authoritative retention capacity status, idle reset opt-out toggle, and operator header controls.
+- **Workbench (`workbench`)**: Full engineering inspection Workbench profile accessed at `/?presentation=spatial` (without `kiosk=1`). Contains all research variants, shared inspector, export/import archive capabilities, learning transition toolbar, and full diagnostic stepping controls.
+
 ## Visitor and facilitated use
 
-**Start · explore a real prediction** → **Sample abca · q3 / h0 / k0** shows the chosen position, known target, highest-probability token and full distribution. Q/K scores → Softmax → Value mixture → Residual opens scene calculations. For another input, explicitly enter it and Predict; the sample control does not overwrite it. **Values / arithmetic / source** retains exact components, operands, consumers and source. Camera buttons, Home and Back are navigation only. On a 1280px display, collapse the Short teaching route disclosure after choosing a landmark to give the calculation more room, or scroll its local panel; reopen the route to choose another landmark.
+**Start · explore a real prediction** launches a fresh live prediction and opens the 5-stop Short teaching route:
+1. **Stop 1 · Prediction**: shows the chosen position, known target, top token and probability distribution.
+2. **Stop 2 · Q/K scores**: inspects query/key dot products and scaling.
+3. **Stop 3 · Softmax**: inspects causal attention softmax normalization.
+4. **Stop 4 · Value mixture**: inspects attention-weighted value combinations.
+5. **Stop 5 · Residual**: distinguishes concatenation, WO projection, and residual connection.
 
-**Step through learning** → **Run to next gradient contribution** is the untimed two-action route. Wait for the actual partial accumulator. Continue runs toward **Candidate ready — not accepted**. Compare Current/Candidate, then explicitly **Accept update** or **Discard candidate**. Lower loss on this example does not imply generalization. Never call an idle reset an acceptance decision.
+The primary action button advances sequentially: **Continue: [Next Landmark]** (`#short-continue`) for stops 1–4, and **Teach: step through learning** (`#short-teach`) at stop 5.
+Visitors can click **Explore freely** (`#visitor-explore-toggle`) to open full semantic selection, or take an operation detour. While on a detour, **Resume short route** (`#short-resume`) restores the route landmark and camera focus.
 
-At Weighted values, **Test without this head** runs matched disposable baseline/zeroed-head computations from the selected checkpoint. It does not train the accepted model. Use **Return to current model** afterward. A provisional candidate must first be explicitly accepted/discarded, or cancelled before Ready.
+When **Teach: step through learning** is clicked, the visitor steps through learning using paced controls: **Run to next gradient contribution** (`#execution-pin`) advances to the next matching backward node for the pinned parameter, and **Continue** (`#execution-continue`) runs to **Candidate ready — not accepted**. At Ready, the visitor decides explicitly: **Accept update** (`#execution-accept`) or **Discard candidate** (`#execution-cancel`). Diagnostic stepping buttons (`#execution-next`, `#execution-pause`, `#execution-follow`) are omitted in visitor mode.
 
-## Reset and recovery
+## Reset, retention, and recovery
 
-**Clear session** is the public reset: canonical model, empty visitor history, no pending candidate or inspector, valid default selection and Home camera. The next visitor sees the retained idle recording. Reset deliberately clears a previously accepted visitor update as station policy; it does not relabel its acceptance receipt as discarded.
+**Public Reset** (`#clear-session`) is the visitor reset action: resets to canonical baseline model, clears visitor history, cancels active candidate/intervention, and returns to the initial exhibit entry. Crucially, **Public Reset preserves facilitator configuration**: if the facilitator clicked **Disable idle reset · facilitated session**, the opt-out remains active across resets until explicitly re-enabled.
 
-Initial field-test idle timing is **300 seconds**, with a **20-second warning**. **Keep this session** renews activity. Pointer, touch, keyboard and wheel count as activity; rendering/playback do not. To facilitate without expiry: **Show operator controls → Disable idle reset · facilitated session**. Manual Clear still returns to the recorded exhibit entry. **Enable idle reset · 300 seconds** (or the configured duration) turns the timer back on without reloading. For a longer timed session use `&idleSeconds=900&warningSeconds=20` in the event URL. Bounds: idle 30–3600 seconds; warning 5–120 seconds, at least five seconds shorter than idle. Settings are in the URL, not persisted visitor data.
+The authoritative retention display reports durable archive capacity:
+`${runs} retained runs · ${retainedMiB} MiB retained of ${hardLimitMiB} MiB durable archive limit; this is durable retained evidence capacity, not total page/process memory.`
 
-The **64 MiB** limit is an estimated serialized-evidence admission budget plus operation headroom, not a cap on total page/worker/process memory. When admission refuses new work, read the visible reason and Clear session. History is not silently evicted. Cancel/discard/reset remain available. Do not repeatedly click a refused action.
+Initial field-test idle timing is **300 seconds**, with a **20-second warning**. **Keep this session** renews activity. Pointer, touch, keyboard, and wheel count as activity; background execution/rendering do not. To facilitate without expiry: **Show operator controls → Disable idle reset · facilitated session**. The opt-out persists across Public Reset until **Enable idle reset · 300 seconds** is clicked. For custom timing, set `&idleSeconds=900&warningSeconds=20` in the event URL. Bounds: idle 30–3600 seconds; warning 5–120 seconds, at least five seconds shorter than idle. Setting changes are runtime state, not persisted visitor data.
+
+When durable archive capacity is exceeded, admission backpressure cleanly refuses new executions with `Retention capacity exceeded` until cleared via Public Reset. History is never silently evicted. Cancel, discard, and reset remain available.
 
 On worker/inspection failure, cancel the current action if available, then Clear session to restart from the canonical visitor baseline. Already accepted receipts remain accepted even if later archival failed; public reset is a separate deliberate action. If the app cannot recover, reload and start a new in-memory session. Reload, browser restart and OS reboot do **not** resume transactions or history.
 

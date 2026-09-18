@@ -255,8 +255,27 @@ body.spatial-mode { background:#0B0F12; color:#F2F5F7; font-family:Plex,sans-ser
 .scene-construction { flex:1; min-height:0; max-height:none; }
 .scene-construction>header { background:transparent; border:0; padding:0 0 6px; min-height:0; font:inherit; }
 .scene-construction .geometry svg { max-height:180px; }
-.visitor-controls .short-guide button {padding:5px 8px}
-.visitor-controls .short-guide p {margin:4px 0}
+.visitor-controls .short-guide button { min-height:44px; padding:6px 12px; font-size:14px; }
+.visitor-controls .short-guide p { margin:4px 0; }
+.visitor-guide-bar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:6px 0; }
+.lesson-progress { font-size:15px; font-weight:600; color:#F2F5F7; letter-spacing:0.3px; margin-right:6px; }
+.primary-action { background:#1b455b !important; border-color:#62C7E8 !important; color:#FFFFFF !important; font-weight:600; }
+.primary-action:hover { background:#235874 !important; border-color:#92e0f8 !important; }
+.facilitator-panel { margin-top:8px; padding:10px 14px; background:#151d24; border:1px solid #3b454d; border-radius:3px; display:flex; flex-direction:column; gap:8px; }
+.facilitator-retention { color:#A7B2BC; font-size:13px; margin:0; font-family:PlexMono,monospace; }
+.facilitator-landmarks { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.facilitator-landmarks button { min-height:36px; padding:5px 9px; font-size:12px; }
+@media(max-height:800px) {
+  .world-pane.has-construction>.spatial-world { flex:0 0 14%; min-height:45px; height:14%; }
+  .scene-construction { min-height:155px; }
+  .facilitator-panel { padding:4px 8px; gap:2px; margin-top:2px; }
+  .facilitator-landmarks { gap:4px; }
+  .facilitator-landmarks button { min-height:28px; padding:2px 6px; font-size:11px; }
+  .visitor-guide-bar { padding:2px 0; gap:4px; }
+  .short-guide p { margin:2px 0; font-size:13px; }
+  .spatial-status { padding:3px 12px; }
+  .spatial-header { padding:4px 10px; }
+}
 body.spatial-mode #exhibit-warning { left:15%; right:15%; top:8px; font-size:16px; padding:8px 12px; }
 body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font-size:16px; }
 .selection-actions { display:flex; gap:6px; }

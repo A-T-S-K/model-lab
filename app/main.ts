@@ -10,6 +10,7 @@ import type { WorldSelection } from './spatial/topology.js';
 import { learningReadModel, resolveParameter, type LearningStage } from "./spatial/learning.js";
 import { SpatialPresenter } from "./spatial/presenter.js";
 import { exhibitTiming, exhibitState } from "./presentation/exhibit-state.js";
+import { experienceCapabilities, resolveExperienceProfile, type ExperienceProfile } from "./presentation/experience-profile.js";
 import plexSansLicense from "@ibm/plex-sans/fonts/complete/woff2/license.txt?url";
 import plexMonoLicense from "@ibm/plex-mono/fonts/complete/woff2/license.txt?url";
 import { historyComparisonReadModel } from "./presentation/history-read-model.js";
@@ -168,6 +169,7 @@ let offerParameterUpdate = false;
 let liveTrainingStep = 0;
 let liveRunId = "";
 let exhibitEntry = new URLSearchParams(location.search).get("kiosk") === "1";
+let idleResetEnabled = exhibitEntry;
 let kioskEnabled = exhibitEntry;
 let exhibitConfiguration = exhibitTiming(new URLSearchParams(location.search));
 let lastActivity = Date.now();
@@ -284,6 +286,7 @@ function bindForwardControls() {
       if (source) void inspect(source, { kind: 'node', nodeId: Number(button.dataset.liveChild) }, 'Actual processed contribution');
     }));
     mount.querySelector('#step-learning')?.addEventListener('click', () => void startForward(true));
+    mount.querySelector('#short-teach')?.addEventListener('click', () => void startForward(true));
     mount.querySelector('#execution-accept')?.addEventListener('click', () => void forwardDriver.acceptUpdate());
     mount.querySelector('#execution-pin')?.addEventListener('click', () => { syncTrainingPin(); if (forwardDriver.progress?.training?.phase === 'optimizer proposal') forwardDriver.runToProposal(); else forwardDriver.runToContribution(); });
     mount.querySelector('#step-prediction')?.addEventListener('click', () => void startForward());
@@ -639,9 +642,14 @@ function render(): void {
     const donorHead=(spatialSelection.head+1)%config.nHead;
     const experimentList=[...archive.learningExperiments.values()].map(e=>({id:e.id,step:e.update.step+1})),experimentWindow=presentationWindow(experimentList,spatialExperimentOffset,PRESENTATION_WORK.spatialExperiments),selectedExperiment=experimentList.find(e=>e.id===spatialExperimentId),experimentItems=selectedExperiment&&!experimentWindow.items.includes(selectedExperiment)?[selectedExperiment,...experimentWindow.items.slice(0,PRESENTATION_WORK.spatialExperiments-1)]:experimentWindow.items;
     spatialExperimentOffset=experimentWindow.offset;
+    const profile = resolveExperienceProfile({
+      isKiosk: exhibitEntry,
+      isFacilitatorOpen: spatialPresenter.operatorControls,
+    });
     mount.innerHTML = spatialPresenter.render(model, {
-      attract: !evidenceRun&&attract&&exhibitEntry, exhibit: !evidenceRun&&exhibitEntry, idleResetEnabled:kioskEnabled, idleResetSeconds:exhibitConfiguration.resetAfterMs/1000,
-      retention:{bytes:retentionStatus?.retained.archiveBytes??0,runs:archive.runs.size,snapshots:archive.snapshots.size,experiments:archive.learningExperiments.size},
+      profile,
+      attract: !evidenceRun&&attract&&exhibitEntry, exhibit: !evidenceRun&&exhibitEntry, idleResetEnabled: idleResetEnabled, idleResetSeconds:exhibitConfiguration.resetAfterMs/1000,
+      retention:{bytes:retentionStatus?.retained.archiveBytes??0,runs:archive.runs.size,snapshots:archive.snapshots.size,experiments:archive.learningExperiments.size,hardLimitBytes:retentionStatus?.hardLimitBytes??PORTABLE_ARCHIVE_LIMITS.archiveBytes},
       interventionPending: activeIntervention!==undefined,
       inspectedArm:forwardDriver.progress?.training?.readyOutputs?(result?.run.manifest.runId===forwardDriver.progress.training.readyOutputs.before.manifest.runId?'Current · accepted checkpoint':'Candidate · provisional checkpoint'):interventionExperiment?(result?.run.manifest.runId===interventionExperiment.baselineRun.manifest.runId?'Baseline':result?.run.manifest.runId===interventionExperiment.donorRun?.manifest.runId?'Donor':'Intervention'):variantExperiment?(result?.run.manifest.runId===variantExperiment.baselineRun.manifest.runId?'Canonical definition':'Leaky ReLU definition'):compositeExperiment?(result?.run.manifest.runId===compositeExperiment.baselineRun.manifest.runId?'Canonical definition':result?.run.manifest.runId===compositeExperiment.initializedRun.manifest.runId?'Composite · initialized':'Composite · trained A/B'):undefined,
       document: documentText, busy, ready, status:evidenceRun?'Read-only admitted evidence · no execution requested':status, error, execution: evidenceRun?undefined:forwardDriver.active?forwardDriver:undefined,
@@ -662,7 +670,7 @@ function render(): void {
     bindSpatialLearning();
     bindForwardControls();
     mount.querySelector('#return-canonical-world')?.addEventListener('click',()=>{spatialEvidenceRunId='';spatialEvidenceReplay=false;clearWorldSelection();clearDisplayedInspection();spatialPresenter.invalidate();render();});
-    mount.querySelector("#exhibit-opt-out")?.addEventListener("click",()=>{ kioskEnabled=!kioskEnabled; lastActivity=Date.now(); saveExhibitConfiguration(); clearExhibitBanner(); render(); });
+    mount.querySelector("#exhibit-opt-out")?.addEventListener("click",()=>{ idleResetEnabled=!idleResetEnabled; lastActivity=Date.now(); saveExhibitConfiguration(); clearExhibitBanner(); render(); });
     mount.querySelectorAll<HTMLElement>("[data-scroll-region]").forEach(element => {
       const scroll = regionScroll.get(element.dataset.scrollRegion);
       if (scroll && priorSpatialSelection === mount.querySelector(".context-lens")?.getAttribute("data-selection")) { element.scrollTop = scroll.top; element.scrollLeft = scroll.left; }
@@ -960,17 +968,22 @@ function syncSpatialSelection(): void {
   if (parameter) selectedParameter = parameter.index;
 }
 function bind(): void {
+  const profile = resolveExperienceProfile({
+    isKiosk: exhibitEntry,
+    isFacilitatorOpen: spatialPresenter.operatorControls,
+  });
+  const capabilities = experienceCapabilities(profile, spatialPresenter.freeExplore);
   sharedInspector.sync(archive.evidence,result?.run.manifest.runId,!busy&&!forwardDriver.active,async()=>execute('predict'),(runId,replay)=>{spatialEvidenceRunId=runId;spatialEvidenceReplay=replay;clearWorldSelection();attract=false;clearDisplayedInspection();spatialPresenter.invalidate();render();},runId=>spatialEvidenceUnavailable(archive.evidence.get(runId)),{
     begin:async operation=>{const transaction=await beginRetention(operation);return {store:transaction.archive.evidence,
       commit:async()=>{await commitRetention(transaction);},cancel:()=>cancelRetention(transaction)};},
-  });
+  }, capabilities.sharedInspector);
   let portableHost=document.querySelector<HTMLElement>('#portable-archive-host');
-  if(spatialActive&&!kioskEnabled){if(!portableHost){portableHost=document.createElement('section');portableHost.id='portable-archive-host';document.body.append(portableHost);}portableHost.innerHTML=portableArchiveControls();}
+  if(spatialActive&&capabilities.portableArchive){if(!portableHost){portableHost=document.createElement('section');portableHost.id='portable-archive-host';document.body.append(portableHost);}portableHost.innerHTML=portableArchiveControls();}
   else portableHost?.remove();
   const selectedVariant=[...archive.modelVariantExperiments.values()].filter(isActivationVariantExperiment).find(experiment=>[experiment.baselineRun.manifest.runId,experiment.variantRun.manifest.runId].includes(result?.run.manifest.runId??''));
   const selectedComposite=[...archive.modelVariantExperiments.values()].filter(isCompositeVariantExperiment).find(experiment=>[experiment.baselineRun.manifest.runId,experiment.initializedRun.manifest.runId,experiment.trainedRun.manifest.runId].includes(result?.run.manifest.runId??''));
   const selectedDataExperiment=activeDataExperimentId?archive.dataExperiments.get(activeDataExperimentId):undefined;
-  if(!attract&&result&&!selectedVariant&&!selectedComposite&&!selectedDataExperiment&&result.run.manifest.model.id==='microgpt'){
+  if(capabilities.researchVariants&&!attract&&result&&!selectedVariant&&!selectedComposite&&!selectedDataExperiment&&result.run.manifest.model.id==='microgpt'){
     const button=document.createElement('button');button.id='open-activation-variant';button.textContent='Open Leaky ReLU variant';button.disabled=busy||forwardDriver.active;
     const compositeButton=document.createElement('button');compositeButton.id='open-composite-variant';compositeButton.textContent='Train composite A/B variant';compositeButton.disabled=busy||forwardDriver.active;
     const dataButton=document.createElement('button');dataButton.id='open-data-experiment';dataButton.textContent='Run matched data experiment';dataButton.disabled=busy||forwardDriver.active;
@@ -978,6 +991,10 @@ function bind(): void {
     button.addEventListener('click',()=>void openActivationVariant());
     compositeButton.addEventListener('click',()=>void openCompositeVariant());
     dataButton.addEventListener('click',()=>void openDataExperiment());
+  } else if(!capabilities.researchVariants){
+    document.querySelector('#open-activation-variant')?.remove();
+    document.querySelector('#open-composite-variant')?.remove();
+    document.querySelector('#open-data-experiment')?.remove();
   }
   if(selectedDataExperiment){
     const e=selectedDataExperiment,substitution=e.design.substitutions[0],step=substitution?.step??0;
@@ -1003,7 +1020,7 @@ function bind(): void {
     container.querySelector('#variant-current')?.addEventListener('click',()=>{if(liveRunId)selectRun(liveRunId);spatialPresenter.kind='mlpRelu';status='Returned to accepted canonical model · variant evidence retained read-only';render();focusCanonicalPredict();});
   }
   if (!attract) {
-    if (!spatialActive) {
+    if (!spatialActive && capabilities.classicToggle) {
       const entry = '<button id="presentation-toggle" class="classic-toggle">Spatial presentation · controlled learning</button>';
       const header = mount.querySelector('.instrument-header');
       if (header) header.insertAdjacentHTML('beforeend', entry);
@@ -1481,7 +1498,8 @@ function bind(): void {
     ?.addEventListener("click", () => void execute("train", trainingCount));
   document.querySelector("#kiosk-mode")?.addEventListener("change", (event) => {
     kioskEnabled = (event.target as HTMLInputElement).checked;
-    if (kioskEnabled) exhibitEntry = true;
+    idleResetEnabled = kioskEnabled;
+    exhibitEntry = kioskEnabled;
     lastActivity = Date.now();
     saveExhibitConfiguration();
     checkExhibitIdle();
@@ -2094,6 +2112,10 @@ async function activateAttract(): Promise<void> {
   guidedMapIndex = 5;
   documentText = fixture.document;
   await execute("predict");
+  if (exhibitEntry && spatialActive) {
+    spatialPresenter.startVisitorSample();
+    render();
+  }
 }
 // Capture the activation before a stage/control sees its coordinate. It cannot select through A1.
 window.addEventListener(
@@ -2152,7 +2174,7 @@ function runLabel(run: RecordedRun): string {
 }
 
 async function exportSessionArchive(): Promise<void> {
-  if (busy || forwardDriver.active || kioskEnabled) return;
+  if (busy || forwardDriver.active || exhibitEntry) return;
   busy = true; error = ""; status = "Serializing retained historical archive…"; render();
   try {
     const exported = await exportPortableArchive(archive);
@@ -2171,7 +2193,7 @@ async function exportSessionArchive(): Promise<void> {
 }
 
 async function importSessionArchive(event: Event): Promise<void> {
-  if (busy || forwardDriver.active || kioskEnabled) return;
+  if (busy || forwardDriver.active || exhibitEntry) return;
   const input = event.target as HTMLInputElement, file = input.files?.[0]; if (!file) return;
   if (file.size > PORTABLE_ARCHIVE_LIMITS.archiveBytes) { error = "Archive exceeds the 32 MiB import limit."; status = "Archive import refused · history unchanged"; portableArchiveMessage = `${status}: ${error}`; render(); queueMicrotask(() => document.querySelector<HTMLInputElement>("#import-archive")?.focus()); return; }
   busy = true; error = ""; status = "Validating portable archive in isolated staging…"; render();
@@ -2224,7 +2246,7 @@ function renderHistory(): string {
       : undefined;
   const retained=retentionStatus,cache=inspectionCache.status();
   const retentionText=retained?`Exact portable-v1 footprint ${(retained.retained.archiveBytes/1048576).toFixed(2)} MiB / ${(retained.hardLimitBytes/1048576).toFixed(0)} MiB · ${(retained.remainingBytes/1048576).toFixed(2)} MiB and ${retained.remainingManifestDataNodes.toLocaleString()} manifest nodes unreserved · ${retained.reservationCount} active reservation${retained.reservationCount===1?'':'s'} · new canonical evidence ${retained.remainingBytes>=RETENTION_RESERVATION_BYTES.canonical&&retained.remainingManifestDataNodes>=RETENTION_RESERVATION_BOUNDS.canonical.manifestDataNodes?'available':'blocked'}`:'Exact portable-v1 footprint synchronizing';
-  return `<section class="source-block history"><h2>Explore exact runs and checkpoints</h2>${result ? `<details data-testid="runtime-provenance"><summary>Exact runtime provenance · available offline</summary><p>This selected run was recorded by Model Lab runtime <code data-testid="runtime-revision">${escapeHtml(result.run.manifest.runtimeRevision)}</code>. Historical inspection requires a compatible runtime.</p></details>` : ""}<p data-testid="history-count">${archive.runs.size} runs · ${archive.snapshots.size} snapshots · ${archive.learningExperiments.size} learning experiments retained in this session.</p><p data-testid="retention-status">${retentionText}. Historical records are not evicted.</p><p data-testid="ephemeral-cache-status">Derived inspection cache ${(cache.bytes/1048576).toFixed(2)} MiB / ${(cache.maxBytes/1048576).toFixed(0)} MiB · ${cache.entries} entries · ${cache.evictions} evictions · not portable evidence.</p>${!kioskEnabled ? portableArchiveControls() : ""}<div class="controls">
+  return `<section class="source-block history"><h2>Explore exact runs and checkpoints</h2>${result ? `<details data-testid="runtime-provenance"><summary>Exact runtime provenance · available offline</summary><p>This selected run was recorded by Model Lab runtime <code data-testid="runtime-revision">${escapeHtml(result.run.manifest.runtimeRevision)}</code>. Historical inspection requires a compatible runtime.</p></details>` : ""}<p data-testid="history-count">${archive.runs.size} runs · ${archive.snapshots.size} snapshots · ${archive.learningExperiments.size} learning experiments retained in this session.</p><p data-testid="retention-status">${retentionText}. Historical records are not evicted.</p><p data-testid="ephemeral-cache-status">Derived inspection cache ${(cache.bytes/1048576).toFixed(2)} MiB / ${(cache.maxBytes/1048576).toFixed(0)} MiB · ${cache.entries} entries · ${cache.evictions} evictions · not portable evidence.</p>${!exhibitEntry ? portableArchiveControls() : ""}<div class="controls">
     <label>Recorded run<select id="history-run" ${busy ? "disabled" : ""}>${options(windowItems(runWindow,selectedRunId),selectedRunId)}</select></label><button data-history-page="runs:previous" ${runWindow.hasPrevious?'':'disabled'}>Previous recorded runs</button><button data-history-page="runs:next" ${runWindow.hasNext?'':'disabled'}>Next recorded runs</button><span data-testid="history-run-window">${windowSummary(runWindow)}</span><label>Exact run ID<input id="history-run-id" value="${escapeHtml(selectedRunId)}"></label><button id="history-run-open">Open exact run</button>
     <label>Reset destination<select id="snapshot-select"><option value="">Canonical initial model</option>${snapshotItems.map((snapshot) => `<option value="${snapshot.id}" ${snapshot.id === selectedSnapshotId ? "selected" : ""}>step ${snapshot.state.optimizer.step} · ${snapshot.id.slice(0, 23)}…</option>`).join("")}</select></label><button data-history-page="snapshots:previous" ${snapshotWindow.hasPrevious?'':'disabled'}>Previous snapshots</button><button data-history-page="snapshots:next" ${snapshotWindow.hasNext?'':'disabled'}>Next snapshots</button><span data-testid="snapshot-window">${windowSummary(snapshotWindow)}</span><label>Exact snapshot ID<input id="snapshot-id" value="${escapeHtml(selectedSnapshotId)}"></label><button id="snapshot-open">Select exact snapshot</button>
     <label>Compare from<select id="compare-run"><option value="">Choose an earlier run</option>${options(windowItems(compareWindow,comparisonRunId),comparisonRunId)}</select></label><button data-history-page="compare:previous" ${compareWindow.hasPrevious?'':'disabled'}>Previous comparison runs</button><button data-history-page="compare:next" ${compareWindow.hasNext?'':'disabled'}>Next comparison runs</button><span data-testid="comparison-run-window">${windowSummary(compareWindow)}</span></div>
@@ -2255,7 +2277,7 @@ function renderHistory(): string {
           }</div>`
         : ""
     }
-    <details><summary>Experiment · head ablation</summary><p>Registered interventions run disposable matched arms from the selected run’s immutable starting snapshot. Head ablation zeros layer ${layer}, head ${head} at the existing writable boundary. Donor patch replaces position ${selectedToken}, layer ${layer}, head ${head} with an observed donor occurrence from another head/position. Live accepted state stays unchanged.</p><button id="ablate-head" ${busy || !result ? "disabled" : ""}>Compare selected head ablation</button><button id="patch-head" ${busy || !result ? "disabled" : ""}>Patch selected head output</button><p>${archive.interventionExperiments.size} registered intervention experiments archived. Select baseline, donor, or intervention runs to inspect observed values and matched-policy deltas. No outcome is labeled beneficial or harmful.</p></details><label class="kiosk-option"><input id="kiosk-mode" type="checkbox" ${kioskEnabled ? "checked" : ""}>Exhibit mode · reset after inactivity</label><div class="controls exhibit-timing"><label>Idle reset after (seconds)<input id="idle-seconds" type="number" min="30" max="3600" value="${exhibitConfiguration.resetAfterMs / 1000}"></label><label>Warning before reset (seconds)<input id="warning-seconds" type="number" min="5" max="120" value="${exhibitConfiguration.warningMs / 1000}"></label><p>Initial field-test timing. Settings are kept in this URL; visitor evidence is not persisted.</p></div><details><summary>Bounded learning and complete capture</summary><div class="controls"><label>Actual updates (1–500)<input id="training-count" type="number" min="1" max="500" value="${trainingCount}"></label><button id="train-many" ${busy || !ready ? "disabled" : ""}>Learn selected updates</button><button id="whole-capture" ${busy || !result ? "disabled" : ""}>Record everything · inspect statistics</button></div><p>Each update receives durable capacity before execution and retains its complete checkpoint/run/experiment evidence. A batch stops before the next update when its reservation cannot fit. The summary cache keeps only the latest ${TRAINING_SUMMARY_LIMIT}; evicting a summary never removes the underlying retained update.</p>${
+    <details><summary>Experiment · head ablation</summary><p>Registered interventions run disposable matched arms from the selected run’s immutable starting snapshot. Head ablation zeros layer ${layer}, head ${head} at the existing writable boundary. Donor patch replaces position ${selectedToken}, layer ${layer}, head ${head} with an observed donor occurrence from another head/position. Live accepted state stays unchanged.</p><button id="ablate-head" ${busy || !result ? "disabled" : ""}>Compare selected head ablation</button><button id="patch-head" ${busy || !result ? "disabled" : ""}>Patch selected head output</button><p>${archive.interventionExperiments.size} registered intervention experiments archived. Select baseline, donor, or intervention runs to inspect observed values and matched-policy deltas. No outcome is labeled beneficial or harmful.</p></details><label class="kiosk-option"><input id="kiosk-mode" type="checkbox" ${exhibitEntry ? "checked" : ""}>Exhibit mode · reset after inactivity</label><div class="controls exhibit-timing"><label>Idle reset after (seconds)<input id="idle-seconds" type="number" min="30" max="3600" value="${exhibitConfiguration.resetAfterMs / 1000}"></label><label>Warning before reset (seconds)<input id="warning-seconds" type="number" min="5" max="120" value="${exhibitConfiguration.warningMs / 1000}"></label><p>Initial field-test timing. Settings are kept in this URL; visitor evidence is not persisted.</p></div><details><summary>Bounded learning and complete capture</summary><div class="controls"><label>Actual updates (1–500)<input id="training-count" type="number" min="1" max="500" value="${trainingCount}"></label><button id="train-many" ${busy || !ready ? "disabled" : ""}>Learn selected updates</button><button id="whole-capture" ${busy || !result ? "disabled" : ""}>Record everything · inspect statistics</button></div><p>Each update receives durable capacity before execution and retains its complete checkpoint/run/experiment evidence. A batch stops before the next update when its reservation cannot fit. The summary cache keeps only the latest ${TRAINING_SUMMARY_LIMIT}; evicting a summary never removes the underlying retained update.</p>${
       trainingSummaries.length
         ? `<p data-testid="training-summary">${trainingSummaryTotal} actual updates summarized · ${trainingSummaries.length} cached · ${trainingSummaryDiscarded} older summaries discarded · latest pre-update loss ${number(trainingSummaries.at(-1)!.loss)}</p><details><summary>Actual loss timeline</summary><p>Showing the latest ${trainingSummaries.length} cached update summaries. Older summary rows may be discarded; retained update evidence is unchanged.</p><div class="table-scroll"><table><thead><tr><th>Source training run / input</th><th>Source snapshot / step</th><th>Resulting step</th><th>Loss before update</th></tr></thead><tbody>${trainingSummaries
             .slice(-500)
@@ -2551,7 +2573,7 @@ function clearExhibitBanner(): void {
 }
 function checkExhibitIdle(): void {
   const state = exhibitState(
-    kioskEnabled,
+    idleResetEnabled,
     attract,
     lastActivity,
     Date.now(),
@@ -2588,7 +2610,7 @@ function recordVisitorActivity(event: Event): void {
   if ((event.target as Element).closest?.("#exhibit-warning")) return;
   const now = Date.now();
   if (
-    exhibitState(kioskEnabled, attract, lastActivity, now, exhibitConfiguration)
+    exhibitState(idleResetEnabled, attract, lastActivity, now, exhibitConfiguration)
       .phase === "RESET"
   ) {
     event.preventDefault();
@@ -2621,7 +2643,7 @@ window.addEventListener(
     if ((event.target as Element).closest?.("#exhibit-warning")) return;
     if (
       exhibitState(
-        kioskEnabled,
+        idleResetEnabled,
         attract,
         lastActivity,
         Date.now(),
@@ -2645,7 +2667,7 @@ window.addEventListener(
   "click",
   (event) => {
     const link = (event.target as Element).closest("a");
-    if (kioskEnabled && link) {
+    if (exhibitEntry && link) {
       event.preventDefault();
       status =
         "Exhibit mode keeps this instrument open. Bundled source remains available in this view.";
@@ -2656,7 +2678,7 @@ window.addEventListener(
 );
 for (const event of ["dragover", "drop"])
   window.addEventListener(event, (event) => {
-    if (kioskEnabled) event.preventDefault();
+    if (exhibitEntry) event.preventDefault();
   });
 
 async function ablateHead(): Promise<void> {
