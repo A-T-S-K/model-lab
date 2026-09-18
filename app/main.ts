@@ -10,7 +10,7 @@ import type { WorldSelection } from './spatial/topology.js';
 import { learningReadModel, resolveParameter, type LearningStage } from "./spatial/learning.js";
 import { SpatialPresenter } from "./spatial/presenter.js";
 import { exhibitTiming, exhibitState } from "./presentation/exhibit-state.js";
-import { experienceCapabilities, resolveExperienceProfile, type ExperienceProfile } from "./presentation/experience-profile.js";
+import { experienceCapabilities, resolveExperienceProfile, type ExperienceCapabilities, type ExperienceProfile } from "./presentation/experience-profile.js";
 import plexSansLicense from "@ibm/plex-sans/fonts/complete/woff2/license.txt?url";
 import plexMonoLicense from "@ibm/plex-mono/fonts/complete/woff2/license.txt?url";
 import { historyComparisonReadModel } from "./presentation/history-read-model.js";
@@ -173,6 +173,15 @@ let idleResetEnabled = exhibitEntry;
 let kioskEnabled = exhibitEntry;
 let exhibitConfiguration = exhibitTiming(new URLSearchParams(location.search));
 let lastActivity = Date.now();
+function currentProfile(): ExperienceProfile {
+  return resolveExperienceProfile({
+    isKiosk: exhibitEntry,
+    isFacilitatorOpen: spatialPresenter.operatorControls,
+  });
+}
+function currentCapabilities(): ExperienceCapabilities {
+  return experienceCapabilities(currentProfile(), spatialPresenter.freeExplore);
+}
 let visitorPointerDown = false;
 const TRAINING_SUMMARY_LIMIT = 500;
 let trainingSummaryTotal = 0;
@@ -642,10 +651,7 @@ function render(): void {
     const donorHead=(spatialSelection.head+1)%config.nHead;
     const experimentList=[...archive.learningExperiments.values()].map(e=>({id:e.id,step:e.update.step+1})),experimentWindow=presentationWindow(experimentList,spatialExperimentOffset,PRESENTATION_WORK.spatialExperiments),selectedExperiment=experimentList.find(e=>e.id===spatialExperimentId),experimentItems=selectedExperiment&&!experimentWindow.items.includes(selectedExperiment)?[selectedExperiment,...experimentWindow.items.slice(0,PRESENTATION_WORK.spatialExperiments-1)]:experimentWindow.items;
     spatialExperimentOffset=experimentWindow.offset;
-    const profile = resolveExperienceProfile({
-      isKiosk: exhibitEntry,
-      isFacilitatorOpen: spatialPresenter.operatorControls,
-    });
+    const profile = currentProfile();
     mount.innerHTML = spatialPresenter.render(model, {
       profile,
       attract: !evidenceRun&&attract&&exhibitEntry, exhibit: !evidenceRun&&exhibitEntry, idleResetEnabled: idleResetEnabled, idleResetSeconds:exhibitConfiguration.resetAfterMs/1000,
@@ -968,11 +974,8 @@ function syncSpatialSelection(): void {
   if (parameter) selectedParameter = parameter.index;
 }
 function bind(): void {
-  const profile = resolveExperienceProfile({
-    isKiosk: exhibitEntry,
-    isFacilitatorOpen: spatialPresenter.operatorControls,
-  });
-  const capabilities = experienceCapabilities(profile, spatialPresenter.freeExplore);
+  const profile = currentProfile();
+  const capabilities = currentCapabilities();
   sharedInspector.sync(archive.evidence,result?.run.manifest.runId,!busy&&!forwardDriver.active,async()=>execute('predict'),(runId,replay)=>{spatialEvidenceRunId=runId;spatialEvidenceReplay=replay;clearWorldSelection();attract=false;clearDisplayedInspection();spatialPresenter.invalidate();render();},runId=>spatialEvidenceUnavailable(archive.evidence.get(runId)),{
     begin:async operation=>{const transaction=await beginRetention(operation);return {store:transaction.archive.evidence,
       commit:async()=>{await commitRetention(transaction);},cancel:()=>cancelRetention(transaction)};},
@@ -2667,7 +2670,7 @@ window.addEventListener(
   "click",
   (event) => {
     const link = (event.target as Element).closest("a");
-    if (exhibitEntry && link) {
+    if (currentCapabilities().eventSafety && link) {
       event.preventDefault();
       status =
         "Exhibit mode keeps this instrument open. Bundled source remains available in this view.";
@@ -2678,7 +2681,7 @@ window.addEventListener(
 );
 for (const event of ["dragover", "drop"])
   window.addEventListener(event, (event) => {
-    if (exhibitEntry) event.preventDefault();
+    if (currentCapabilities().eventSafety) event.preventDefault();
   });
 
 async function ablateHead(): Promise<void> {
