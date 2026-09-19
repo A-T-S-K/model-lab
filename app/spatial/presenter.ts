@@ -378,6 +378,8 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
             this.learningRouteStop !== undefined ||
             this.learningStage
           ),
+          query: this.selection.query,
+          head: this.selection.head,
         }) : '')
       : '';
     const expertLearningMarkup = !isPublicProfile

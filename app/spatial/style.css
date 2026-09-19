@@ -677,12 +677,20 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   pointer-events: none;
 }
 
-.reverse-edge {
+.reverse-edge,
+.reverse-causal-edge {
   fill: none;
   stroke: #ba68c8;
   stroke-width: 2.5;
   stroke-dasharray: 6 4;
   animation: reverseFlow 1.8s linear infinite;
+}
+
+.reverse-region-guide {
+  fill: none;
+  stroke: rgba(186, 104, 200, 0.45);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 5;
 }
 
 @keyframes reverseFlow {
@@ -865,6 +873,8 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
     animation: none !important;
   }
   .reverse-edge,
+  .reverse-causal-edge,
+  .reverse-region-guide,
   .reverse-landmark-reticle {
     animation: none !important;
     stroke-dashoffset: 0 !important;

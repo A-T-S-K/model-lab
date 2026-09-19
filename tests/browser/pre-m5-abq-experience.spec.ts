@@ -329,13 +329,33 @@ test('2c. Reverse learning traversal, objective anchor, backward landmarks, para
 
   // 1. Objective Anchor attached near output probabilities
   await expect(page.getByTestId('objective-anchor')).toBeVisible();
+  await expect(page.getByTestId('objective-anchor')).toContainText('p0');
+  await expect(page.getByTestId('objective-anchor')).toContainText('p1');
+  await expect(page.getByTestId('objective-anchor')).toContainText('p2');
+  await expect(page.getByTestId('objective-anchor')).toContainText('p3');
+  await expect(page.getByTestId('objective-anchor')).toContainText('p4');
+  await expect(page.getByTestId('objective-anchor')).toContainText('[PENDING]');
+  await expect(page.getByTestId('objective-anchor')).not.toContainText('[OBSERVED]');
+
+  // Reverse Causal Overlay: exact-address edges, residual branches, and region guides
   await expect(page.locator('.reverse-causal-overlay')).toBeVisible();
+  await expect(page.locator('.reverse-causal-edge').first()).toHaveAttribute('data-reverse-from-kind');
+  await expect(page.locator('.reverse-causal-edge').first()).toHaveAttribute('data-reverse-to-kind');
+  // Residual branches: mlpResidual -> attentionResidual, attentionResidual -> embeddingNorm
+  await expect(page.locator('.reverse-causal-edge[data-reverse-from-kind="mlpResidual"][data-reverse-to-kind="attentionResidual"]')).toBeVisible();
+  await expect(page.locator('.reverse-causal-edge[data-reverse-from-kind="attentionResidual"][data-reverse-to-kind="embeddingNorm"]')).toBeVisible();
+  // Absence of false shortcut headOutput <- preAttentionNorm
+  await expect(page.locator('.reverse-causal-edge[data-reverse-from-kind="headOutput"][data-reverse-to-kind="preAttentionNorm"]')).toHaveCount(0);
+  // Presence of reverse-region-guide for multi-key fan-in / landmarks
+  await expect(page.locator('.reverse-region-guide')).not.toHaveCount(0);
+
   await expect(page.getByTestId('reverse-truth-cue').first()).toContainText('Backward explanation path over the real computation. Visual movement is not runtime timing.');
 
   // Check all-position objective in Values tab
   await page.locator('button[data-dock-depth="values"]').click();
   await expect(page.getByTestId('dock-values')).toBeVisible();
   await expect(page.getByTestId('training-objective')).toBeVisible();
+  await expect(page.getByTestId('training-objective')).toContainText('[PENDING]');
   await page.screenshot({ path: `${evidenceDir}/02-learning-objective-1920.png` });
   await page.locator('.dock-tab-close').click();
   await expect(page.getByTestId('dock-explain')).toBeVisible();
@@ -393,13 +413,24 @@ test('2c. Reverse learning traversal, objective anchor, backward landmarks, para
   await expect(page.getByTestId('lesson-progress')).toContainText('Learning · Stop 7 of 7 · ADAM');
   await expect(page.getByTestId('adam-learning-overlay')).toBeVisible();
   await expect(page.getByTestId('adam-learning-overlay')).toHaveAttribute('data-provisional', 'true');
+  await expect(page.getByTestId('adam-learning-overlay')).toHaveAttribute('data-status', 'pending');
+  await expect(page.getByTestId('adam-proposal-pending')).toBeVisible();
+  await expect(page.getByTestId('adam-learning-overlay')).not.toContainText('-0.042');
   expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
   await page.screenshot({ path: `${evidenceDir}/10-adam-explain-1920.png` });
+
+  // Adam dock values: pending proposal status
+  await page.locator('button[data-dock-depth="values"]').click();
+  await expect(page.getByTestId('dock-values')).toBeVisible();
+  await expect(page.getByTestId('dock-values')).toContainText('Adam Optimizer Proposal');
+  await expect(page.getByTestId('dock-values').getByTestId('adam-proposal-pending')).toBeVisible();
+  await page.locator('.dock-tab-close').click();
 
   // Adam math in dock
   await page.locator('button[data-dock-depth="math"]').click();
   await expect(page.getByTestId('dock-math')).toBeVisible();
   await expect(page.getByTestId('dock-math')).toContainText('Adam Optimizer Equations');
+  await expect(page.getByTestId('dock-math').getByTestId('proposal-pending')).toBeVisible();
   expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
   await page.screenshot({ path: `${evidenceDir}/11-adam-math-1920.png` });
   await page.locator('.dock-tab-close').click();
@@ -482,6 +513,12 @@ test('3. Stepped training, candidate discard, and authority preservation', async
   // Assert legacy upper comparison is suppressed
   await expect(page.locator('.decision-summary')).toHaveCount(0);
   await expect(page.locator('.output-comparison')).toHaveCount(0);
+
+  // Assert authentic Adam proposal is rendered in overlay
+  await expect(page.getByTestId('adam-learning-overlay')).toBeVisible();
+  await expect(page.getByTestId('adam-learning-overlay')).toHaveAttribute('data-status', 'ready');
+  await expect(page.getByTestId('adam-learning-overlay').getByTestId('adam-proposal-table')).toBeVisible();
+
   await page.screenshot({ path: `${evidenceDir}/13-candidate-ready-1920.png` });
 
   // Candidate Ready Compare regression:
@@ -931,6 +968,9 @@ test('7. 1280x720 layout and reduced motion visual captures', async ({ page }) =
   // Advance to Stop 6 (ADAM)
   await page.locator('#reverse-continue').click();
   await expect(page.getByTestId('adam-learning-overlay')).toBeVisible();
+  await expect(page.getByTestId('adam-learning-overlay')).toHaveAttribute('data-status', 'pending');
+  await expect(page.getByTestId('adam-proposal-pending')).toBeVisible();
+  await expect(page.getByTestId('adam-learning-overlay')).not.toContainText('-0.042');
   // 23: Adam explain at 1280x720
   await page.screenshot({ path: `${evidenceDir}/23-adam-explain-1280.png` });
 
@@ -948,6 +988,9 @@ test('7. 1280x720 layout and reduced motion visual captures', async ({ page }) =
   await expect(page.locator('#execution-continue')).toBeEnabled({ timeout: 60000 });
   await page.locator('#execution-continue').click();
   await expect(page.locator('#execution-controls')).toHaveAttribute('data-training-phase', 'ready', { timeout: 60000 });
+  await expect(page.getByTestId('adam-learning-overlay')).toBeVisible();
+  await expect(page.getByTestId('adam-learning-overlay')).toHaveAttribute('data-status', 'ready');
+  await expect(page.getByTestId('adam-learning-overlay').getByTestId('adam-proposal-table')).toBeVisible();
 
   // 24: Candidate Ready default at 1280x720
   await page.screenshot({ path: `${evidenceDir}/24-candidate-ready-1280.png` });
