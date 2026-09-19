@@ -564,10 +564,277 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
 .contextual-dock .dock-route-actions button,
 .contextual-dock .dock-tab,
 .contextual-dock .dock-tab-close,
-.facilitator-landmarks button {
+.facilitator-landmarks button,
+.facilitator-reverse button {
   min-height: 44px;
   min-width: 44px;
   box-sizing: border-box;
+}
+
+/* Facilitator Reverse Learning Navigation */
+.facilitator-reverse {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid #283038;
+}
+
+.facilitator-subhead {
+  font-size: 11px;
+  font-weight: 600;
+  color: #ba68c8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-right: 4px;
+}
+
+.facilitator-reverse button {
+  background: #1e242b;
+  color: #e5a0ff;
+  border: 1px solid #4a3459;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0 10px;
+}
+
+.facilitator-reverse button:hover {
+  background: #2a2233;
+  border-color: #ba68c8;
+}
+
+/* Public Same-World Learning Overlays */
+.public-learning-world {
+  pointer-events: none;
+}
+
+/* Objective Anchor Overlay */
+.objective-anchor {
+  pointer-events: all;
+  transition: opacity 0.2s ease;
+}
+
+.objective-box {
+  fill: #161b22;
+  stroke: #ffb74d;
+  stroke-width: 1.5;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.5));
+}
+
+.objective-tether {
+  fill: none;
+  stroke: #ffb74d;
+  stroke-width: 2;
+  stroke-dasharray: 4 3;
+}
+
+.objective-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  fill: #ffb74d;
+}
+
+.objective-title {
+  font-size: 16px;
+  font-weight: 700;
+  fill: #f0f6fc;
+}
+
+.objective-sub {
+  font-size: 12px;
+  fill: #8b949e;
+}
+
+.objective-row {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  fill: #c9d1d9;
+}
+
+.objective-divider {
+  stroke: #30363d;
+  stroke-width: 1;
+}
+
+.objective-mean {
+  font-size: 14px;
+  font-weight: 700;
+  fill: #ffb74d;
+}
+
+.objective-scope-note {
+  font-size: 11px;
+  fill: #8b949e;
+  font-style: italic;
+}
+
+/* Reverse Causal Overlay & Edges */
+.reverse-causal-overlay {
+  pointer-events: none;
+}
+
+.reverse-edge {
+  fill: none;
+  stroke: #ba68c8;
+  stroke-width: 2.5;
+  stroke-dasharray: 6 4;
+  animation: reverseFlow 1.8s linear infinite;
+}
+
+@keyframes reverseFlow {
+  to {
+    stroke-dashoffset: 20;
+  }
+}
+
+.reverse-truth-banner {
+  pointer-events: none;
+}
+
+.reverse-truth-bg {
+  fill: #221a28;
+  stroke: #ba68c8;
+  stroke-width: 1;
+}
+
+.reverse-truth-cue {
+  font-size: 12px;
+  font-weight: 600;
+  fill: #f5d0fe;
+  letter-spacing: 0.02em;
+}
+
+.reverse-landmark-reticle {
+  fill: none;
+  stroke: #e5a0ff;
+  stroke-width: 2;
+  stroke-dasharray: 8 4;
+  animation: reticlePulse 2s ease-in-out infinite;
+}
+
+@keyframes reticlePulse {
+  0%, 100% { stroke-opacity: 0.6; }
+  50% { stroke-opacity: 1; stroke-width: 2.5; }
+}
+
+/* Parameter Learning Overlay */
+.parameter-learning-overlay {
+  pointer-events: all;
+  transition: opacity 0.2s ease;
+}
+
+.parameter-overlay-box {
+  fill: #161b22;
+  stroke: #58a6ff;
+  stroke-width: 1.5;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.5));
+}
+
+.parameter-learning-tether {
+  fill: none;
+  stroke: #58a6ff;
+  stroke-width: 2;
+  stroke-dasharray: 4 3;
+}
+
+.param-overlay-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  fill: #58a6ff;
+}
+
+.param-overlay-title {
+  font-size: 15px;
+  font-weight: 700;
+  fill: #f0f6fc;
+}
+
+.param-overlay-calc,
+.param-overlay-accum,
+.param-overlay-ordinal {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  fill: #c9d1d9;
+}
+
+.param-overlay-divider {
+  stroke: #30363d;
+  stroke-width: 1;
+}
+
+.param-overlay-gradient {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12.5px;
+}
+
+.gradient-final {
+  fill: #58b98c;
+  font-weight: 700;
+}
+
+.gradient-partial {
+  fill: #ffb74d;
+  font-weight: 700;
+}
+
+.gradient-val {
+  fill: #f0f6fc;
+  font-weight: 600;
+}
+
+/* Adam Optimizer Overlay */
+.adam-learning-overlay {
+  pointer-events: all;
+  transition: opacity 0.2s ease;
+}
+
+.adam-overlay-box {
+  fill: #161b22;
+  stroke: #62c7e8;
+  stroke-width: 1.5;
+  stroke-dasharray: 5 3;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.5));
+}
+
+.adam-learning-tether {
+  fill: none;
+  stroke: #62c7e8;
+  stroke-width: 2;
+  stroke-dasharray: 4 3;
+}
+
+.adam-overlay-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  fill: #62c7e8;
+}
+
+.adam-overlay-title {
+  font-size: 14px;
+  font-weight: 700;
+  fill: #62c7e8;
+}
+
+.adam-overlay-row {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px;
+  fill: #c9d1d9;
+}
+
+.adam-overlay-scope {
+  font-size: 10.5px;
+  fill: #8b949e;
+  font-style: italic;
+}
+
+.active-learning-anchor {
+  filter: drop-shadow(0 0 10px rgba(186, 104, 200, 0.4));
 }
 
 @media (max-height: 800px) {
@@ -597,5 +864,11 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
     transition: none !important;
     animation: none !important;
   }
+  .reverse-edge,
+  .reverse-landmark-reticle {
+    animation: none !important;
+    stroke-dashoffset: 0 !important;
+  }
 }
+
 

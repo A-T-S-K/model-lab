@@ -46,22 +46,42 @@ export interface ContextualDockOptions {
   readonly outputPair?: OutputPair;
   readonly comparisonLabels?: [string, string];
   readonly hasComparison: boolean;
+  readonly learningRouteStop?: number;
 }
 
 function renderExplain(opts: ContextualDockOptions): string {
-  const { model: m, address: a, element, parameter, pin, executionProgress, trainingProgress, learningStage, learningModel } = opts;
+  const { model: m, address: a, element, parameter, pin, executionProgress, trainingProgress, learningStage, learningModel, learningRouteStop } = opts;
   if (!m) return '<p>No model loaded.</p>';
 
   if (trainingProgress) {
     const t = trainingProgress;
+    const isBackward = t.phase === 'backward' || t.phase === 'backward seed';
+    const truthCue = isBackward
+      ? `<p class="reverse-truth-cue" data-testid="reverse-truth-cue">Backward explanation path over the real computation. Visual movement is not runtime timing.</p>`
+      : '';
     return `<div class="dock-explain-content" data-testid="dock-explain">
       <p class="learning-scope">Live training · ${esc(t.phase)} · accepted step ${t.acceptedStep} → proposed step ${t.acceptedStep + 1} provisional</p>
       <div class="dock-pin-info"><span data-testid="pin-owner">${esc(pin.name)} → ${esc(operations.find(o=>o.kind===parameterOwners[pin.name])?.title??pin.name)} · same global owner · accepted ${esc(t.startingSnapshotId.slice(0,12))}</span></div>
       <p class="learning-gradient-summary">${t.final ? 'Final' : 'Partial'} gradient: <span data-testid="live-gradient" data-value="${t.gradient}">${t.gradient === undefined ? 'pending' : fmt(t.gradient)}</span></p>
       <p class="learning-mechanism">Parameter uses contribute and accumulate: each backward occurrence calculates a child adjoint × local derivative contribution and adds it to the parameter gradient accumulator.</p>
+      ${truthCue}
       ${t.proposal ? `<p class="learning-provisional">Candidate proposal: θ ${fmt(t.proposal.before)} → ${fmt(t.proposal.after)} · provisional until explicitly accepted.</p>` : ''}
       <p>Pinned ${esc(parameterLabel(pin))}. Losses across all positions enter the objective; candidate proposals remain provisional until accepted.</p>
     </div>`;
+  }
+
+  if (learningRouteStop !== undefined && learningRouteStop >= 0) {
+    let narrative = '';
+    if (learningRouteStop === 0) {
+      narrative = `<p>Training Objective: Predictions are compared with known targets across all positions to calculate loss. The average of all target losses forms the single training objective. The forward lesson followed one selected prediction occurrence (p3). Training combines losses across all target positions.</p><p class="reverse-truth-cue" data-testid="reverse-truth-cue">Backward explanation path over the real computation. Visual movement is not runtime timing.</p>`;
+    } else if (learningRouteStop >= 1 && learningRouteStop <= 4) {
+      narrative = `<p>Backward Explanation: Sensitivity propagates backward through the exact computation that produced predictions. We are following one selected prediction slice backward through the model to understand the computation. The selected parameter's actual gradient can receive contributions from many scalar paths and positions.</p><p class="reverse-truth-cue" data-testid="reverse-truth-cue">Backward explanation path over the real computation. Visual movement is not runtime timing.</p>`;
+    } else if (learningRouteStop === 5) {
+      narrative = `<p>Parameter Accumulation: We are inspecting one parameter (${esc(parameterLabel(pin))}). Parameter uses contribute and accumulate: each backward occurrence calculates a child adjoint × local derivative contribution and adds it to the parameter gradient accumulator. Partial gradient updates until all occurrences finish.</p><p class="reverse-truth-cue" data-testid="reverse-truth-cue">Backward explanation path over the real computation. Visual movement is not runtime timing.</p>`;
+    } else if (learningRouteStop === 6) {
+      narrative = `<p>Adam Proposal: The optimizer combines the final gradient with persistent moment history (m and v) to compute a provisional candidate update for the parameter. Provisional proposal; accepted model has not changed.</p><p class="reverse-truth-cue" data-testid="reverse-truth-cue">Backward explanation path over the real computation. Visual movement is not runtime timing.</p>`;
+    }
+    return `<div class="dock-explain-content" data-testid="dock-explain"><section class="teaching-step" data-testid="learning-teaching-step">${narrative}</section></div>`;
   }
 
   if (learningStage && learningModel && learningModel.available) {
@@ -114,15 +134,39 @@ function stepTeachingSection(m: SpatialReadModel, a: Address, element: number): 
 }
 
 function renderValues(opts: ContextualDockOptions): string {
-  const { model: m, address: a, element, parameter, row, column, pin, trainingProgress, learningStage, learningModel } = opts;
+  const { model: m, address: a, element, parameter, row, column, pin, trainingProgress, learningStage, learningModel, learningRouteStop } = opts;
   if (!m) return '<p>No model loaded.</p>';
 
   if (trainingProgress) {
     const t = trainingProgress;
     return `<div class="dock-values-content" data-testid="dock-values">
       <h3>All-position target losses (${t.losses.length} positions)</h3>
+      <table data-testid="training-objective"><thead><tr><th>Position</th><th>Target ID</th><th>Loss (-log P)</th></tr></thead><tbody>${t.losses.map((l, i) => `<tr><th>p${i}</th><td>target ${l.target}</td><td>${val(l.value)}</td></tr>`).join('')}</tbody></table>
       ${t.losses.map((l, i) => `<p>p${i} target ${l.target}: ${l.value === undefined ? 'pending' : fmt(l.value)}</p>`).join('')}
       <p>Ordered mean: ${t.mean === undefined ? 'pending' : fmt(t.mean)}</p>
+    </div>`;
+  }
+
+  if (learningRouteStop === 0) {
+    if (learningModel && learningModel.available) {
+      return `<div class="dock-values-content" data-testid="dock-values">
+        <h3>All-position training objective (${learningModel.objective.rows.length} positions)</h3>
+        <table data-testid="training-objective"><thead><tr><th>Position</th><th>Target token</th><th>Observed P(target)</th><th>Observed −log P</th></tr></thead><tbody>${learningModel.objective.rows.map(r => `<tr><th>p${r.position} / ${esc(r.inputLabel)} (${r.input})</th><td>${esc(r.targetLabel)} (${r.target})</td><td>${val(r.probability)}</td><td>${val(r.loss)}</td></tr>`).join('')}</tbody></table>
+        <p>Ordered mean loss: ${val(learningModel.objective.mean, 'training-mean')} OBSERVED</p>
+      </div>`;
+    }
+    const f = m.forward;
+    const vocab = f.vocabulary ?? [];
+    const input = f.input ?? [];
+    const rows = input.map((inp, i) => {
+      const target = i < input.length - 1 ? input[i + 1] : 0;
+      const targetLabel = vocab[target] ?? String(target);
+      return { position: i, input: inp, inputLabel: vocab[inp] ?? String(inp), target, targetLabel };
+    });
+    return `<div class="dock-values-content" data-testid="dock-values">
+      <h3>All-position training objective (${rows.length} positions)</h3>
+      <table data-testid="training-objective"><thead><tr><th>Position / input</th><th>Target token</th><th>Loss (-log P)</th></tr></thead><tbody>${rows.map(r => `<tr><th>p${r.position} (${esc(r.inputLabel)})</th><td>${esc(r.targetLabel)} (${r.target})</td><td>pending</td></tr>`).join('')}</tbody></table>
+      <p>The forward route followed one prediction slice; learning combines losses across all ${rows.length} positions into the mean training objective.</p>
     </div>`;
   }
 
@@ -160,7 +204,7 @@ function renderValues(opts: ContextualDockOptions): string {
 }
 
 function renderMath(opts: ContextualDockOptions): string {
-  const { model: m, address: a, element, scalar, executionProgress, trainingProgress, learningStage, learningModel, pin } = opts;
+  const { model: m, address: a, element, scalar, executionProgress, trainingProgress, learningStage, learningModel, pin, learningRouteStop } = opts;
   if (!m) return '<p>No model loaded.</p>';
 
   if (trainingProgress) {
@@ -196,6 +240,28 @@ function renderMath(opts: ContextualDockOptions): string {
         <p>Recorded gradient ${val(back.gradient, 'learning-gradient')}</p>
         ${back.fanInAvailable ? `<table data-testid="learning-contributions"><thead><tr><th>Occurrence</th><th>Child adjoint</th><th>Local derivative</th><th>Contribution</th></tr></thead><tbody>${back.visible.map(edge => `<tr><td>edge ${edge.id}</td><td>${val(edge.childAdjoint)}</td><td>${val(edge.localDerivative)}</td><td>${val(edge.contribution)}</td></tr>`).join('')}</tbody></table>` : ''}
         <section class="spatial-scalar" id="microscope"><h3>Scalar inspection</h3>${scalar}</section>
+      </div>`;
+    }
+  }
+
+  if (learningRouteStop !== undefined) {
+    if (learningRouteStop === 5) {
+      return `<div class="dock-math-content" data-testid="dock-math">
+        <h3>Parameter Contribution Math · ${esc(pin.name)}</h3>
+        <p>Each use of the parameter in the computational graph receives a backward signal:</p>
+        <p class="math-eq">contribution = child adjoint × local derivative</p>
+        <p>Accumulator: sum of all incoming contributions produces the parameter gradient.</p>
+        ${scalar ? `<section class="spatial-scalar" id="microscope"><h3>Scalar inspection</h3>${scalar}</section>` : ''}
+      </div>`;
+    }
+    if (learningRouteStop === 6) {
+      return `<div class="dock-math-content" data-testid="dock-math">
+        <h3>Adam Optimizer Equations</h3>
+        <p>First moment: m′ = β₁ · m + (1 − β₁) · g</p>
+        <p>Second moment: v′ = β₂ · v + (1 − β₂) · g²</p>
+        <p>Bias-corrected: m̂ = m′ / (1 − β₁ᵗ), v̂ = v′ / (1 − β₂ᵗ)</p>
+        <p>Parameter update: θ′ = θ − α · m̂ / (√v̂ + ε)</p>
+        <p class="learning-provisional">Adam update formula proposes candidate parameter. Remains provisional until accepted.</p>
       </div>`;
     }
   }
