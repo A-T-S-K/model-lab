@@ -5,8 +5,73 @@ import type {InspectionResult,ParameterRef} from '../../inspect/types.js';
 import {backwardReadModel} from '../presentation/backward-read-model.js';
 import {adamReadModel} from '../presentation/adam-read-model.js';
 import {forwardReadModel} from './forward.js';
+import type {TrainingPhase} from '../worker/training-execution.js';
 export interface ParameterPin {name:string;row:number;column:number}
 export type LearningStage='objective'|'gradient'|'adam'|'checkpoint'|'compare';
+
+export interface LearningPhasePresentation {
+  readonly label: string;
+  readonly purpose: string;
+}
+
+export function learningPhasePresentation(
+  phase: TrainingPhase,
+  context?: { readonly final?: boolean; readonly count?: number; readonly pinLabel?: string }
+): LearningPhasePresentation {
+  switch (phase) {
+    case 'baseline forward':
+      return {
+        label: 'Learning · Baseline Forward',
+        purpose: 'Running the accepted model on the fixed training input to establish the current endpoint.',
+      };
+    case 'training forward':
+      return {
+        label: 'Learning · Training Forward',
+        purpose: 'Running the training forward pass that produces the values used by the objective and backward pass.',
+      };
+    case 'loss':
+      return {
+        label: 'Learning · Training Objective',
+        purpose: 'Combine cross-entropy losses across all positions into mean training objective.',
+      };
+    case 'backward seed':
+      return {
+        label: 'Learning · Backward Seed',
+        purpose: 'Seeding dLoss/dLoss = 1 before reverse-mode accumulation begins.',
+      };
+    case 'backward':
+      return {
+        label: `Learning · Backward ${context?.final ? 'complete' : context?.count !== undefined ? `pass (${context.count} steps)` : ''}`.trim(),
+        purpose: 'Actual scalar reverse-mode execution is propagating adjoints and accumulating parameter gradients.',
+      };
+    case 'optimizer proposal':
+      return {
+        label: 'Learning · Adam Proposal',
+        purpose: context?.pinLabel
+          ? `Adam is computing provisional parameter proposals from final gradients and persistent optimizer state for pinned ${context.pinLabel}.`
+          : 'Adam is computing provisional parameter proposals from final gradients and persistent optimizer state.',
+      };
+    case 'candidate application':
+      return {
+        label: 'Learning · Private Candidate',
+        purpose: 'Applying the complete validated proposal inside the private working transaction to create the provisional candidate state.',
+      };
+    case 'candidate forward':
+      return {
+        label: 'Learning · Candidate Forward',
+        purpose: 'Real forward execution on the provisional candidate state. The accepted model has not changed.',
+      };
+    case 'ready':
+      return {
+        label: 'Learning · Candidate Ready',
+        purpose: 'Candidate parameters evaluated. Accept the update to advance the accepted model, or Discard to revert.',
+      };
+    default: {
+      const _exhaustive: never = phase;
+      throw new Error(`Unhandled training phase: ${_exhaustive}`);
+    }
+  }
+}
 export function resolveParameter(snapshot:ArchivedSnapshot|undefined,pin:ParameterPin):ParameterRef|undefined{
  if(!snapshot||![pin.row,pin.column].every(x=>Number.isInteger(x)&&x>=0))return;
  let index=0;

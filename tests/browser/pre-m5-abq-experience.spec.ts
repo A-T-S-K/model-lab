@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 
-const evidenceDir = process.env.PRE_M5_EVIDENCE_DIR ?? 'test-results/scratch/p0-e3-review-evidence-20260918-01';
+const evidenceDir = process.env.PRE_M5_EVIDENCE_DIR ?? 'test-results/scratch/p0-e3b-review-evidence-20260919-01';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -484,13 +484,15 @@ test('3. Stepped training, candidate discard, and authority preservation', async
   await page.locator('#execution-pin').click();
   await expect(page.locator('#execution-continue')).toBeEnabled({ timeout: 60000 });
   await expect(page.getByTestId('execution-frontier')).toContainText('stopped after matching backward node');
+  await expect(page.getByTestId('lesson-progress')).toContainText('Learning · Backward');
+  await expect(page.getByTestId('lesson-progress')).not.toContainText('Candidate');
 
   // Explain tab is meaning-first (no raw contribution arithmetic or signed tracks)
   await expect(page.getByTestId('dock-explain')).toContainText('Parameter uses contribute and accumulate');
   await expect(page.getByTestId('dock-explain')).toContainText('Partial gradient');
   await expect(page.getByTestId('dock-explain').locator('[data-testid="live-contribution"]')).toHaveCount(0);
   await expect(page.getByTestId('dock-explain').locator('.live-signed-track')).toHaveCount(0);
-  await page.screenshot({ path: `${evidenceDir}/12-candidate-forward-or-transition-1920.png` });
+  await page.screenshot({ path: `${evidenceDir}/12-live-backward-contribution-1920.png` });
 
   // Math tab retains exact learning evidence
   await page.locator('button[data-dock-depth="math"]').click();
@@ -505,6 +507,8 @@ test('3. Stepped training, candidate discard, and authority preservation', async
   // Advance to Candidate ready
   await page.locator('#execution-continue').click();
   await expect(page.locator('#execution-controls')).toHaveAttribute('data-training-phase', 'ready', { timeout: 60000 });
+  await expect(page.getByTestId('lesson-progress')).toContainText('Learning · Candidate Ready');
+  await expect(page.getByTestId('lesson-progress')).not.toContainText('Backward');
   await expect(page.locator('#execution-accept')).toBeVisible();
   await expect(page.locator('#execution-cancel')).toBeVisible();
   await expect(page.locator('#execution-cancel')).toContainText('Discard candidate');
@@ -752,6 +756,7 @@ test('6. 44px minimum touch targets and keyboard accessibility across qualified 
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto('/?presentation=spatial&kiosk=1');
   await assertMin44('#exhibit-start', 'Entry Start button');
+  await expect(page.locator('#exhibit-start')).toBeEnabled();
 
   // Keyboard entry
   await page.locator('#exhibit-start').focus();
@@ -1067,7 +1072,7 @@ test('7. 1280x720 layout and reduced motion visual captures', async ({ page }) =
       '09-parameter-contribution-math-1920.png',
       '10-adam-explain-1920.png',
       '11-adam-math-1920.png',
-      '12-candidate-forward-or-transition-1920.png',
+      '12-live-backward-contribution-1920.png',
       '13-candidate-ready-1920.png',
       '14-candidate-compare-1920.png',
       '15-post-accept-1920.png',

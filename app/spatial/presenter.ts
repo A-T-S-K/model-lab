@@ -7,7 +7,8 @@ import type { ForwardDriver } from '../worker/forward-driver.js';
 import type { ForwardBoundary } from '../../model/microgpt.js';
 import { ExplanationPlayback } from "./playback.js";
 import { learningScene, learningInspector, parameterLabel, learningStations } from "./learning-view.js";
-import type { LearningModel, LearningStage, ParameterPin } from "./learning.js";
+import { learningPhasePresentation, type LearningModel, type LearningPhasePresentation, type LearningStage, type ParameterPin } from "./learning.js";
+export { learningPhasePresentation, type LearningPhasePresentation } from "./learning.js";
 import { isRegisteredWorld, type AnySpatialReadModel, type MicrogptSelection, type SpatialReadModel } from "./bindings.js";
 import { SpatialCamera, HOME, type CameraBox } from "./camera.js";
 import { headKinds, operations, parameterOwners, type Address } from "./forward.js";
@@ -324,19 +325,13 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
       }
     } else if (state.execution?.progress?.training) {
       const t = state.execution.progress.training;
-      if (t.phase === 'ready') {
-        lessonProgress = `Learning · Candidate Ready`;
-        routePurpose = `Candidate parameters evaluated. Accept the update to advance the accepted model, or Discard to revert.`;
-      } else if (t.phase === 'loss') {
-        lessonProgress = `Learning · Training Objective`;
-        routePurpose = `Combine cross-entropy losses across all positions into mean training objective.`;
-      } else if (t.phase === 'optimizer proposal' || t.phase === 'candidate application') {
-        lessonProgress = `Learning · Adam Proposal`;
-        routePurpose = `Adam uses final gradient and persistent moments to propose candidate update for pinned ${parameterLabel(this.pin)}.`;
-      } else {
-        lessonProgress = `Learning · Backward ${t.final ? 'complete' : `pass (${t.count} steps)`}`;
-        routePurpose = `Propagating gradients backward through the model world into parameter accumulator.`;
-      }
+      const presentation = learningPhasePresentation(t.phase, {
+        final: t.final,
+        count: t.count,
+        pinLabel: parameterLabel(this.pin),
+      });
+      lessonProgress = presentation.label;
+      routePurpose = presentation.purpose;
       primaryAction = "";
       attentionAction = "";
     } else if (isAttn) {
