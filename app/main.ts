@@ -249,10 +249,35 @@ function forwardChanged() {
   if (revision !== inspectedExecutionRevision) { clearDisplayedInspection(); inspectedExecutionRevision = revision; }
   if (forwardDriver.preview) {
     result = forwardDriver.preview; player = new TracePlayer(result.run);
+    const profile = currentProfile();
     const training = forwardDriver.progress?.training;
-    if (training && forwardDriver.follow && ['loss','backward seed','backward','optimizer proposal','candidate application','ready'].includes(training.phase)) spatialPresenter.followLearning(training.phase === 'loss' ? 'objective' : training.phase.includes('backward') ? 'gradient' : 'adam');
     const boundary = forwardDriver.progress?.last;
-    if (boundary && forwardDriver.follow) spatialPresenter.followBoundary(boundary);
+    if (forwardDriver.follow) {
+      if (training?.phase.endsWith('forward')) {
+        // Real forward phases (baseline forward, training forward, candidate forward)
+        // follow authentic backend ForwardBoundary operations through the model topology.
+        if (boundary) spatialPresenter.followBoundary(boundary);
+      } else if (training) {
+        // Non-forward learning phases (loss, backward seed, backward, optimizer proposal, candidate application, ready)
+        if (profile === 'workbench') {
+          // Workbench retains expert lower learning rail framing and learningStage
+          spatialPresenter.followLearning(
+            training.phase === 'loss'
+              ? 'objective'
+              : training.phase.includes('backward')
+                ? 'gradient'
+                : 'adam'
+          );
+        } else {
+          // Visitor and Facilitator use public same-world learning evidence
+          const rowsCount = training.losses?.length || (Array.isArray(forwardDriver.preview?.run.manifest.input) ? forwardDriver.preview.run.manifest.input.length : 4);
+          spatialPresenter.followPublicLearning(training.phase, rowsCount);
+        }
+      } else if (boundary) {
+        // Regular non-training prediction forward
+        spatialPresenter.followBoundary(boundary);
+      }
+    }
     status = `${forwardDriver.phase === 'pausing' ? 'Pausing · admitted operator may finish' : forwardDriver.pending && forwardDriver.phase === 'paused' ? 'Executing one admitted operator' : forwardDriver.phase === 'running' ? 'Running · paced operator execution' : forwardDriver.phase === 'starting' ? 'Preparing input and checkpoint' : forwardDriver.phase === 'cancelling' ? 'Cancelling execution' : 'Paused · no future permits'} · ${forwardDriver.progress?.sequence}/${forwardDriver.progress?.total}`;
     if (training) status = `Accepted step ${training.acceptedStep} · ${training.phase === 'ready' ? 'Candidate ready — not accepted' : training.phase} · candidate is provisional`;
     syncSpatialSelection();
@@ -267,7 +292,8 @@ function forwardChanged() {
 function executionExplore(event: Event) {
   if (!forwardDriver.active) return;
   const target = event.target as Element;
-  if (!target.closest('.world-workspace,.spatial-selection,#spatial-home,#spatial-back,#spatial-focus,#spatial-lens') || target.closest('#execution-controls')) return;
+  if (target.closest('.contextual-dock, #execution-controls')) return;
+  if (!target.closest('.world-workspace,.spatial-selection,#spatial-home,#spatial-back,#spatial-focus,#spatial-lens')) return;
   forwardDriver.follow = false;
   if (forwardDriver.phase === 'running') {
     // Defer render until the current gesture/selection handler has used its target.
@@ -297,10 +323,19 @@ function bindForwardControls() {
     mount.querySelector('#step-learning')?.addEventListener('click', () => void startForward(true));
     mount.querySelector('#short-teach')?.addEventListener('click', () => void startForward(true));
     mount.querySelector('#execution-accept')?.addEventListener('click', () => void forwardDriver.acceptUpdate());
-    mount.querySelector('#execution-pin')?.addEventListener('click', () => { syncTrainingPin(); if (forwardDriver.progress?.training?.phase === 'optimizer proposal') forwardDriver.runToProposal(); else forwardDriver.runToContribution(); });
+    mount.querySelector('#execution-pin')?.addEventListener('click', () => {
+      syncTrainingPin();
+      if (!currentCapabilities().executionDiagnostics) forwardDriver.follow = true;
+      if (forwardDriver.progress?.training?.phase === 'optimizer proposal') forwardDriver.runToProposal();
+      else forwardDriver.runToContribution();
+    });
     mount.querySelector('#step-prediction')?.addEventListener('click', () => void startForward());
     mount.querySelector('#execution-next')?.addEventListener('click', () => { syncTrainingPin(); void forwardDriver.next(); });
-    mount.querySelector('#execution-continue')?.addEventListener('click', () => { syncTrainingPin(); forwardDriver.continue(); });
+    mount.querySelector('#execution-continue')?.addEventListener('click', () => {
+      syncTrainingPin();
+      if (!currentCapabilities().executionDiagnostics) forwardDriver.follow = true;
+      forwardDriver.continue();
+    });
     mount.querySelector('#execution-pause')?.addEventListener('click', () => forwardDriver.pause());
     mount.querySelector('#execution-cancel')?.addEventListener('click', () => void cancelForward());
     mount.querySelector('#execution-follow')?.addEventListener('change', event => { forwardDriver.follow = (event.target as HTMLInputElement).checked; });

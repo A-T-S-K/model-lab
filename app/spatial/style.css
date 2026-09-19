@@ -631,42 +631,42 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   stroke-dasharray: 4 3;
 }
 
-.objective-tag {
+.spatial-world .objective-tag {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
   fill: #ffb74d;
 }
 
-.objective-title {
+.spatial-world .objective-title {
   font-size: 16px;
   font-weight: 700;
   fill: #f0f6fc;
 }
 
-.objective-sub {
+.spatial-world .objective-sub {
   font-size: 12px;
   fill: #8b949e;
 }
 
-.objective-row {
+.spatial-world .objective-row {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   font-size: 12px;
   fill: #c9d1d9;
 }
 
-.objective-divider {
+.spatial-world .objective-divider {
   stroke: #30363d;
   stroke-width: 1;
 }
 
-.objective-mean {
+.spatial-world .objective-mean {
   font-size: 14px;
   font-weight: 700;
   fill: #ffb74d;
 }
 
-.objective-scope-note {
+.spatial-world .objective-scope-note {
   font-size: 11px;
   fill: #8b949e;
   font-style: italic;
@@ -749,33 +749,33 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   stroke-dasharray: 4 3;
 }
 
-.param-overlay-tag {
+.spatial-world .param-overlay-tag {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
   fill: #58a6ff;
 }
 
-.param-overlay-title {
+.spatial-world .param-overlay-title {
   font-size: 15px;
   font-weight: 700;
   fill: #f0f6fc;
 }
 
-.param-overlay-calc,
-.param-overlay-accum,
-.param-overlay-ordinal {
+.spatial-world .param-overlay-calc,
+.spatial-world .param-overlay-accum,
+.spatial-world .param-overlay-ordinal {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   font-size: 11.5px;
   fill: #c9d1d9;
 }
 
-.param-overlay-divider {
+.spatial-world .param-overlay-divider {
   stroke: #30363d;
   stroke-width: 1;
 }
 
-.param-overlay-gradient {
+.spatial-world .param-overlay-gradient {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   font-size: 12.5px;
 }
@@ -816,26 +816,26 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   stroke-dasharray: 4 3;
 }
 
-.adam-overlay-tag {
+.spatial-world .adam-overlay-tag {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
   fill: #62c7e8;
 }
 
-.adam-overlay-title {
+.spatial-world .adam-overlay-title {
   font-size: 14px;
   font-weight: 700;
   fill: #62c7e8;
 }
 
-.adam-overlay-row {
+.spatial-world .adam-overlay-row {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   font-size: 11px;
   fill: #c9d1d9;
 }
 
-.adam-overlay-scope {
+.spatial-world .adam-overlay-scope {
   font-size: 10.5px;
   fill: #8b949e;
   font-style: italic;

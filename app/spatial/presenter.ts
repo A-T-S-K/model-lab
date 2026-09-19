@@ -2,7 +2,8 @@ import { sceneConstruction } from './construction.js';
 import { outputSummary, componentComparison, type OutputPair } from './comparison.js';
 import type { ForwardModel } from './forward.js';
 import { liveLearningScene, liveLearningInspector } from './live-learning.js';
-import { publicLearningScene } from './public-learning.js';
+import { publicLearningScene, publicLearningCameraBox, type PublicLearningCameraPhase } from './public-learning.js';
+import type { TrainingPhase } from '../worker/training-execution.js';
 import type { ForwardDriver } from '../worker/forward-driver.js';
 import type { ForwardBoundary } from '../../model/microgpt.js';
 import { ExplanationPlayback } from "./playback.js";
@@ -220,6 +221,24 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
     this.openLearning(stage); const node = learningStations.find(s => s.stage === stage) ?? learningStations[2];
     this.pendingBox = { x: node.x-50, y:1160, width:820, height:460 };
   }
+  followPublicLearning(phase: TrainingPhase, rowsCount = 4) {
+    if (phase.endsWith('forward')) return;
+    const target: PublicLearningCameraPhase = phase === 'loss'
+      ? 'objective'
+      : phase === 'backward seed' || phase === 'backward'
+        ? 'parameter'
+        : 'adam';
+    const box = publicLearningCameraBox(target, this.pin, { rowsCount });
+    if (
+      this.camera.box.x === box.x &&
+      this.camera.box.y === box.y &&
+      this.camera.box.width === box.width &&
+      this.camera.box.height === box.height
+    ) {
+      return;
+    }
+    this.pendingBox = box;
+  }
   captureLocation(): Location { return { selection:{...this.selection},kind:this.kind,element:this.element,parameter:this.parameter,row:this.row,column:this.column,lens:this.lens,learningStage:this.learningStage,box:{...this.camera.box} }; }
   restoreLocation(location: Location) {
     Object.assign(this.selection,location.selection);this.kind=location.kind;this.element=location.element;this.parameter=location.parameter;
@@ -244,13 +263,15 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
   private frame(){
     if(this.learningRouteStop !== undefined && this.learningRouteStop >= 0){
       if(this.learningRouteStop === 0){
-        const prob = stationFor('probabilities');
-        this.pendingBox = { x: prob.x - 50, y: prob.y - 150, width: 850, height: 550 };
+        this.pendingBox = publicLearningCameraBox('objective', this.pin);
         return;
       }
-      if(this.learningRouteStop === 5 || this.learningRouteStop === 6){
-        const bank = stationFor(this.pin.name);
-        this.pendingBox = { x: bank.x - 50, y: bank.y - 100, width: 900, height: 550 };
+      if(this.learningRouteStop === 5){
+        this.pendingBox = publicLearningCameraBox('parameter', this.pin);
+        return;
+      }
+      if(this.learningRouteStop === 6){
+        this.pendingBox = publicLearningCameraBox('adam', this.pin);
         return;
       }
       const landmark = REVERSE_LANDMARKS[this.learningRouteStop];

@@ -50,17 +50,156 @@ export function publicLearningScene(opts: PublicLearningOptions): string {
   return `<g class="public-learning-world" data-testid="public-learning-world">${parts.join('')}</g>`;
 }
 
+export interface WorldRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export function objectiveLearningBounds(rowsCount = 4): WorldRect {
+  const probStation = stationFor('probabilities');
+  const x = probStation.x + probStation.width + 30;
+  const y = probStation.y - 120;
+  const width = 400;
+  const maxDisplayRows = 8;
+  const count = Math.min(maxDisplayRows, rowsCount);
+  const truncated = rowsCount > maxDisplayRows;
+  const lineCount = count + (truncated ? 1 : 0);
+  const rowHeight = 28;
+  const dividerY = y + 114 + lineCount * rowHeight + 8;
+  const meanY = dividerY + 28;
+  const note1Y = meanY + 28;
+  const note2Y = note1Y + 22;
+  const height = note2Y - y + 26;
+  return { x, y, width, height };
+}
+
+export function parameterLearningBounds(pin: ParameterPin): WorldRect {
+  const bank = stationFor(pin.name);
+  const x = bank.x + bank.width + 25;
+  const y = bank.y - 45;
+  const width = 450;
+  const height = 180;
+  return { x, y, width, height };
+}
+
+export function adamLearningBounds(pin: ParameterPin): WorldRect {
+  const bank = stationFor(pin.name);
+  const x = bank.x + bank.width + 25;
+  const y = bank.y + 145;
+  const width = 450;
+  const height = 160;
+  return { x, y, width, height };
+}
+
+export function unionBoxes(boxes: readonly WorldRect[]): WorldRect {
+  if (boxes.length === 0) return { x: 0, y: 0, width: 0, height: 0 };
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const b of boxes) {
+    if (b.x < minX) minX = b.x;
+    if (b.y < minY) minY = b.y;
+    if (b.x + b.width > maxX) maxX = b.x + b.width;
+    if (b.y + b.height > maxY) maxY = b.y + b.height;
+  }
+  return {
+    x: minX,
+    y: minY,
+    width: maxX - minX,
+    height: maxY - minY,
+  };
+}
+
+export type PublicLearningCameraPhase = 'objective' | 'parameter' | 'adam';
+
+export interface PublicCameraBoxOptions {
+  rowsCount?: number;
+  padX?: number;
+  padY?: number;
+  minWidth?: number;
+  minHeight?: number;
+  worldWidth?: number;
+  worldHeight?: number;
+}
+
+export function publicLearningCameraBox(
+  phase: PublicLearningCameraPhase,
+  pin: ParameterPin,
+  options?: PublicCameraBoxOptions
+): WorldRect {
+  // Public canonical-world clamping bounds are strictly 4500 x 1300
+  const worldWidth = options?.worldWidth ?? 4500;
+  const worldHeight = options?.worldHeight ?? 1300;
+  const padX = options?.padX ?? 60;
+  const padY = options?.padY ?? (phase === 'adam' ? 40 : 60);
+  const minWidth = options?.minWidth ?? 960;
+  const minHeight = options?.minHeight ?? 580;
+
+  let rawBox: WorldRect;
+
+  if (phase === 'objective') {
+    // Objective: probabilities station + objective overlay
+    const probStation = stationFor('probabilities');
+    const objBounds = objectiveLearningBounds(options?.rowsCount ?? 4);
+    rawBox = unionBoxes([probStation, objBounds]);
+  } else if (phase === 'parameter') {
+    // Backward: actual parameter owner + parameter bank + parameter accumulation overlay
+    const ownerName = parameterOwners[pin.name] ?? 'tokenEmbedding';
+    const ownerStation = stationFor(ownerName);
+    const bankStation = stationFor(pin.name);
+    const paramBounds = parameterLearningBounds(pin);
+    rawBox = unionBoxes([ownerStation, bankStation, paramBounds]);
+  } else {
+    // Adam / Ready: parameter bank + parameter accumulation overlay + Adam overlay
+    const bankStation = stationFor(pin.name);
+    const paramBounds = parameterLearningBounds(pin);
+    const adamBounds = adamLearningBounds(pin);
+    rawBox = unionBoxes([bankStation, paramBounds, adamBounds]);
+  }
+
+  // Pad and fit:
+  let width = Math.max(rawBox.width + padX * 2, minWidth);
+  let height = Math.max(rawBox.height + padY * 2, minHeight);
+
+  const cx = rawBox.x + rawBox.width / 2;
+  const cy = rawBox.y + rawBox.height / 2;
+  let x = cx - width / 2;
+  let y = cy - height / 2;
+
+  // Clamping within public canonical world domain [0..worldWidth, 0..worldHeight]
+  if (width > worldWidth) {
+    width = worldWidth;
+    x = 0;
+  } else {
+    if (x < 0) x = 0;
+    if (x + width > worldWidth) x = worldWidth - width;
+  }
+
+  if (height > worldHeight) {
+    height = worldHeight;
+    y = 0;
+  } else {
+    if (y < 0) y = 0;
+    if (y + height > worldHeight) y = worldHeight - height;
+  }
+
+  return {
+    x: Math.round(x),
+    y: Math.round(y),
+    width: Math.round(width),
+    height: Math.round(height),
+  };
+}
+
 function renderObjectiveAnchor(
   f: ForwardModel,
   t?: TrainingProgress,
   m?: LearningModel,
   learningRouteStop?: number,
 ): string {
-  const probStation = stationFor('probabilities');
-  const x = probStation.x + probStation.width + 30;
-  const y = probStation.y - 120;
-  const width = 400;
-
   const isHighlighted = learningRouteStop === 0 || t?.phase === 'loss';
 
   // Per-position losses and mean
@@ -106,6 +245,10 @@ function renderObjectiveAnchor(
     });
   }
 
+  const bounds = objectiveLearningBounds(rows.length);
+  const { x, y, width, height } = bounds;
+  const probStation = stationFor('probabilities');
+
   const maxDisplayRows = 8;
   const displayRows = rows.slice(0, maxDisplayRows);
   const truncated = rows.length > maxDisplayRows;
@@ -123,7 +266,6 @@ function renderObjectiveAnchor(
   const meanY = dividerY + 28;
   const note1Y = meanY + 28;
   const note2Y = note1Y + 22;
-  const height = note2Y - y + 26;
 
   let titleText: string;
   let tagText: string;
@@ -374,11 +516,9 @@ function renderParameterLearningOverlay(
   m?: LearningModel,
   learningRouteStop?: number,
 ): string {
+  const bounds = parameterLearningBounds(pin);
+  const { x, y, width, height } = bounds;
   const bank = stationFor(pin.name);
-  const x = bank.x + bank.width + 25;
-  const y = bank.y - 45;
-  const width = 450;
-  const height = 180;
 
   const isHighlighted = learningRouteStop === 5 || (t && ['backward', 'backward seed', 'optimizer proposal'].includes(t.phase));
 
@@ -441,11 +581,9 @@ function renderAdamLearningOverlay(
   // If neither proposal evidence exists nor Adam stop/highlight is active, do not render overlay
   if (!u && !isHighlighted) return '';
 
+  const bounds = adamLearningBounds(pin);
+  const { x, y, width, height } = bounds;
   const bank = stationFor(pin.name);
-  const x = bank.x + bank.width + 25;
-  const y = bank.y + 145;
-  const width = 450;
-  const height = 160;
   const pinLabel = `${pin.name}[${pin.row},${pin.column}]`;
 
   if (u) {
