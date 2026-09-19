@@ -55,6 +55,11 @@ test('1. Visitor profile DOM omissions hide unneeded workbench controls', async 
   await expect(page.locator('#spatial-operation option[value="leakyRelu"]')).toHaveCount(0);
   await expect(page.locator('#spatial-operation option[value="compositeW"]')).toHaveCount(0);
 
+  // Contextual dock is present, side-lens and tether are omitted from DOM in visitor profile
+  await expect(page.getByTestId('contextual-dock')).toBeVisible();
+  await expect(page.locator('.context-lens')).toHaveCount(0);
+  await expect(page.locator('.context-tether')).toHaveCount(0);
+
   // Permitted visitor controls are present
   await expect(page.locator('#clear-session')).toContainText('Public Reset');
   await expect(page.locator('#spatial-home')).toBeVisible();
@@ -477,9 +482,10 @@ test('6. 44px minimum touch targets and keyboard accessibility across qualified 
   async function assertMin44(selector: string, desc?: string) {
     const el = page.locator(selector).first();
     await expect(el).toBeVisible();
-    const box = await el.boundingBox();
-    expect(box, `Bounding box for ${selector}`).not.toBeNull();
-    expect(box!.height, `Height for ${desc ?? selector} must be >= 44px (got ${box!.height})`).toBeGreaterThanOrEqual(44);
+    await expect.poll(async () => {
+      const box = await el.boundingBox();
+      return box?.height ?? 0;
+    }, { message: `Height for ${desc ?? selector} must be >= 44px` }).toBeGreaterThanOrEqual(44);
   }
 
   // 1. 1920x1080 Visitor Mode
@@ -498,6 +504,9 @@ test('6. 44px minimum touch targets and keyboard accessibility across qualified 
   await assertMin44('#operator-controls', 'Operator Controls button');
   await assertMin44('#clear-session', 'Public Reset button');
   await assertMin44('#scene-construction', 'Scene math toggle button');
+  await assertMin44('[data-dock-depth="explain"]', 'Dock tab Explain');
+  await assertMin44('[data-dock-depth="values"]', 'Dock tab Values');
+  await assertMin44('[data-dock-depth="source"]', 'Dock tab Source');
 
   // Keyboard navigation through short route
   await page.locator('#short-continue').focus();
@@ -748,3 +757,87 @@ test('7. 1280x720 layout and reduced motion visual captures', async ({ page }) =
     idleResetOptOutPersistedAcrossReset: true
   }, null, 2));
 });
+
+test('8. P0-E2 Unified contextual dock, depth switching, world dominant floor, and 40vh bound', async ({ page }) => {
+  await mkdir(evidenceDir, { recursive: true });
+
+  // 1. Test at 1920x1080
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await audit(page);
+  await page.goto('/?presentation=spatial&kiosk=1');
+  await page.locator('#exhibit-start').click();
+  await expect(page.getByTestId('status')).toContainText('Live prediction complete');
+
+  // Verify dock presence and lens omission in visitor profile
+  await expect(page.getByTestId('contextual-dock')).toBeVisible();
+  await expect(page.locator('.context-lens')).toHaveCount(0);
+  await expect(page.locator('.context-tether')).toHaveCount(0);
+
+  // Check 1080p World dominant floor in default Explain state (>= 55% of world+dock region)
+  const worldBox1080 = await page.locator('#spatial-world').boundingBox();
+  const dockBox1080 = await page.getByTestId('contextual-dock').boundingBox();
+  expect(worldBox1080).not.toBeNull();
+  expect(dockBox1080).not.toBeNull();
+  const combinedHeight1080 = worldBox1080!.height + dockBox1080!.height;
+  const worldRatio1080 = worldBox1080!.height / combinedHeight1080;
+  expect(worldRatio1080).toBeGreaterThanOrEqual(0.55);
+
+  // 2. Test at 1280x720
+  await page.setViewportSize({ width: 1280, height: 720 });
+  const worldBox720 = await page.locator('#spatial-world').boundingBox();
+  const dockBox720 = await page.getByTestId('contextual-dock').boundingBox();
+  expect(worldBox720).not.toBeNull();
+  expect(dockBox720).not.toBeNull();
+  const combinedHeight720 = worldBox720!.height + dockBox720!.height;
+  const worldRatio720 = worldBox720!.height / combinedHeight720;
+  expect(worldRatio720).toBeGreaterThanOrEqual(0.55);
+
+  // 3. Zero-execution depth switching & expanded dock bound <= 40vh (288px at 720p)
+  const initialCommands = await page.evaluate(() => (window as any).abq.commands.length);
+
+  // Depth: Values
+  await page.locator('[data-dock-depth="values"]').click();
+  await expect(page.getByTestId('dock-values')).toBeVisible();
+  const valuesDockBox = await page.getByTestId('contextual-dock').boundingBox();
+  expect(valuesDockBox!.height).toBeLessThanOrEqual(720 * 0.40 + 1);
+  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
+
+  // Depth: Math
+  await page.locator('[data-dock-depth="math"]').click();
+  await expect(page.getByTestId('dock-math')).toBeVisible();
+  const mathDockBox = await page.getByTestId('contextual-dock').boundingBox();
+  expect(mathDockBox!.height).toBeLessThanOrEqual(720 * 0.40 + 1);
+  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
+
+  // Depth: Source
+  await page.locator('[data-dock-depth="source"]').click();
+  await expect(page.getByTestId('dock-source')).toBeVisible();
+  const sourceDockBox = await page.getByTestId('contextual-dock').boundingBox();
+  expect(sourceDockBox!.height).toBeLessThanOrEqual(720 * 0.40 + 1);
+  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
+
+  // Return to Explain via Close button
+  await page.locator('.dock-tab-close').click();
+  await expect(page.getByTestId('dock-explain')).toBeVisible();
+  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
+
+  // Verify route controls remain intact and visible in Explain state
+  await expect(page.getByTestId('lesson-progress')).toBeVisible();
+  await expect(page.locator('#short-continue')).toBeVisible();
+
+  // Test touch targets for dock tabs >= 44px
+  for (const tab of ['explain', 'values', 'math', 'source']) {
+    const tabBox = await page.locator(`button[data-dock-depth="${tab}"]`).boundingBox();
+    expect(tabBox).not.toBeNull();
+    expect(tabBox!.height).toBeGreaterThanOrEqual(44);
+    expect(tabBox!.width).toBeGreaterThanOrEqual(44);
+  }
+
+  // Facilitator mode verification: dock is also present at bottom, lens omitted
+  await page.locator('#operator-controls').click();
+  await expect(page.getByTestId('facilitator-panel')).toBeVisible();
+  await expect(page.getByTestId('contextual-dock')).toBeVisible();
+  await expect(page.locator('.context-lens')).toHaveCount(0);
+  await page.screenshot({ path: `${evidenceDir}/25-dock-facilitator-1280.png` });
+});
+

@@ -11,10 +11,10 @@ import { sourceView } from "../source/catalog.js";
 export const fmt=(value:number|undefined)=>value===undefined?"unavailable":Number(value.toPrecision(7)).toString();
 const val=(v:number|undefined)=>`<span data-value="${v??""}" title="${v??"unavailable"}">${fmt(v)}</span>`;
 export const addressLabel=(a:Address)=>`${operations.find(o=>o.kind===a.kind)?.title??a.kind}${a.layer===undefined?"":` · L${a.layer}`} · p${a.token}${a.head===undefined?"":` / h${a.head}`}`;
-function valuesTable(e:Explanation, vocabulary?:readonly string[]) {
+export function valuesTable(e:Explanation, vocabulary?:readonly string[]) {
   return `<div class="element-grid" data-testid="forward-elements">${e.output?.map((v,i)=>`<button data-forward-element="${i}" data-value="${v}" title="${v}"><small>${vocabulary?esc(outputTokenName(i,vocabulary))+" · ":""}[${i}]</small>${fmt(v)}</button>`).join("")??"<p>NOT CAPTURED · no substituted values.</p>"}</div>`;
 }
-function arithmetic(e:Explanation, element:number) {
+export function arithmetic(e:Explanation, element:number) {
   const family=e.definition?.family;
   if(!e.indexValid) return '<p role="status">Element unavailable in this source. Select a valid component; the prior scalar is not rebound.</p>';
   if(family==="linear") return `<p>Output[${element}] ≈ Σ input[j] × W[${element},j]. Rows are outputs, columns are inputs; no bias.</p><div class="table-scroll"><table data-testid="linear-terms"><thead><tr><th>j</th><th>Input</th><th>Weight</th><th>Product · derived</th></tr></thead><tbody>${e.terms?.map(t=>`<tr><th>${t.index}</th><td>${val(t.input)}</td><td>${val(t.weight)}</td><td>${val(t.product)}</td></tr>`).join("")??"<tr><td>Checkpoint unavailable</td></tr>"}</tbody></table></div><p>Derived sum ${val(e.terms?.reduce((s,t)=>s+t.product,0))} ≈ observed ${val(e.observed)}</p>`;
