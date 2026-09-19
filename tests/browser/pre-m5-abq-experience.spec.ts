@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 
-const evidenceDir = process.env.PRE_M5_EVIDENCE_DIR ?? 'test-results/scratch/p0-final-review-evidence-20260918-01';
+const evidenceDir = process.env.PRE_M5_EVIDENCE_DIR ?? 'test-results/scratch/p0-e2a-evidence-20260918-01';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -335,15 +335,64 @@ test('3. Stepped training, candidate discard, and authority preservation', async
   await page.locator('#execution-pin').click();
   await expect(page.locator('#execution-continue')).toBeEnabled({ timeout: 60000 });
   await expect(page.getByTestId('execution-frontier')).toContainText('stopped after matching backward node');
-  await expect(page.getByTestId('live-contribution')).toBeVisible();
-  await page.screenshot({ path: `${evidenceDir}/08-gradient-contribution-1920.png` });
+
+  // Explain tab is meaning-first (no raw contribution arithmetic or signed tracks)
+  await expect(page.getByTestId('dock-explain')).toContainText('Parameter uses contribute and accumulate');
+  await expect(page.getByTestId('dock-explain')).toContainText('Partial gradient');
+  await expect(page.getByTestId('dock-explain').locator('[data-testid="live-contribution"]')).toHaveCount(0);
+  await expect(page.getByTestId('dock-explain').locator('.live-signed-track')).toHaveCount(0);
+  await page.screenshot({ path: `${evidenceDir}/08-gradient-explain-1920.png` });
+
+  // Math tab retains exact learning evidence
+  await page.locator('button[data-dock-depth="math"]').click();
+  await expect(page.getByTestId('dock-math')).toBeVisible();
+  await expect(page.getByTestId('dock-math').getByTestId('live-contribution')).toBeVisible();
+  await expect(page.getByTestId('dock-math').locator('.live-signed-track').first()).toBeVisible();
+  await page.screenshot({ path: `${evidenceDir}/08-gradient-math-1920.png` });
+
+  // Return to Explain tab
+  await page.locator('.dock-tab-close').click();
+  await expect(page.getByTestId('dock-explain')).toBeVisible();
 
   // Advance to Candidate ready
   await page.locator('#execution-continue').click();
   await expect(page.locator('#execution-controls')).toHaveAttribute('data-training-phase', 'ready', { timeout: 60000 });
   await expect(page.locator('#execution-accept')).toBeVisible();
   await expect(page.locator('#execution-cancel')).toContainText('Discard candidate');
+  await expect(page.getByTestId('execution-frontier')).toContainText('Candidate ready — not accepted');
   await page.screenshot({ path: `${evidenceDir}/09-candidate-ready-1920.png` });
+
+  // Candidate Ready Compare regression:
+  // Assert Compare tab exists in the contextual dock
+  const compareTab = page.locator('button[data-dock-depth="compare"]');
+  await expect(compareTab).toBeVisible();
+
+  // Assert opening Compare issues zero execution
+  const commandsBeforeCompare = await page.evaluate(() => (window as any).abq.commands.length);
+  const runBefore = await page.locator('[data-testid="selected-world-object"]').getAttribute('data-run-id');
+  await compareTab.click();
+  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(commandsBeforeCompare);
+
+  // Assert Compare content contains real Current/Candidate evidence
+  const compareContent = page.getByTestId('dock-compare');
+  await expect(compareContent).toBeVisible();
+  await expect(compareContent).toContainText('Current / Candidate');
+  await expect(compareContent.getByTestId('before-mean')).toBeVisible();
+  await expect(compareContent.getByTestId('after-mean')).toBeVisible();
+  await expect(compareContent.locator('.output-comparison table')).toBeVisible();
+  await expect(compareContent).not.toContainText('No active comparison available');
+
+  // Assert run/candidate identities remain unchanged
+  expect(await page.locator('[data-testid="selected-world-object"]').getAttribute('data-run-id')).toBe(runBefore);
+  await page.screenshot({ path: `${evidenceDir}/candidate-ready-compare-1920.png` });
+
+  // Assert closing Compare preserves Candidate Ready state
+  await page.locator('.dock-tab-close').click();
+  await expect(page.getByTestId('dock-explain')).toBeVisible();
+  await expect(page.locator('#execution-controls')).toHaveAttribute('data-training-phase', 'ready');
+  await expect(page.locator('#execution-accept')).toBeVisible();
+  await expect(page.locator('#execution-cancel')).toBeVisible();
+  await expect(page.locator('#execution-cancel')).toContainText('Discard candidate');
 
   // Discard candidate
   await page.locator('#execution-cancel').click();
@@ -455,8 +504,9 @@ test('4. Facilitator panel, authoritative retention text, execution omissions, a
   await expect(page.locator('#exhibit-opt-out')).toContainText('Enable idle reset · 300 seconds');
 });
 
-test('5. Workbench profile preservation at /?presentation=spatial', async ({ page }) => {
+test('5. Workbench profile preservation and single-surface explanation arbitration at /?presentation=spatial', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
+  await audit(page);
   await page.goto('/?presentation=spatial');
   await expect(page.locator('#predict')).toBeEnabled();
   await page.locator('#predict').click();
@@ -475,6 +525,48 @@ test('5. Workbench profile preservation at /?presentation=spatial', async ({ pag
   await expect(page.locator('#clear-session')).toContainText('Clear session');
 
   await page.screenshot({ path: `${evidenceDir}/workbench-preserved-1920.png` });
+
+  // Workbench single-surface explanation arbitration regression (Section E):
+  // Record command baseline: surface switching must NOT trigger model execution
+  const initialCommands = await page.evaluate(() => (window as any).abq.commands.length);
+  const runId = await page.locator('[data-testid="selected-world-object"]').getAttribute('data-run-id');
+
+  // 1. Open Scene Math: verify construction visible and lens not simultaneously visible
+  await page.locator('#scene-construction').click();
+  await expect(page.locator('.scene-construction')).toBeVisible();
+  await expect(page.locator('.context-lens')).toBeHidden();
+  await page.screenshot({ path: `${evidenceDir}/workbench-scene-math-1920.png` });
+
+  // 2. Open Values / arithmetic / source: verify right lens visible and construction not simultaneously visible
+  await page.locator('#open-spatial-detail').click();
+  await expect(page.locator('.context-lens')).toBeVisible();
+  await expect(page.locator('.scene-construction')).toHaveCount(0);
+  await page.screenshot({ path: `${evidenceDir}/workbench-lens-1920.png` });
+
+  // 3. Close lens and open Scene Math: verify construction visible and lens not simultaneously visible
+  await page.locator('#close-spatial-lens').click();
+  await expect(page.locator('.context-lens')).toBeHidden();
+  await page.locator('#scene-construction').click();
+  await expect(page.locator('.scene-construction')).toBeVisible();
+  await expect(page.locator('.context-lens')).toBeHidden();
+
+  // 4. Open via #spatial-focus: verify right lens visible and construction not simultaneously visible
+  await page.locator('#spatial-focus').click();
+  await expect(page.locator('.context-lens')).toBeVisible();
+  await expect(page.locator('.scene-construction')).toHaveCount(0);
+
+  // 5. Open Scene Math then open via #spatial-lens (Q/K lens): verify right lens visible and construction not simultaneously visible
+  await page.locator('#close-spatial-lens').click();
+  await expect(page.locator('.context-lens')).toBeHidden();
+  await page.locator('#scene-construction').click();
+  await expect(page.locator('.scene-construction')).toBeVisible();
+  await page.locator('#spatial-lens').click();
+  await expect(page.locator('.context-lens')).toBeVisible();
+  await expect(page.locator('.scene-construction')).toHaveCount(0);
+
+  // 6. Verify run identity does not change and zero model execution occurs
+  expect(await page.locator('[data-testid="selected-world-object"]').getAttribute('data-run-id')).toBe(runId);
+  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
 });
 
 test('6. 44px minimum touch targets and keyboard accessibility across qualified viewports', async ({ page }) => {
@@ -503,7 +595,7 @@ test('6. 44px minimum touch targets and keyboard accessibility across qualified 
   await assertMin44('#visitor-explore-toggle', 'Visitor Explore Toggle');
   await assertMin44('#operator-controls', 'Operator Controls button');
   await assertMin44('#clear-session', 'Public Reset button');
-  await assertMin44('#scene-construction', 'Scene math toggle button');
+  await assertMin44('[data-dock-depth="math"]', 'Dock tab Math');
   await assertMin44('[data-dock-depth="explain"]', 'Dock tab Explain');
   await assertMin44('[data-dock-depth="values"]', 'Dock tab Values');
   await assertMin44('[data-dock-depth="source"]', 'Dock tab Source');
@@ -600,7 +692,7 @@ test('6. 44px minimum touch targets and keyboard accessibility across qualified 
   }
   await assertMin44('#short-teach', '720p Visitor Teach button at Stop 5');
   await assertMin44('#visitor-explore-toggle', '720p Visitor Explore Toggle');
-  await assertMin44('#scene-construction', '720p Scene math button');
+  await assertMin44('button[data-dock-depth="math"]', '720p Math tab button');
 
   // Launch stepped training as visitor at 1280x720
   await page.locator('#short-teach').click();
@@ -611,7 +703,12 @@ test('6. 44px minimum touch targets and keyboard accessibility across qualified 
   await page.locator('#execution-pin').click();
   await expect(page.locator('#execution-continue')).toBeEnabled({ timeout: 60000 });
   await expect(page.getByTestId('execution-frontier')).toContainText('stopped after matching backward node');
-  await expect(page.getByTestId('live-contribution')).toBeVisible();
+
+  // Verify Math tab exposes live-contribution at 1280x720
+  await page.locator('button[data-dock-depth="math"]').click();
+  await expect(page.getByTestId('dock-math')).toBeVisible();
+  await expect(page.getByTestId('dock-math').getByTestId('live-contribution')).toBeVisible();
+  await page.locator('.dock-tab-close').click();
 
   // Directly measure visitor execution controls at 1280x720 in partial/stopped state
   await assertMin44('#execution-pin', '720p Visitor Execution Pin button');
@@ -621,6 +718,14 @@ test('6. 44px minimum touch targets and keyboard accessibility across qualified 
   // Advance to Ready
   await page.locator('#execution-continue').click();
   await expect(page.locator('#execution-controls')).toHaveAttribute('data-training-phase', 'ready', { timeout: 60000 });
+
+  // Verify Compare at 1280x720
+  await page.locator('button[data-dock-depth="compare"]').click();
+  await expect(page.getByTestId('dock-compare')).toBeVisible();
+  await expect(page.getByTestId('dock-compare')).toContainText('Current / Candidate');
+  await expect(page.getByTestId('dock-compare')).not.toContainText('No active comparison available');
+  await page.screenshot({ path: `${evidenceDir}/candidate-ready-compare-1280.png` });
+  await page.locator('.dock-tab-close').click();
 
   // Directly measure visitor execution controls at 1280x720 in Ready state
   await assertMin44('#execution-accept', '720p Visitor Execution Accept button');
@@ -681,8 +786,13 @@ test('7. 1280x720 layout and reduced motion visual captures', async ({ page }) =
   await page.locator('#execution-pin').click();
   await expect(page.locator('#execution-continue')).toBeEnabled({ timeout: 60000 });
   await expect(page.getByTestId('execution-frontier')).toContainText('stopped after matching backward node');
-  await expect(page.getByTestId('live-contribution')).toBeVisible();
-  await page.screenshot({ path: `${evidenceDir}/19-gradient-contribution-1280.png` });
+  await page.screenshot({ path: `${evidenceDir}/19-gradient-explain-1280.png` });
+
+  await page.locator('button[data-dock-depth="math"]').click();
+  await expect(page.getByTestId('dock-math')).toBeVisible();
+  await expect(page.getByTestId('dock-math').getByTestId('live-contribution')).toBeVisible();
+  await page.screenshot({ path: `${evidenceDir}/19-gradient-math-1280.png` });
+  await page.locator('.dock-tab-close').click();
 
   // 20: Candidate ready
   await page.locator('#execution-continue').click();

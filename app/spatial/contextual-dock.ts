@@ -4,7 +4,7 @@ import { operations, parameterOwners } from './forward.js';
 import type { ForwardProgress } from '../worker/protocol.js';
 import type { TrainingProgress } from '../worker/training-execution.js';
 import type { LearningModel, LearningStage, ParameterPin } from './learning.js';
-import { outputTokenName, componentComparison, type OutputPair } from './comparison.js';
+import { outputTokenName, outputSummary, componentComparison, type OutputPair } from './comparison.js';
 import { geometry, projection } from './view.js';
 import { probabilityColor } from './geometry.js';
 import { simplexGlyph } from './scene.js';
@@ -54,22 +54,12 @@ function renderExplain(opts: ContextualDockOptions): string {
 
   if (trainingProgress) {
     const t = trainingProgress;
-    const e = t.contributions.at(-1);
-    const n = (v: number | undefined) => v === undefined ? 'pending' : Number(v.toPrecision(8)).toString();
-    const mark = (v: number) => `<span class="live-signed-track"><i style="left:${v < 0 ? 50-50*Math.min(1,Math.abs(v)) : 50}%;width:${50*Math.min(1,Math.abs(v))}%;background:${v<0?'#DC7C7C':'#58B98C'}"></i></span>`;
-    const contribution = `<section class="live-learning" data-testid="live-learning-arithmetic">
-      <div class="dock-pin-info"><span data-testid="pin-owner">${esc(pin.name)} → ${esc(operations.find(o=>o.kind===parameterOwners[pin.name])?.title??pin.name)} · same global owner · accepted ${esc(t.startingSnapshotId.slice(0,12))}</span></div>
-      <h3>${t.final?'Final':'Partial'} gradient <span data-testid="live-gradient" data-value="${t.gradient}">${n(t.gradient)}</span></h3>
-      ${e ? `<p>Occurrence ${e.ordinal} · operand ${e.operand} · child <button data-live-child="${e.child}" data-live-source="${esc(t.gradientSourceRunId)}">scalar ${e.child}</button></p>
-      <p data-testid="live-contribution">${n(e.childAdjoint)} × ${n(e.localDerivative)} = ${n(e.contribution)}</p>
-      <div class="live-arithmetic-row">Contribution ${mark(e.contribution)} ${n(e.contribution)}</div>
-      <div class="live-arithmetic-row">Accumulator ${mark(e.before)} ${n(e.before)}</div>
-      <div class="live-arithmetic-row">After addition ${mark(e.after)} ${n(e.after)}</div>
-      <p class="live-scale">Signed marks: fixed −1…+1, clipped at endpoints; exact numbers shown. Count is separate from magnitude.</p>` : (t.final ? '<p>Traversal complete. The final gradient is known, including zero. No live occurrences are retained for this pin; earlier history is not reconstructed.</p>' : '<p>Contribution pending. Inspection grants no work.</p>')}
-    </section>`;
     return `<div class="dock-explain-content" data-testid="dock-explain">
       <p class="learning-scope">Live training · ${esc(t.phase)} · accepted step ${t.acceptedStep} → proposed step ${t.acceptedStep + 1} provisional</p>
-      ${contribution}
+      <div class="dock-pin-info"><span data-testid="pin-owner">${esc(pin.name)} → ${esc(operations.find(o=>o.kind===parameterOwners[pin.name])?.title??pin.name)} · same global owner · accepted ${esc(t.startingSnapshotId.slice(0,12))}</span></div>
+      <p class="learning-gradient-summary">${t.final ? 'Final' : 'Partial'} gradient: <span data-testid="live-gradient" data-value="${t.gradient}">${t.gradient === undefined ? 'pending' : fmt(t.gradient)}</span></p>
+      <p class="learning-mechanism">Parameter uses contribute and accumulate: each backward occurrence calculates a child adjoint × local derivative contribution and adds it to the parameter gradient accumulator.</p>
+      ${t.proposal ? `<p class="learning-provisional">Candidate proposal: θ ${fmt(t.proposal.before)} → ${fmt(t.proposal.after)} · provisional until explicitly accepted.</p>` : ''}
       <p>Pinned ${esc(parameterLabel(pin))}. Losses across all positions enter the objective; candidate proposals remain provisional until accepted.</p>
     </div>`;
   }
@@ -175,13 +165,18 @@ function renderMath(opts: ContextualDockOptions): string {
 
   if (trainingProgress) {
     const t = trainingProgress, e = t.contributions.at(-1), u = t.proposal;
+    const n = (v: number | undefined) => v === undefined ? 'pending' : Number(v.toPrecision(8)).toString();
     const mark = (v: number) => `<span class="live-signed-track"><i style="left:${v < 0 ? 50 - 50 * Math.min(1, Math.abs(v)) : 50}%;width:${50 * Math.min(1, Math.abs(v))}%;background:${v < 0 ? '#DC7C7C' : '#58B98C'}"></i></span>`;
     return `<div class="dock-math-content" data-testid="dock-math">
-      <section><h3>${t.final ? 'Final' : 'Partial'} gradient <span data-testid="live-gradient" data-value="${t.gradient}">${fmt(t.gradient)}</span></h3>
-      ${e ? `<p data-testid="live-contribution">${fmt(e.childAdjoint)} × ${fmt(e.localDerivative)} = ${fmt(e.contribution)}</p>
-      <div class="live-arithmetic-row">Contribution ${mark(e.contribution)} ${fmt(e.contribution)}</div>
-      <div class="live-arithmetic-row">Accumulator ${mark(e.before)} ${fmt(e.before)}</div>
-      <div class="live-arithmetic-row">After addition ${mark(e.after)} ${fmt(e.after)}</div>` : '<p>Contribution pending.</p>'}
+      <section class="live-learning" data-testid="live-learning-arithmetic">
+        <div class="dock-pin-info"><span data-testid="pin-owner">${esc(pin.name)} → ${esc(operations.find(o=>o.kind===parameterOwners[pin.name])?.title??pin.name)} · same global owner · accepted ${esc(t.startingSnapshotId.slice(0,12))}</span></div>
+        <h3>${t.final ? 'Final' : 'Partial'} gradient <span data-testid="live-gradient" data-value="${t.gradient}">${n(t.gradient)}</span></h3>
+        ${e ? `<p>Occurrence ${e.ordinal} · operand ${e.operand} · child <button data-live-child="${e.child}" data-live-source="${esc(t.gradientSourceRunId)}">scalar ${e.child}</button></p>
+        <p data-testid="live-contribution">${n(e.childAdjoint)} × ${n(e.localDerivative)} = ${n(e.contribution)}</p>
+        <div class="live-arithmetic-row">Contribution ${mark(e.contribution)} ${n(e.contribution)}</div>
+        <div class="live-arithmetic-row">Accumulator ${mark(e.before)} ${n(e.before)}</div>
+        <div class="live-arithmetic-row">After addition ${mark(e.after)} ${n(e.after)}</div>
+        <p class="live-scale">Signed marks: fixed −1…+1, clipped at endpoints; exact numbers shown. Count is separate from magnitude.</p>` : (t.final ? '<p>Traversal complete. The final gradient is known, including zero. No live occurrences are retained for this pin; earlier history is not reconstructed.</p>' : '<p>Contribution pending. Inspection grants no work.</p>')}
       </section>
       ${u ? `<div class="adam-chain" data-testid="live-proposal"><section>Old θ ${fmt(u.before)} · m ${fmt(u.mBefore)} · v ${fmt(u.vBefore)}<br>Final g ${fmt(u.gradient)}</section><span>↓</span><section>m′ = β₁m + (1−β₁)g · Proposed m′ ${fmt(u.mAfter)} / v′ ${fmt(u.vAfter)}<br>m̂ ${fmt(u.mHat)} · v̂ ${fmt(u.vHat)}</section><span>↓</span><section>Stored Δ ${fmt(u.delta)} → candidate θ′ ${fmt(u.after)}</section></div>` : ''}
       <section class="spatial-scalar" id="microscope"><h3>Scalar / source inspection</h3>${scalar}</section>
@@ -260,19 +255,38 @@ function renderSource(opts: ContextualDockOptions): string {
 }
 
 function renderCompare(opts: ContextualDockOptions): string {
-  const { address: a, comparison, comparisonLabels, outputPair, model: m } = opts;
+  const { address: a, comparison, comparisonLabels, outputPair } = opts;
   const labels = comparisonLabels ?? ['Before', 'After'];
+  let outputContent = '';
+  if (outputPair && outputPair.before?.manifest?.input && outputPair.after?.manifest?.input) {
+    const inputLen = (outputPair.before.manifest.targets as readonly number[] | undefined)?.length ?? (outputPair.before.manifest.input as readonly number[] | undefined)?.length ?? 0;
+    const position = typeof a.token === 'number' && a.token >= 0 && a.token < inputLen
+      ? a.token
+      : Math.min(Math.max(0, a.token ?? 0), Math.max(0, inputLen - 1));
+    outputContent = outputSummary(outputPair, position, labels);
+  }
+  const componentContent = comparison ? componentComparison(comparison, a, labels) : '';
+
+  if (!outputContent && !componentContent) {
+    return `<div class="dock-compare-content" data-testid="dock-compare"><p>No active comparison available.</p></div>`;
+  }
+
   return `<div class="dock-compare-content" data-testid="dock-compare">
-    ${outputPair && m ? `<div class="decision-summary">${outputTokenName(0, m.forward.vocabulary)}</div>` : ''}
-    ${comparison ? componentComparison(comparison, a, labels) : '<p>No active comparison available.</p>'}
+    ${outputContent}
+    ${componentContent}
   </div>`;
 }
 
 export function renderContextualDock(opts: ContextualDockOptions): string {
-  const { depth, lessonProgress, routePurpose, primaryAction, attentionAction, shortDetour, freeExplore, operatorControls, hasComparison, profile } = opts;
+  const { depth, lessonProgress, routePurpose, primaryAction, attentionAction, shortDetour, freeExplore, operatorControls, profile } = opts;
+
+  const canRenderOutput = Boolean(opts.outputPair && opts.outputPair.before?.manifest?.input && opts.outputPair.after?.manifest?.input);
+  const canRenderComponent = Boolean(opts.comparison?.before && opts.comparison?.after);
+  const hasComparison = Boolean(opts.hasComparison && (canRenderOutput || canRenderComponent));
+  const effectiveDepth: DockDepth = (depth === 'compare' && !hasComparison) ? 'explain' : depth;
 
   let bodyContent = '';
-  switch (depth) {
+  switch (effectiveDepth) {
     case 'explain':
       bodyContent = renderExplain(opts);
       break;
@@ -290,10 +304,10 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
       break;
   }
 
-  const isExpanded = depth !== 'explain';
+  const isExpanded = effectiveDepth !== 'explain';
   const isFacilitator = profile === 'facilitator';
 
-  return `<section class="contextual-dock short-guide ${isExpanded ? 'is-expanded' : ''}" data-testid="contextual-dock" data-active-depth="${depth}" aria-label="Contextual explanation dock">
+  return `<section class="contextual-dock short-guide ${isExpanded ? 'is-expanded' : ''}" data-testid="contextual-dock" data-active-depth="${effectiveDepth}" aria-label="Contextual explanation dock">
     <div class="dock-header" data-testid="dock-header">
       <div class="dock-route-info">
         ${lessonProgress ? `<span class="lesson-progress" data-testid="lesson-progress">${esc(lessonProgress)}</span>` : ''}
@@ -309,11 +323,11 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
       </div>
     </div>
     <nav class="dock-tabs" aria-label="Explanation depth">
-      <button class="dock-tab ${depth === 'explain' ? 'active' : ''}" data-dock-depth="explain" ${depth === 'explain' ? 'aria-pressed="true"' : ''}>Explain</button>
-      <button class="dock-tab ${depth === 'values' ? 'active' : ''}" data-dock-depth="values" ${depth === 'values' ? 'aria-pressed="true"' : ''}>Values</button>
-      <button class="dock-tab ${depth === 'math' ? 'active' : ''}" id="scene-construction" data-dock-depth="math" ${depth === 'math' ? 'aria-pressed="true"' : ''}>Math</button>
-      <button class="dock-tab ${depth === 'source' ? 'active' : ''}" data-dock-depth="source" ${depth === 'source' ? 'aria-pressed="true"' : ''}>Source</button>
-      ${hasComparison ? `<button class="dock-tab ${depth === 'compare' ? 'active' : ''}" data-dock-depth="compare" ${depth === 'compare' ? 'aria-pressed="true"' : ''}>Compare</button>` : ''}
+      <button class="dock-tab ${effectiveDepth === 'explain' ? 'active' : ''}" data-dock-depth="explain" ${effectiveDepth === 'explain' ? 'aria-pressed="true"' : ''}>Explain</button>
+      <button class="dock-tab ${effectiveDepth === 'values' ? 'active' : ''}" data-dock-depth="values" ${effectiveDepth === 'values' ? 'aria-pressed="true"' : ''}>Values</button>
+      <button class="dock-tab ${effectiveDepth === 'math' ? 'active' : ''}" data-dock-depth="math" ${effectiveDepth === 'math' ? 'aria-pressed="true"' : ''}>Math</button>
+      <button class="dock-tab ${effectiveDepth === 'source' ? 'active' : ''}" data-dock-depth="source" ${effectiveDepth === 'source' ? 'aria-pressed="true"' : ''}>Source</button>
+      ${hasComparison ? `<button class="dock-tab ${effectiveDepth === 'compare' ? 'active' : ''}" data-dock-depth="compare" ${effectiveDepth === 'compare' ? 'aria-pressed="true"' : ''}>Compare</button>` : ''}
       ${isExpanded ? `<button class="dock-tab-close" data-dock-depth="explain" title="Close detail" aria-label="Close detail">✕ Close</button>` : ''}
     </nav>
     <div class="dock-body" data-testid="dock-body">

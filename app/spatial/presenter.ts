@@ -167,7 +167,7 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
   learningStage?:LearningStage;
   pin:ParameterPin={name:"wte",row:0,column:0};
   expanded=false;
-  openLearning(stage:LearningStage){if(this.shortStop>=0)this.shortDetour=true;this.learningStage=stage;this.lens=true;}
+  openLearning(stage:LearningStage){if(this.shortStop>=0)this.shortDetour=true;this.learningStage=stage;this.lens=true;this.construction=false;}
   focusLearning(stage:LearningStage){if(this.shortStop>=0)this.shortDetour=true;this.interrupt();this.remember();this.openLearning(stage);const node=learningStations.find(s=>s.stage===stage)??learningStations[2];this.pendingBox={x:node.x-50,y:1160,width:820,height:460};}
   followLearning(stage: LearningStage) {
     if (this.learningStage === stage && this.lens) return;
@@ -204,7 +204,7 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
     if(["k","v"].includes(address.kind))this.selection.key=address.token;else this.selection.query=address.token;
     if(address.head!==undefined)this.selection.head=address.head;
     if(address.layer!==undefined)this.selection.layer=address.layer;
-    this.element=address.kind==="attentionLogits"?this.selection.key:["q","k","v"].includes(address.kind)?this.selection.head*this.headWidth+this.selection.feature:0;this.lens=true;this.detour=this.guided&&!guided;this.frame();
+    this.element=address.kind==="attentionLogits"?this.selection.key:["q","k","v"].includes(address.kind)?this.selection.head*this.headWidth+this.selection.feature:0;this.lens=true;this.construction=false;this.detour=this.guided&&!guided;this.frame();
   }
   render(m:AnySpatialReadModel|undefined,state:PresentationState) {
     if(m&&isRegisteredWorld(m))return m.presentation.render({status:state.status,error:state.error,replay:Boolean(state.evidenceWorld?.replay)});
@@ -212,18 +212,19 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
     const p=this.playback;
     if(p.source && (state.busy||!m||!m.valid|| (p.route==='forward'?m.source.sourceRunId!==p.source:!state.learning?.available||state.learning.experiment.id!==p.source)))this.invalidate();
     const s=this.selection,a=this.address();
-    const sceneOpen=this.construction&&!this.learningStage&&(!state.intervention||!this.lens);
-    const prepared=state.execution?.progress?.training?.readyOutputs;
-    const pair=prepared??state.outputPair;
-    const labels:[string,string]=prepared?['Current','Candidate']:state.comparisonLabels??['Before','After'];
-    const options=(labels:string[],selected:number)=>`${selected>=labels.length?`<option value="${selected}" selected>${selected} · unavailable</option>`:""}${labels.map((label,i)=>`<option value="${i}" ${selected===i?"selected":""}>${esc(label)}</option>`).join("")}`;
-    const label=this.learningStage?`${this.learningStage} · ${parameterLabel(this.pin)}`:this.parameter??`${m?.forward.operations.find(operation=>operation.kind===a.kind)?.title??addressLabel(a)}${a.layer===undefined?'':` · L${a.layer}`} · p${a.token}${a.head===undefined?'':` / h${a.head}`}`;
     const isKiosk = Boolean(state.exhibit);
     const profile = state.profile ?? (isKiosk ? (this.operatorControls ? 'facilitator' : 'visitor') : 'workbench');
     const capabilities = experienceCapabilities(profile, this.freeExplore);
     const isVisitor = profile === 'visitor';
     const isFacilitator = profile === 'facilitator';
     const isWorkbench = profile === 'workbench';
+    const lensActive = this.lens && (!isWorkbench || !this.construction);
+    const sceneOpen = this.construction && !lensActive && !this.learningStage && (!state.intervention || !lensActive);
+    const prepared=state.execution?.progress?.training?.readyOutputs;
+    const pair=prepared??state.outputPair;
+    const labels:[string,string]=prepared?['Current','Candidate']:state.comparisonLabels??['Before','After'];
+    const options=(labels:string[],selected:number)=>`${selected>=labels.length?`<option value="${selected}" selected>${selected} · unavailable</option>`:""}${labels.map((label,i)=>`<option value="${i}" ${selected===i?"selected":""}>${esc(label)}</option>`).join("")}`;
+    const label=this.learningStage?`${this.learningStage} · ${parameterLabel(this.pin)}`:this.parameter??`${m?.forward.operations.find(operation=>operation.kind===a.kind)?.title??addressLabel(a)}${a.layer===undefined?'':` · L${a.layer}`} · p${a.token}${a.head===undefined?'':` / h${a.head}`}`;
     const showDeeperControls = capabilities.defaultSemanticSelectors;
     const hardLimitMiB = ((state.retention?.hardLimitBytes ?? 32 * 1024 * 1024) / 1048576).toFixed(0);
     const retainedMiB = ((state.retention?.bytes ?? 0) / 1048576).toFixed(1);
@@ -299,10 +300,10 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
         outputPair: pair,
         comparisonLabels: labels,
         hasComparison: Boolean(state.comparison || pair),
-      })}</div>` : `<div class="world-workspace ${this.lens?"has-lens":""}"><div class="world-pane ${sceneOpen?"has-construction":""}">${sceneSvg(m.forward,a,s.key,this.learningStage?this.pin.name:this.parameter,m.labels,s.query,state.comparison??(this.learningStage==="compare"&&state.learning?.available?state.learning.comparison:undefined),state.execution?.progress?.training ? liveLearningScene(state.execution.progress.training,this.pin) : learningScene(state.learning,this.learningStage,this.pin),state.execution?.progress,this.element)}<div class="camera-controls"><button id="zoom-in" aria-label="Zoom in">+</button><button id="zoom-out" aria-label="Zoom out">−</button><button data-pan="-1,0" aria-label="Pan left">←</button><button data-pan="1,0" aria-label="Pan right">→</button><button data-pan="0,-1" aria-label="Pan up">↑</button><button data-pan="0,1" aria-label="Pan down">↓</button></div>
+      })}</div>` : `<div class="world-workspace ${lensActive?"has-lens":""}"><div class="world-pane ${sceneOpen?"has-construction":""}">${sceneSvg(m.forward,a,s.key,this.learningStage?this.pin.name:this.parameter,m.labels,s.query,state.comparison??(this.learningStage==="compare"&&state.learning?.available?state.learning.comparison:undefined),state.execution?.progress?.training ? liveLearningScene(state.execution.progress.training,this.pin) : learningScene(state.learning,this.learningStage,this.pin),state.execution?.progress,this.element)}<div class="camera-controls"><button id="zoom-in" aria-label="Zoom in">+</button><button id="zoom-out" aria-label="Zoom out">−</button><button data-pan="-1,0" aria-label="Pan left">←</button><button data-pan="1,0" aria-label="Pan right">→</button><button data-pan="0,-1" aria-label="Pan up">↑</button><button data-pan="0,1" aria-label="Pan down">↓</button></div>
       <div class="selection-card" data-landmark-anchor="${a.kind}" data-landmark-token="${a.token}" data-landmark-layer="${a.layer ?? ''}" data-landmark-run="${esc(m?.source.sourceRunId ?? '')}"><div data-testid="landmark-occurrence" data-semantic-anchor="${a.kind}" data-position="${a.token}" data-layer="${a.layer !== undefined ? a.layer : ''}" data-run-id="${esc(m?.source.sourceRunId ?? '')}" style="display:none;" aria-hidden="true"></div><small>SELECTED WORLD OBJECT</small><strong data-testid="selected-world-object" data-semantic-anchor="${a.kind}" data-position="${a.token}" data-layer="${a.layer ?? ''}" data-run-id="${esc(m?.source.sourceRunId ?? '')}">${esc(label)}</strong><span>layer ${a.layer??'model'} · position ${a.token} · query ${s.query} / key ${s.key} · head ${s.head}</span><span>${state.comparison?`${labels[0]}: neutral. ${labels[1]}: cyan. Shared scale per pair.`:this.learningStage==="compare"?"Before: neutral. After: cyan. Shared scale per pair.":"Signed strips: independent scales. Q/K lens: shared scale."}</span><div class="selection-actions"><button id="open-spatial-detail">Values / arithmetic / source</button><button id="scene-construction">${this.construction?"Close scene math":"Scene math"}</button></div>${this.kind==="headOutput"&&!state.evidenceWorld?`${capabilities.headAblation?`<button id="spatial-ablate" ${state.execution||state.busy?"disabled":""}>Test without this head</button>`:""}${capabilities.donorPatch?`<button id="spatial-patch" ${state.execution||state.busy?"disabled":""}>Patch from observed donor</button>`:""}<small class="head-action-scope">${state.execution?"Finish/cancel execution or accept/discard candidate first.":`Selected checkpoint ${esc((m.source.sourceSnapshotId??"unavailable").slice(0,19))}… · ablation: all positions; patch target: p${s.query}/h${s.head}, donor: p${state.patchDonor?.token??0}/h${state.patchDonor?.head??0}; after aggregation / before concat.`}</small>`:""}${!m.valid?'<p role="alert">Selection unavailable in this run. Choose valid indices; prior evidence is not rebound.</p>':""}</div>
       <svg class="world-minimap" viewBox="0 0 ${m.forward.descriptor.presentation==='microgpt-canonical-curated'?4500:1250+m.forward.layers*2500} ${m.forward.descriptor.presentation==='microgpt-canonical-curated'?1700:Math.max(1500,420+m.forward.heads*270)}" aria-label="Same world camera footprint"><path d="M100 600 H${m.forward.descriptor.presentation==='microgpt-canonical-curated'?4300:1050+m.forward.layers*2500}"/>${m.forward.operations.map((o)=>{const t=stationForWorld(m.forward,o.kind,s.head,s.layer);return `<rect x="${t.x}" y="${t.y}" width="100" height="160" class="${o.kind===this.kind?"selected":""}"/>`;}).join("")}<rect id="camera-footprint"/></svg>${sceneOpen?sceneConstruction(m,a,this.element,state.execution?.progress):""}</div>
-      <svg class="context-tether" aria-hidden="true"><path id="context-tether-path"/></svg><aside class="context-lens" ${this.lens?"":"hidden"} data-selection="${esc(JSON.stringify([this.kind,a.token,a.head,this.parameter,this.learningStage,state.experimentId,m.source.sourceRunId]))}" aria-label="Contextual arithmetic lens">${this.learningStage&&state.execution?.progress?.training?liveLearningInspector(state.execution.progress.training,this.pin,state.scalar):this.learningStage?learningInspector(state.learning,this.learningStage,this.pin,a,state.scalar,this.expanded):forwardInspector(m,a,this.element,this.parameter,this.row,this.column,state.scalar,state.execution?.progress,sceneOpen).replace('<details open><summary>Calculation and complete values</summary>',`${state.comparison?componentComparison(state.comparison,a,labels):""}<details open><summary>Calculation and complete values</summary>`)}</aside></div>`}`:`<section class="spatial-empty"><h1>One model, a complete forward computation</h1><p>Enter a, b or c, then Predict. Explore its actual operations and their sources.</p></section>`}</div>`;
+      <svg class="context-tether" aria-hidden="true"><path id="context-tether-path"/></svg><aside class="context-lens" ${lensActive?"":"hidden"} data-selection="${esc(JSON.stringify([this.kind,a.token,a.head,this.parameter,this.learningStage,state.experimentId,m.source.sourceRunId]))}" aria-label="Contextual arithmetic lens">${this.learningStage&&state.execution?.progress?.training?liveLearningInspector(state.execution.progress.training,this.pin,state.scalar):this.learningStage?learningInspector(state.learning,this.learningStage,this.pin,a,state.scalar,this.expanded):forwardInspector(m,a,this.element,this.parameter,this.row,this.column,state.scalar,state.execution?.progress,sceneOpen).replace('<details open><summary>Calculation and complete values</summary>',`${state.comparison?componentComparison(state.comparison,a,labels):""}<details open><summary>Calculation and complete values</summary>`)}</aside></div>`}`:`<section class="spatial-empty"><h1>One model, a complete forward computation</h1><p>Enter a, b or c, then Predict. Explore its actual operations and their sources.</p></section>`}</div>`;
   }
   bind(m:AnySpatialReadModel|undefined,changed:()=>void,render:()=>void,phase?:(phase:string)=>void) {
     if(m&&isRegisteredWorld(m)){m.presentation.bind(changed,render);return;}
@@ -367,20 +368,24 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
       if(m?.source.capturedDocument!=='abca'){this.shortMessage='The sample selection needs an abca prediction. Enter abca and explicitly Predict first.';render();return;}
       Object.assign(this.selection,{query:3,key:0,head:0,feature:0});this.shortRoute(0);changed();render();
     });
-    on('#scene-construction',()=>{this.construction=!this.construction;render();});
+    on('#scene-construction',()=>{
+      this.construction=!this.construction;
+      if(this.construction) this.lens=false;
+      render();
+    });
     const home=()=>{if(this.shortStop>=0)this.shortDetour=true;this.interrupt();this.remember();this.lens=false;const svg=root.querySelector<SVGSVGElement>('#spatial-world'),width=Number(svg?.dataset.worldWidth)||HOME.width,height=Number(svg?.dataset.worldHeight)||HOME.height;this.pendingBox={x:0,y:0,width,height};render();};
     const back=()=>{this.interrupt();const prior=this.history.pop();if(!prior)return;Object.assign(this.selection,prior.selection);this.kind=prior.kind;this.element=prior.element;this.parameter=prior.parameter;this.row=prior.row;this.column=prior.column;this.lens=prior.lens;this.learningStage=prior.learningStage;this.pendingBox=prior.box;change();};
     for(const id of ["#spatial-home","#lens-home"])on(id,home);
     for(const id of ["#spatial-back","#lens-back"])on(id,back);
-    on("#spatial-focus",()=>{this.remember();this.lens=true;this.frame();render();});
-    on("#spatial-lens",()=>{this.go({kind:"attentionLogits",token:this.selection.query,head:this.selection.head});change();});
-    on("#open-spatial-detail",()=>{this.lens=true;this.frame();render();});
+    on("#spatial-focus",()=>{this.remember();this.lens=true;this.construction=false;this.frame();render();});
+    on("#spatial-lens",()=>{this.lens=true;this.construction=false;this.go({kind:"attentionLogits",token:this.selection.query,head:this.selection.head});change();});
+    on("#open-spatial-detail",()=>{this.lens=true;this.construction=false;this.frame();render();});
     on("#close-spatial-lens",()=>{this.lens=false;render();});
     const gesture=()=>{this.interrupt();const status=root.querySelector('[data-testid="explanation-status"]');if(status&&this.playback.source)status.textContent=`Explore detour · ${this.playback.cursor+1}/${this.playback.length}`;this.remember();this.detour=this.guided;const label=root.querySelector("#waypoint-status");if(label&&this.guided)label.textContent=`Explore detour · ${this.playback.cursor+1}/${this.playback.length} · Resume explanation to return`;};
     const svg=root.querySelector<SVGSVGElement>("#spatial-world");
     if(svg){this.camera.attach(svg,()=>{const p=root.querySelector("#camera-footprint"),b=this.camera.box;p?.setAttribute("x",String(b.x));p?.setAttribute("y",String(b.y));p?.setAttribute("width",String(b.width));p?.setAttribute("height",String(b.height));
       const lensEl=root.querySelector<HTMLElement>(".context-lens"),tether=root.querySelector<SVGPathElement>("#context-tether-path");
-      if(this.lens&&lensEl&&tether){
+      if(this.lens && !this.construction && lensEl && tether){
         const workspace=root.querySelector(".world-workspace")!.getBoundingClientRect(),lens=lensEl.getBoundingClientRect();
         const object=this.parameter?root.querySelector(`[data-world-parameter="${this.parameter}"]`):root.querySelector(`[data-world-kind="${this.kind}"]${layerKinds.has(this.kind)?`[data-world-layer="${this.selection.layer}"]`:''}${["q","k","v"].includes(this.kind)||headKinds.has(this.kind)?`[data-world-head="${this.selection.head}"]`:""}`);
         const from=object?.querySelector("rect")?.getBoundingClientRect();

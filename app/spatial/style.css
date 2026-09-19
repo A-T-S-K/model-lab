@@ -311,7 +311,7 @@ body.spatial-mode { background:#0B0F12; color:#F2F5F7; font-family:Plex,sans-ser
 [data-experience-profile="visitor"] #short-resume,
 [data-experience-profile="visitor"] #operator-controls,
 [data-experience-profile="visitor"] #execution-controls button,
-[data-experience-profile="visitor"] #scene-construction,
+[data-experience-profile="visitor"] button[data-dock-depth="math"],
 [data-experience-profile="facilitator"] #exhibit-start,
 [data-experience-profile="facilitator"] #clear-session,
 [data-experience-profile="facilitator"] #operator-controls,
@@ -321,7 +321,7 @@ body.spatial-mode { background:#0B0F12; color:#F2F5F7; font-family:Plex,sans-ser
 [data-experience-profile="facilitator"] #short-resume,
 [data-experience-profile="facilitator"] #exhibit-opt-out,
 [data-experience-profile="facilitator"] #execution-controls button,
-[data-experience-profile="facilitator"] #scene-construction {
+[data-experience-profile="facilitator"] button[data-dock-depth="math"] {
   min-height: 44px;
   box-sizing: border-box;
 }
