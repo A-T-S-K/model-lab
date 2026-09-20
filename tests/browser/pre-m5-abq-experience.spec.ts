@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
-import { mkdir, writeFile, copyFile } from 'node:fs/promises';
+import { mkdir, writeFile, copyFile, readFile } from 'node:fs/promises';
 import { execSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { RUNTIME_REVISION } from '../../runtime/revision.js';
 
 const evidenceDir = process.env.PRE_M5_EVIDENCE_DIR ?? 'test-results/scratch/p0-e3c-review-evidence-20260919-01';
@@ -11,6 +12,7 @@ interface EvidenceCapture {
   filename: string;
   viewport: { width: number; height: number };
   actualState: string;
+  sha256?: string;
   cameraViewBox?: { x: number; y: number; width: number; height: number };
   evidenceWorldBounds?: Record<string, any>;
   intersectionRatio?: number;
@@ -149,11 +151,17 @@ async function captureEvidence(
 
   const fullPath = `${evidenceDir}/${filename}`;
   await page.screenshot({ path: fullPath });
+  let sha256: string | undefined;
+  try {
+    const bytes = await readFile(fullPath);
+    sha256 = createHash('sha256').update(bytes).digest('hex');
+  } catch {}
 
   manifestCaptures.push({
     filename,
     viewport: vp,
     actualState,
+    sha256,
     cameraViewBox,
     evidenceWorldBounds: Object.keys(evidenceWorldBounds).length > 0 ? evidenceWorldBounds : undefined,
     intersectionRatio,
@@ -190,8 +198,10 @@ test('1. Visitor profile DOM omissions hide unneeded workbench controls', async 
   await page.goto('/?presentation=spatial&kiosk=1');
 
   await expect(page.locator('#exhibit-start')).toBeEnabled();
+  await captureEvidence(page, '01-attract-1920.png', 'attract', '#exhibit-start');
   await page.locator('#exhibit-start').click();
   await expect(page.getByTestId('status')).toContainText('Live prediction complete');
+  await captureEvidence(page, '02-prediction-payoff-1920.png', 'prediction payoff', '[data-world-kind="probabilities"]');
 
   // Verify persistent profile marker
   await expect(page.locator('.spatial-shell')).toHaveAttribute('data-experience-profile', 'visitor');
@@ -257,7 +267,6 @@ test('2. 5-stop causal forward spine traversal, primary actions, zero-execution 
   await expect(page.getByTestId('scene-construction')).toBeVisible();
   await expect(page.getByTestId('scene-construction')).toContainText('Known target: a');
   await expect(page.getByTestId('scene-construction')).toContainText('Highest-probability token: a');
-  await page.screenshot({ path: `${evidenceDir}/01-forward-predict-1920.png` });
 
   // Record command baseline: explanation navigation must NOT send any Worker commands
   const initialCommands = await page.evaluate(() => (window as any).abq.commands.length);
@@ -287,6 +296,7 @@ test('2. 5-stop causal forward spine traversal, primary actions, zero-execution 
   await expect(page.getByTestId('scene-construction')).toContainText('Two distinct normalizations are preserved');
   const representText = await page.getByTestId('dock-explain').textContent();
   expect(representText?.match(/Two distinct normalizations are preserved/g)?.length).toBe(1);
+  await captureEvidence(page, '03-represent-1920.png', 'REPRESENT', '[data-world-kind="tokenEmbedding"]');
   expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
 
   // Advance to Stop 2: MIX CONTEXT (attentionResidual · p3 · L0)
@@ -303,6 +313,7 @@ test('2. 5-stop causal forward spine traversal, primary actions, zero-execution 
   await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-position', '3');
   await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-layer', '0');
   await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-run-id', payoffRunId!);
+  await captureEvidence(page, '04-mix-context-1920.png', 'MIX CONTEXT', '[data-world-kind="attentionBlock"]');
   expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
 
   // Advance to Stop 3: TRANSFORM (mlpResidual · p3 · L0)
@@ -326,6 +337,7 @@ test('2. 5-stop causal forward spine traversal, primary actions, zero-execution 
   await expect(page.getByTestId('scene-construction')).toContainText('Canonical MLP pipeline');
   const transformText = await page.getByTestId('dock-explain').textContent();
   expect(transformText?.match(/Canonical MLP pipeline/g)?.length).toBe(1);
+  await captureEvidence(page, '06-transform-1920.png', 'TRANSFORM', '[data-world-kind="mlpBlock"]');
   expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
 
   // Advance to Stop 4: SCORE (logits · p3)
@@ -345,6 +357,7 @@ test('2. 5-stop causal forward spine traversal, primary actions, zero-execution 
   await expect(page.getByTestId('scene-construction')).toContainText('Raw token scores are unnormalized logits, not probabilities');
   const scoreText = await page.getByTestId('dock-explain').textContent();
   expect(scoreText?.match(/Raw token scores are unnormalized logits, not probabilities/g)?.length).toBe(1);
+  await captureEvidence(page, '07-score-1920.png', 'SCORE', '[data-world-kind="unembed"]');
   expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
 
   // Advance to Stop 5: PREDICT (probabilities · p3)
@@ -364,6 +377,7 @@ test('2. 5-stop causal forward spine traversal, primary actions, zero-execution 
   // Endpoint identity matches payoff identity
   await expect(page.getByTestId('scene-construction')).toContainText('Known target: a');
   await expect(page.getByTestId('scene-construction')).toContainText('Highest-probability token: a');
+  await captureEvidence(page, '08-predict-1920.png', 'PREDICT', '[data-world-kind="probabilities"]');
   expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
 
   // Detour via Free Exploration: changing operation sets shortDetour = true
@@ -372,6 +386,7 @@ test('2. 5-stop causal forward spine traversal, primary actions, zero-execution 
   await page.locator('#spatial-operation').selectOption('mlpRelu');
   await expect(page.locator('.short-guide')).toContainText('Exploring a detour');
   await expect(page.locator('#short-resume')).toBeVisible();
+  await captureEvidence(page, '09-free-explore-resume-1920.png', 'Free Explore / Resume', '#short-resume');
 
   // Resume short route: clears detour state, returns to stop 5, hides resume button
   await page.locator('#short-resume').click();
@@ -403,6 +418,7 @@ test('2b. Optional attention drill-down from MIX CONTEXT, zero-execution travers
   await expect(page.locator('#attention-return')).toBeVisible();
   await expect(page.locator('#short-continue')).toContainText('Continue: Turn scores into normalized weights');
   await expect(page.getByTestId('scene-construction')).toContainText('Attention scores');
+  await captureEvidence(page, '05-attention-drilldown-1920.png', 'attention drill-down', '[data-world-kind="attentionBlock"]');
 
   // Q/K Math in contextual dock
   await page.locator('button[data-dock-depth="math"]').click();
@@ -516,42 +532,37 @@ test('2c. Reverse learning traversal, objective anchor, backward landmarks, para
   await expect(page.getByTestId('dock-values')).toBeVisible();
   await expect(page.getByTestId('training-objective')).toBeVisible();
   await expect(page.getByTestId('training-objective')).toContainText('[PENDING]');
-  await captureEvidence(page, '01-learning-objective-1920.png', 'Objective anchor and output probabilities in model world', '[data-testid="objective-anchor"]', { probabilities: '[data-world-kind="probabilities"]' });
-  await page.screenshot({ path: `${evidenceDir}/02-learning-objective-1920.png` });
+  await captureEvidence(page, '10-learning-objective-1920.png', 'learning objective', '[data-testid="objective-anchor"]', { probabilities: '[data-world-kind="probabilities"]' });
   await page.locator('.dock-tab-close').click();
   await expect(page.getByTestId('dock-explain')).toBeVisible();
 
-  // Screenshot 03: Stop 0 output probabilities
+  // Stop 0 output probabilities
   expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
-  await page.screenshot({ path: `${evidenceDir}/03-backward-output-1920.png` });
 
   // Advance to Stop 1: SCORE
   await page.locator('#reverse-continue').click();
   await expect(page.getByTestId('lesson-progress')).toContainText('Learning · Stop 2 of 7 · SCORE');
   await expect(page.locator('.reverse-causal-overlay')).toHaveAttribute('data-active-reverse-landmark', 'logits');
   expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
-  await page.screenshot({ path: `${evidenceDir}/04-backward-score-1920.png` });
+  await captureEvidence(page, '11-reverse-path-1920.png', 'reverse path', '.reverse-causal-overlay');
 
   // Advance to Stop 2: TRANSFORM
   await page.locator('#reverse-continue').click();
   await expect(page.getByTestId('lesson-progress')).toContainText('Learning · Stop 3 of 7 · TRANSFORM');
   await expect(page.locator('.reverse-causal-overlay')).toHaveAttribute('data-active-reverse-landmark', 'mlpResidual');
   expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
-  await page.screenshot({ path: `${evidenceDir}/05-backward-transform-1920.png` });
 
   // Advance to Stop 3: MIX CONTEXT
   await page.locator('#reverse-continue').click();
   await expect(page.getByTestId('lesson-progress')).toContainText('Learning · Stop 4 of 7 · MIX CONTEXT');
   await expect(page.locator('.reverse-causal-overlay')).toHaveAttribute('data-active-reverse-landmark', 'attentionResidual');
   expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
-  await page.screenshot({ path: `${evidenceDir}/06-backward-context-1920.png` });
 
   // Advance to Stop 4: REPRESENT
   await page.locator('#reverse-continue').click();
   await expect(page.getByTestId('lesson-progress')).toContainText('Learning · Stop 5 of 7 · REPRESENT');
   await expect(page.locator('.reverse-causal-overlay')).toHaveAttribute('data-active-reverse-landmark', 'preAttentionNorm');
   expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
-  await page.screenshot({ path: `${evidenceDir}/07-backward-represent-1920.png` });
 
   // Advance to Stop 5: PARAMETER (reached in the same world, parameter contribution overlay visible)
   await page.locator('#reverse-continue').click();
@@ -559,14 +570,12 @@ test('2c. Reverse learning traversal, objective anchor, backward landmarks, para
   await expect(page.getByTestId('parameter-learning-overlay')).toBeVisible();
   await expect(page.locator('.param-overlay-title')).toContainText('tokenEmbedding');
   expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
-  await page.screenshot({ path: `${evidenceDir}/08-parameter-contribution-explain-1920.png` });
 
   // Parameter math in dock
   await page.locator('button[data-dock-depth="math"]').click();
   await expect(page.getByTestId('dock-math')).toBeVisible();
   await expect(page.getByTestId('dock-math')).toContainText('child adjoint');
   expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
-  await page.screenshot({ path: `${evidenceDir}/09-parameter-contribution-math-1920.png` });
   await page.locator('.dock-tab-close').click();
 
   // Advance to Stop 6: ADAM (Adam proposal attached to parameter bank, provisional)
@@ -578,7 +587,7 @@ test('2c. Reverse learning traversal, objective anchor, backward landmarks, para
   await expect(page.getByTestId('adam-proposal-pending')).toBeVisible();
   await expect(page.getByTestId('adam-learning-overlay')).not.toContainText('-0.042');
   expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
-  await page.screenshot({ path: `${evidenceDir}/10-adam-explain-1920.png` });
+  await captureEvidence(page, '14-adam-pending-1920.png', 'Adam pending', '[data-testid="adam-learning-overlay"]');
 
   // Adam dock values: pending proposal status
   await page.locator('button[data-dock-depth="values"]').click();
@@ -593,7 +602,6 @@ test('2c. Reverse learning traversal, objective anchor, backward landmarks, para
   await expect(page.getByTestId('dock-math')).toContainText('Adam Optimizer Equations');
   await expect(page.getByTestId('dock-math').getByTestId('proposal-pending')).toBeVisible();
   expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
-  await page.screenshot({ path: `${evidenceDir}/11-adam-math-1920.png` });
   await page.locator('.dock-tab-close').click();
 
   // Assert entire reverse traversal executed zero worker commands
@@ -660,15 +668,14 @@ test('3. Stepped training, candidate discard, and authority preservation', async
   await expect(page.getByTestId('dock-explain')).toContainText('Partial gradient');
   await expect(page.getByTestId('dock-explain').locator('[data-testid="live-contribution"]')).toHaveCount(0);
   await expect(page.getByTestId('dock-explain').locator('.live-signed-track')).toHaveCount(0);
-  await captureEvidence(page, '02-live-backward-contribution-1920.png', 'Stopped backward contribution on wte[0,0] in model world', '.parameter-learning-overlay', { wteBank: '[data-world-parameter="wte"]', owner: '[data-world-kind="tokenEmbedding"]' });
-  await page.screenshot({ path: `${evidenceDir}/12-live-backward-contribution-1920.png` });
+  await captureEvidence(page, '12-live-backward-contribution-explain-1920.png', 'live backward contribution Explain', '.parameter-learning-overlay', { wteBank: '[data-world-parameter="wte"]', owner: '[data-world-kind="tokenEmbedding"]' });
 
   // Math tab retains exact learning evidence
   await page.locator('button[data-dock-depth="math"]').click();
   await expect(page.getByTestId('dock-math')).toBeVisible();
   await expect(page.getByTestId('dock-math').getByTestId('live-contribution')).toBeVisible();
   await expect(page.getByTestId('dock-math').locator('.live-signed-track').first()).toBeVisible();
-  await captureEvidence(page, '03-live-backward-contribution-math-1920.png', 'Live backward contribution with Math tab open', '.parameter-learning-overlay');
+  await captureEvidence(page, '13-live-backward-contribution-math-1920.png', 'live backward contribution Math', '.parameter-learning-overlay');
 
   // Return to Explain tab
   await page.locator('.dock-tab-close').click();
@@ -699,8 +706,7 @@ test('3. Stepped training, candidate discard, and authority preservation', async
   await expect(page.locator('.learning-stations')).toHaveCount(0);
   await expect(page.locator('[data-learning-stage]')).toHaveCount(0);
 
-  await captureEvidence(page, '04-candidate-ready-1920.png', 'Candidate Ready state with Adam overlay in model world', '[data-testid="adam-learning-overlay"]', { wteBank: '[data-world-parameter="wte"]' });
-  await page.screenshot({ path: `${evidenceDir}/13-candidate-ready-1920.png` });
+  await captureEvidence(page, '15-candidate-ready-1920.png', 'Candidate Ready', '[data-testid="adam-learning-overlay"]', { wteBank: '[data-world-parameter="wte"]' });
 
   // Candidate Ready Compare regression (Amendment 8):
   // Assert Compare tab exists in the contextual dock
@@ -753,8 +759,7 @@ test('3. Stepped training, candidate discard, and authority preservation', async
 
   // Assert run/candidate identities remain unchanged
   expect(await page.locator('[data-testid="selected-world-object"]').getAttribute('data-run-id')).toBe(runBefore);
-  await captureEvidence(page, '05-candidate-compare-1920.png', 'Candidate Compare dock active with model world camera preserved', '[data-testid="adam-learning-overlay"]', { wteBank: '[data-world-parameter="wte"]' });
-  await page.screenshot({ path: `${evidenceDir}/14-candidate-compare-1920.png` });
+  await captureEvidence(page, '16-candidate-compare-1920.png', 'Candidate Compare', '[data-testid="adam-learning-overlay"]', { wteBank: '[data-world-parameter="wte"]' });
 
   // Assert closing Compare preserves Candidate Ready state
   await page.locator('.dock-tab-close').click();
@@ -768,7 +773,7 @@ test('3. Stepped training, candidate discard, and authority preservation', async
   await page.locator('#execution-cancel').click();
   await expect(page.locator('#execution-controls')).toHaveCount(0);
   await expect(page.getByTestId('status')).toContainText('Execution cancelled · prior completed evidence preserved');
-  await page.screenshot({ path: `${evidenceDir}/16-post-discard-1920.png` });
+  await captureEvidence(page, '18-post-discard-1920.png', 'post Discard');
 
   // Verify acceptTraining was NOT called, cancel command was sent, and optimizer step is unchanged
   const a = await page.evaluate(() => (window as any).abq);
@@ -818,7 +823,7 @@ test('3b. Stepped training, candidate accept, live step advancement, and public 
 
   // Subsequent operation uses accepted model (training step 1)
   await expect(page.getByTestId('status')).toContainText('Live update complete · training step 1');
-  await page.screenshot({ path: `${evidenceDir}/15-post-accept-1920.png` });
+  await captureEvidence(page, '17-post-accept-1920.png', 'post Accept');
 
   // Public Reset restores baseline model and clears session
   await page.locator('#clear-session').click();
@@ -868,8 +873,6 @@ test('4. Facilitator panel, authoritative retention text, execution omissions, a
   await expect(page.locator('.learning-stations')).toHaveCount(0);
   await expect(page.locator('[data-learning-stage]')).toHaveCount(0);
 
-  await captureEvidence(page, '06-facilitator-live-learning-1920.png', 'Facilitator profile live learning stopped on wte in model world', '.parameter-learning-overlay', { wteBank: '[data-world-parameter="wte"]', owner: '[data-world-kind="tokenEmbedding"]' });
-
   await page.locator('#execution-cancel').click();
   await expect(page.locator('#execution-controls')).toHaveCount(0);
 
@@ -881,7 +884,7 @@ test('4. Facilitator panel, authoritative retention text, execution omissions, a
   // Show facilitator reverse learning controls and overlay
   await page.locator('[data-reverse-stop="0"]').click();
   await expect(page.locator('.reverse-causal-overlay')).toBeVisible();
-  await page.screenshot({ path: `${evidenceDir}/17-facilitator-learning-1920.png` });
+  await captureEvidence(page, '19-facilitator-1920.png', 'Facilitator', '[data-testid="facilitator-panel"]');
 
   // Public Reset preserves facilitator opt-out setting
   await page.locator('#clear-session').click();
@@ -921,7 +924,6 @@ test('5. Workbench profile preservation and single-surface explanation arbitrati
   await page.locator('#scene-construction').click();
   await expect(page.locator('.scene-construction')).toBeVisible();
   await expect(page.locator('.context-lens')).toBeHidden();
-  await page.screenshot({ path: `${evidenceDir}/18-workbench-learning-preserved-1920.png` });
 
   // 2. Open Values / arithmetic / source: verify right lens visible and construction not simultaneously visible
   await page.locator('#open-spatial-detail').click();
@@ -989,8 +991,8 @@ test('5. Workbench profile preservation and single-surface explanation arbitrati
 
   await captureEvidence(
     page,
-    '07-workbench-completed-gradient-stage-1920.png',
-    'Workbench completed gradient stage with expert lower rail',
+    '20-workbench-1920.png',
+    'Workbench',
     'g[data-learning-stage="gradient"]'
   );
 });
@@ -1190,9 +1192,13 @@ test('7. 1280x720 layout and reduced motion visual captures', async ({ page }) =
   // Start visitor route
   await page.locator('#exhibit-start').click();
   await expect(page.getByTestId('status')).toContainText('Live prediction complete');
+  await captureEvidence(page, '21-prediction-1280.png', 'prediction', '[data-world-kind="probabilities"]');
 
-  // Advance through 5 stops to PREDICT (stop 5)
-  for (let i = 0; i < 5; i++) {
+  // Advance through forward stops
+  await page.locator('#short-continue').click();
+  await expect(page.getByTestId('lesson-progress')).toContainText('Step 1 of 5 · REPRESENT');
+  await captureEvidence(page, '22-forward-route-1280.png', 'forward route', '[data-world-kind="tokenEmbedding"]');
+  for (let i = 1; i < 5; i++) {
     await page.locator('#short-continue').click();
   }
   await expect(page.locator('#start-reverse-learning')).toBeVisible();
@@ -1200,28 +1206,21 @@ test('7. 1280x720 layout and reduced motion visual captures', async ({ page }) =
   // Enter reverse route: Stop 0 (probabilities)
   await page.locator('#start-reverse-learning').click();
   await expect(page.getByTestId('objective-anchor')).toBeVisible();
-  // 19: Learning Objective at 1280x720
-  await page.screenshot({ path: `${evidenceDir}/19-learning-objective-1280.png` });
 
   // Advance along reverse route to Stop 2 (TRANSFORM)
   await page.locator('#reverse-continue').click(); // to Stop 1 (SCORE)
   await page.locator('#reverse-continue').click(); // to Stop 2 (TRANSFORM)
   await expect(page.getByTestId('lesson-progress')).toContainText('TRANSFORM');
-  // 20: Backward path at 1280x720
-  await page.screenshot({ path: `${evidenceDir}/20-backward-path-1280.png` });
 
   // Advance to Stop 5 (PARAMETER)
   await page.locator('#reverse-continue').click(); // to Stop 3 (MIX CONTEXT)
   await page.locator('#reverse-continue').click(); // to Stop 4 (REPRESENT)
   await page.locator('#reverse-continue').click(); // to Stop 5 (PARAMETER)
   await expect(page.getByTestId('parameter-learning-overlay')).toBeVisible();
-  // 21: Parameter contribution explain at 1280x720
-  await page.screenshot({ path: `${evidenceDir}/21-parameter-contribution-explain-1280.png` });
 
-  // 22: Parameter contribution math at 1280x720
+  // Parameter contribution math at 1280x720
   await page.locator('button[data-dock-depth="math"]').click();
   await expect(page.getByTestId('dock-math')).toBeVisible();
-  await page.screenshot({ path: `${evidenceDir}/22-parameter-contribution-math-1280.png` });
   await page.locator('.dock-tab-close').click();
 
   // Advance to Stop 6 (ADAM)
@@ -1230,8 +1229,6 @@ test('7. 1280x720 layout and reduced motion visual captures', async ({ page }) =
   await expect(page.getByTestId('adam-learning-overlay')).toHaveAttribute('data-status', 'pending');
   await expect(page.getByTestId('adam-proposal-pending')).toBeVisible();
   await expect(page.getByTestId('adam-learning-overlay')).not.toContainText('-0.042');
-  // 23: Adam explain at 1280x720
-  await page.screenshot({ path: `${evidenceDir}/23-adam-explain-1280.png` });
 
   // Stepped training for Candidate Ready at 1280x720
   await page.locator('#clear-session').click();
@@ -1254,8 +1251,8 @@ test('7. 1280x720 layout and reduced motion visual captures', async ({ page }) =
   await expect(page.locator('.learning-stations')).toHaveCount(0);
   await expect(page.locator('[data-learning-stage]')).toHaveCount(0);
 
-  // 08-live-backward-contribution-1280.png
-  await captureEvidence(page, '08-live-backward-contribution-1280.png', '1280x720 stopped backward contribution on wte in model world', '.parameter-learning-overlay', { wteBank: '[data-world-parameter="wte"]', owner: '[data-world-kind="tokenEmbedding"]' });
+  // 25-live-backward-1280.png
+  await captureEvidence(page, '25-live-backward-1280.png', 'live backward', '.parameter-learning-overlay', { wteBank: '[data-world-parameter="wte"]', owner: '[data-world-kind="tokenEmbedding"]' });
 
   // Advance to Candidate Ready at 1280x720
   await page.locator('#execution-continue').click();
@@ -1270,8 +1267,8 @@ test('7. 1280x720 layout and reduced motion visual captures', async ({ page }) =
   await expect(page.locator('.learning-stations')).toHaveCount(0);
   await expect(page.locator('[data-learning-stage]')).toHaveCount(0);
 
-  // 09-candidate-ready-1280.png
-  await captureEvidence(page, '09-candidate-ready-1280.png', '1280x720 Candidate Ready state with Adam overlay in model world', '[data-testid="adam-learning-overlay"]', { wteBank: '[data-world-parameter="wte"]' });
+  // 26-candidate-ready-1280.png
+  await captureEvidence(page, '26-candidate-ready-1280.png', 'Candidate Ready', '[data-testid="adam-learning-overlay"]', { wteBank: '[data-world-parameter="wte"]' });
 
   // Candidate Ready Compare at 1280x720
   const cameraBeforeCompare720 = await page.evaluate(() => {
@@ -1296,8 +1293,8 @@ test('7. 1280x720 layout and reduced motion visual captures', async ({ page }) =
   await assertSvgElementInViewBox(page, '[data-testid="adam-learning-overlay"]', { requireCenterInside: true, minIntersectionRatio: 0.8, description: '720p Adam overlay during Compare' });
   await assertSvgElementInViewBox(page, '[data-world-parameter="wte"]', { requireCenterInside: true, minIntersectionRatio: 0.8, description: '720p wte bank during Compare' });
 
-  // 10-candidate-compare-1280.png
-  await captureEvidence(page, '10-candidate-compare-1280.png', '1280x720 Candidate Compare dock active with model world camera preserved', '[data-testid="adam-learning-overlay"]', { wteBank: '[data-world-parameter="wte"]' });
+  // 27-candidate-compare-1280.png
+  await captureEvidence(page, '27-candidate-compare-1280.png', 'Candidate Compare', '[data-testid="adam-learning-overlay"]', { wteBank: '[data-world-parameter="wte"]' });
 
   await page.locator('.dock-tab-close').click();
 
@@ -1305,7 +1302,7 @@ test('7. 1280x720 layout and reduced motion visual captures', async ({ page }) =
   await page.locator('#execution-cancel').click();
   await expect(page.locator('#execution-controls')).toHaveCount(0);
 
-  // 11: Facilitator mode at 1280x720 live learning stopped on wte
+  // Facilitator mode at 1280x720 live learning stopped on wte
   await page.locator('#operator-controls').click();
   await expect(page.getByTestId('facilitator-panel')).toBeVisible();
   await page.locator('#step-learning').click();
@@ -1321,13 +1318,13 @@ test('7. 1280x720 layout and reduced motion visual captures', async ({ page }) =
   await expect(page.locator('.learning-stations')).toHaveCount(0);
   await expect(page.locator('[data-learning-stage]')).toHaveCount(0);
 
-  // 11-facilitator-live-learning-1280.png
-  await captureEvidence(page, '11-facilitator-live-learning-1280.png', '1280x720 Facilitator profile live learning in model world', '.parameter-learning-overlay', { wteBank: '[data-world-parameter="wte"]', owner: '[data-world-kind="tokenEmbedding"]' });
+  // 28-facilitator-1280.png
+  await captureEvidence(page, '28-facilitator-1280.png', 'Facilitator', '.parameter-learning-overlay', { wteBank: '[data-world-parameter="wte"]', owner: '[data-world-kind="tokenEmbedding"]' });
 
   await page.locator('#execution-cancel').click();
   await expect(page.locator('#execution-controls')).toHaveCount(0);
 
-  // 12: Reduced motion live learning at 1280x720
+  // Reduced motion live learning at 1280x720
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.locator('#step-learning').click();
   await expect(page.locator('#execution-controls')).toBeVisible();
@@ -1342,75 +1339,11 @@ test('7. 1280x720 layout and reduced motion visual captures', async ({ page }) =
   await expect(page.locator('.learning-stations')).toHaveCount(0);
   await expect(page.locator('[data-learning-stage]')).toHaveCount(0);
 
-  // 12-reduced-motion-live-learning-1280.png
-  await captureEvidence(page, '12-reduced-motion-live-learning-1280.png', '1280x720 reduced-motion live learning in model world', '.parameter-learning-overlay', { wteBank: '[data-world-parameter="wte"]', owner: '[data-world-kind="tokenEmbedding"]' });
+  // 29-reduced-motion-1280.png
+  await captureEvidence(page, '29-reduced-motion-1280.png', 'reduced motion', '.parameter-learning-overlay', { wteBank: '[data-world-parameter="wte"]', owner: '[data-world-kind="tokenEmbedding"]' });
 
   await page.locator('#execution-cancel').click();
   await expect(page.locator('#execution-controls')).toHaveCount(0);
-
-  // Write exact-candidate manifest.json
-  const exactCandidateCommit = execSync('git rev-parse HEAD').toString().trim();
-  const exactCandidateTree = execSync('git rev-parse HEAD^{tree}').toString().trim();
-  const manifest = {
-    exactCandidateCommit,
-    exactCandidateTree,
-    runtimeRevision: RUNTIME_REVISION,
-    generatedFromExactCandidate: true,
-    captures: manifestCaptures,
-  };
-  await writeFile(`${evidenceDir}/manifest.json`, JSON.stringify(manifest, null, 2));
-
-  // Copy all 12 evidence images to brain artifact directory for direct inspection
-  const brainDir = '/Users/joshuahansen/.gemini/antigravity/brain/6d8e458a-1970-4be1-aeb8-1268f8635817';
-  for (const capture of manifestCaptures) {
-    try {
-      await copyFile(`${evidenceDir}/${capture.filename}`, `${brainDir}/${capture.filename}`);
-    } catch (e) {
-      console.error(`Failed to copy ${capture.filename} to brain directory:`, e);
-    }
-  }
-
-  // Write visual verification audit summary
-  await writeFile(`${evidenceDir}/qualification-summary.json`, JSON.stringify({
-    qualifiedAt: new Date().toISOString(),
-    task: 'P0-E3',
-    profiles: ['visitor', 'facilitator', 'workbench'],
-    omissionsVerified: [
-      '#open-shared-inspector',
-      '#presentation-toggle',
-      '#portable-archive-host',
-      '#import-archive',
-      '#export-archive',
-      '#spatial-patch',
-      '.learning-toolbar',
-      '#step-prediction',
-      '#step-learning',
-      '#spatial-learn',
-      '.learning-stations',
-      '[data-learning-stage]',
-      '#execution-next',
-      '#execution-pause',
-      '#execution-follow',
-      '#execution-controls details',
-      'research variants'
-    ],
-    reverseRouteStopsVerified: [
-      'PREDICT',
-      'SCORE',
-      'TRANSFORM',
-      'MIX CONTEXT',
-      'REPRESENT',
-      'PARAMETER',
-      'ADAM'
-    ],
-    zeroExecutionTraveralVerified: true,
-    sameWorldTopologyVerified: true,
-    touchTargetMinHeight: 44,
-    viewportHeightsVerified: [1080, 720],
-    reducedMotionVerified: true,
-    idleResetOptOutPersistedAcrossReset: true,
-    screenshotsCaptured: manifestCaptures.map(c => c.filename),
-  }, null, 2));
 });
 
 test('8. P0-E2 Unified contextual dock, depth switching, world dominant floor, and 40vh bound', async ({ page }) => {
@@ -1463,6 +1396,7 @@ test('8. P0-E2 Unified contextual dock, depth switching, world dominant floor, a
   const mathDockBox = await page.getByTestId('contextual-dock').boundingBox();
   expect(mathDockBox!.height).toBeLessThanOrEqual(720 * 0.40 + 1);
   expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
+  await captureEvidence(page, '23-deep-math-1280.png', 'deep Math', '[data-testid="dock-math"]');
 
   // Depth: Source
   await page.locator('[data-dock-depth="source"]').click();
@@ -1470,6 +1404,7 @@ test('8. P0-E2 Unified contextual dock, depth switching, world dominant floor, a
   const sourceDockBox = await page.getByTestId('contextual-dock').boundingBox();
   expect(sourceDockBox!.height).toBeLessThanOrEqual(720 * 0.40 + 1);
   expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
+  await captureEvidence(page, '24-source-1280.png', 'Source', '[data-testid="dock-source"]');
 
   // Return to Explain via Close button
   await page.locator('.dock-tab-close').click();
@@ -1493,5 +1428,50 @@ test('8. P0-E2 Unified contextual dock, depth switching, world dominant floor, a
   await expect(page.getByTestId('facilitator-panel')).toBeVisible();
   await expect(page.getByTestId('contextual-dock')).toBeVisible();
   await expect(page.locator('.context-lens')).toHaveCount(0);
+});
+
+test.afterAll(async () => {
+  if (manifestCaptures.length === 0) return;
+  const brainDir = process.env.BRAIN_DIR ?? '/Users/joshuahansen/.gemini/antigravity/brain/3a325773-362b-41b7-8686-9d9806a443f8';
+  try {
+    await mkdir(brainDir, { recursive: true });
+  } catch {}
+
+  for (const capture of manifestCaptures) {
+    const fullPath = `${evidenceDir}/${capture.filename}`;
+    try {
+      await copyFile(fullPath, `${brainDir}/${capture.filename}`);
+    } catch (e) {
+      console.error(`Failed to copy ${capture.filename} to brain directory:`, e);
+    }
+  }
+
+  const manifest = {
+    repository: 'A-T-S-K/model-lab',
+    branch: execSync('git rev-parse --abbrev-ref HEAD').toString().trim(),
+    implementationCommit: execSync('git rev-parse HEAD').toString().trim(),
+    implementationTree: execSync('git rev-parse HEAD^{tree}').toString().trim(),
+    applicationRuntime: RUNTIME_REVISION,
+    nativeRuntime: 'sha256:1e6828657d55bb74295bfc95bd2e7af64d0e7c5516ace241207a7244ff3d012a',
+    generatedFromExactCandidate: true,
+    captures: manifestCaptures,
+  };
+  await writeFile(`${evidenceDir}/manifest.json`, JSON.stringify(manifest, null, 2));
+  try {
+    await copyFile(`${evidenceDir}/manifest.json`, `${brainDir}/manifest.json`);
+  } catch {}
+
+  await writeFile(`${evidenceDir}/qualification-summary.json`, JSON.stringify({
+    qualifiedAt: new Date().toISOString(),
+    candidateCommit: manifest.implementationCommit,
+    candidateTree: manifest.implementationTree,
+    applicationRuntime: manifest.applicationRuntime,
+    nativeRuntime: manifest.nativeRuntime,
+    totalCaptures: manifestCaptures.length,
+    viewports: {
+      '1920x1080': manifestCaptures.filter(c => c.viewport.width === 1920).length,
+      '1280x720': manifestCaptures.filter(c => c.viewport.width === 1280).length,
+    },
+  }, null, 2));
 });
 
