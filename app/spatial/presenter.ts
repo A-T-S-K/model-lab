@@ -36,7 +36,11 @@ export function computeTrainingActionState(
   const e = execution;
   const t = progress.training;
   const ready = t.phase === 'ready';
-  const disabled = e.phase !== 'paused' || e.pending;
+  const objectivePending = isPublic
+    && currentTourState === 'p2_objective'
+    && tourTargetState === undefined
+    && t.mean === undefined;
+  const disabled = e.phase !== 'paused' || e.pending || objectivePending;
   const cancelling = e.phase === 'cancelling';
   const canPin = !t.final || t.phase === 'optimizer proposal';
   const pinLabel = t.phase === 'optimizer proposal'
@@ -266,7 +270,7 @@ export class SpatialPresenter {
           exec.runToContribution();
           break;
         case 'p2_gradient_contribution':
-          exec.runToProposal();
+          exec.continue();
           break;
         case 'p2_final_gradient':
           exec.runToProposal();
@@ -278,13 +282,24 @@ export class SpatialPresenter {
     }
   }
   checkEvidenceGates() {
-    if (!this.isPublicProfile() || !this.tourTargetState) return;
+    if (!this.isPublicProfile()) return;
+    const exec = this.state?.execution;
+    if (
+      this.publicTourState === 'p2_objective'
+      && this.tourTargetState === undefined
+      && exec?.progress?.training?.mean !== undefined
+      && exec.active
+      && exec.phase === 'running'
+    ) {
+      exec.pause();
+      return;
+    }
+    if (!this.tourTargetState) return;
     const evidence = this.getTourEvidence();
     if (canAdvanceTour(this.publicTourState, evidence)) {
       this.publicTourState = this.tourTargetState;
       this.tourTargetState = undefined;
       this.applyTourSelection();
-      const exec = this.state?.execution;
       if (exec && exec.active && exec.phase === 'running') {
         exec.pause();
       }
@@ -558,6 +573,13 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
     let attentionAction = "";
 
     const tourContent = isPublicProfile ? getPublicTourContent(this.publicTourState, this.publicTourOutcome) : undefined;
+    const trainingState = computeTrainingActionState(
+      state.execution,
+      this.pin,
+      isPublicProfile,
+      this.tourTargetState,
+      this.publicTourState,
+    );
     if (tourContent) {
       if (state.attract) {
         lessonProgress = "";
@@ -583,11 +605,18 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
         routePurpose = tourContent.routePurpose;
         if (tourContent.primaryAction) {
           const isPending = Boolean(this.tourTargetState);
-          const label = isPending
-            ? getPendingTourActionLabel(this.publicTourState)
-            : tourContent.primaryAction.label;
-          const disabled = isPending || Boolean(tourContent.primaryAction.disabled);
-          primaryAction = `<button id="${tourContent.primaryAction.id}" class="primary-action${isPending ? ' is-working' : ''}" ${disabled ? 'disabled' : ''}>${esc(label)}</button>`;
+          const isMeasuringObjective = tourContent.state === 'p2_objective'
+            && !isPending
+            && trainingState?.disabled === true
+            && state.execution?.progress?.training?.mean === undefined;
+          const isWorking = isPending || isMeasuringObjective;
+          const label = isMeasuringObjective
+            ? 'Measuring error...'
+            : isPending
+              ? getPendingTourActionLabel(this.publicTourState)
+              : tourContent.primaryAction.label;
+          const disabled = isWorking || Boolean(tourContent.primaryAction.disabled);
+          primaryAction = `<button id="${tourContent.primaryAction.id}" class="primary-action${isWorking ? ' is-working' : ''}" ${disabled ? 'disabled' : ''}>${esc(label)}</button>`;
         }
         if (tourContent.optionalActions.length > 0) {
           attentionAction = tourContent.optionalActions.map(act =>
@@ -688,13 +717,7 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
         profile,
         freeExplore: this.freeExplore,
         attract: Boolean(state.attract && isPublicProfile),
-        trainingState: computeTrainingActionState(
-          state.execution,
-          this.pin,
-          isPublicProfile,
-          this.tourTargetState,
-          this.publicTourState,
-        ),
+        trainingState,
         lessonProgress,
         routePurpose,
         primaryAction,

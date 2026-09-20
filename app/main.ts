@@ -392,6 +392,15 @@ async function startForward(training = false) {
   clearDisplayedInspection(); operation++; beforeForward = result; result = undefined; player = undefined; error = ''; status = 'Preparing captured input and checkpoint…';
   spatialSelection.query = 0; spatialSelection.key = 0; spatialSelection.head = 0;
   syncTrainingPin(); await forwardDriver.start(documentText, training);
+  if (
+    training &&
+    spatialPresenter.isPublicProfile() &&
+    spatialPresenter.publicTourState === 'p2_objective' &&
+    forwardDriver.active &&
+    forwardDriver.progress?.training?.mean === undefined
+  ) {
+    forwardDriver.continue();
+  }
 }
 async function cancelForward() {
   spatialPresenter.tourTargetState = undefined;

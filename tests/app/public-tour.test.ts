@@ -17,6 +17,7 @@ import {
   type PublicTourState,
   type TourEvidence,
 } from '../../app/spatial/public-tour.js';
+import { SpatialPresenter, computeTrainingActionState } from '../../app/spatial/presenter.js';
 
 test('PUBLIC_TOUR_STATES defines exactly 14 authoritative narrative states', () => {
   assert.equal(PUBLIC_TOUR_STATES.length, 14);
@@ -592,5 +593,97 @@ test('C3: Gated transitions advance exactly once to the target state and pause u
   assert.equal(canAdvanceTour('p2_adam_proposal', ev5), true);
 
   assert.equal(canAdvanceTour('candidate_ready', ev5), false);
+});
+
+
+test('C3-R1: final-gradient transition continues normal backward without proposal stop-at-pin', () => {
+  const calls: string[] = [];
+  const presenter = Object.create(SpatialPresenter.prototype) as SpatialPresenter;
+  presenter.profile = 'visitor';
+  presenter.publicTourState = 'p2_gradient_contribution';
+  presenter.tourTargetState = undefined;
+  (presenter as any).state = {
+    profile: 'visitor',
+    execution: {
+      active: true,
+      phase: 'paused',
+      pending: false,
+      pin: 0,
+      progress: {
+        executionId: 'c3-r1-final-gradient',
+        sequence: 1,
+        training: {
+          phase: 'backward',
+          mean: 1,
+          contributions: [{}],
+          final: false,
+          gradient: 0,
+        },
+      },
+      continue: () => calls.push('continue'),
+      runToContribution: () => calls.push('runToContribution'),
+      runToProposal: () => calls.push('runToProposal'),
+    },
+  };
+
+  presenter.advanceTour();
+
+  assert.equal(presenter.publicTourState, 'p2_gradient_contribution');
+  assert.equal(presenter.tourTargetState, 'p2_final_gradient');
+  assert.deepEqual(calls, ['continue']);
+});
+
+test('C3-R1: objective mean pauses in place and unlocks its CTA only after measurement', () => {
+  const presenter = Object.create(SpatialPresenter.prototype) as SpatialPresenter;
+  presenter.profile = 'visitor';
+  presenter.publicTourState = 'p2_objective';
+  presenter.tourTargetState = undefined;
+  let pauseCalls = 0;
+  const execution = {
+    active: true,
+    phase: 'running',
+    pending: false,
+    pin: 0,
+    progress: {
+      executionId: 'c3-r1-objective',
+      sequence: 2,
+      training: {
+        phase: 'backward seed',
+        mean: 0.25,
+        contributions: [],
+        final: false,
+        gradient: 0,
+      },
+    },
+    pause: () => {
+      pauseCalls++;
+      execution.phase = 'paused';
+    },
+  };
+  (presenter as any).state = { profile: 'visitor', execution };
+
+  presenter.checkEvidenceGates();
+
+  assert.equal(pauseCalls, 1);
+  assert.equal(presenter.publicTourState, 'p2_objective');
+  assert.equal(presenter.tourTargetState, undefined);
+
+  const pin = { name: 'wte', row: 0, column: 0 } as any;
+  const pendingAction = computeTrainingActionState({
+    ...execution,
+    phase: 'paused',
+    progress: {
+      ...execution.progress,
+      training: { ...execution.progress.training, mean: undefined },
+    },
+  } as any, pin, true, undefined, 'p2_objective');
+  const readyAction = computeTrainingActionState({
+    ...execution,
+    phase: 'paused',
+  } as any, pin, true, undefined, 'p2_objective');
+
+  assert.equal(pendingAction?.disabled, true);
+  assert.equal(readyAction?.disabled, false);
+  assert.equal(getPublicTourContent('p2_objective').primaryAction?.label, 'Continue: Trace gradient contribution');
 });
 
