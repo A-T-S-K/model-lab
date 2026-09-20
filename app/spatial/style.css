@@ -296,6 +296,9 @@ body.spatial-mode { background:#0B0F12; color:#F2F5F7; font-family:Plex,sans-ser
   .contextual-dock .dock-body { padding: 3px 10px; }
   .dock-essential-result p { margin: 2px 0; }
 }
+.spatial-shell[data-experience-profile="visitor"] .spatial-header {
+  flex-wrap: nowrap;
+}
 [data-experience-profile="visitor"] button,
 [data-experience-profile="facilitator"] button {
   box-sizing: border-box;
@@ -357,6 +360,7 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
 
 /* P0-E2 Contextual Dock and Public Profile Layout */
 .world-workspace.is-public-profile {
+  display: flex;
   flex-direction: column;
   gap: 0;
   flex: 1 1 0;
@@ -364,16 +368,35 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   overflow: hidden;
 }
 .world-workspace.is-public-profile > .world-pane {
-  flex: 1 1 auto;
-  min-height: 40px;
+  flex: 0 0 auto;
+  width: 100%;
+  aspect-ratio: 4480 / 1280;
+  max-height: calc(100% - clamp(220px, 28vh, 360px));
+  min-height: 180px;
   position: relative;
-  height: auto;
   overflow: hidden;
 }
 .world-workspace.is-public-profile > .world-pane > .spatial-world {
   width: 100%;
   height: 100%;
-  flex: 1 1 auto;
+  display: block;
+}
+
+.world-workspace.is-public-profile > .contextual-dock,
+.world-workspace.is-public-profile > .contextual-dock.is-expanded,
+.world-workspace.is-public-profile > .contextual-dock:not(.is-expanded) {
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: none;
+  display: flex;
+  flex-direction: column;
+  background: #111820;
+  border-top: 1px solid #3b454d;
+  font-size: 14px;
+  line-height: 1.4;
+  z-index: 15;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .contextual-dock {
@@ -390,35 +413,40 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
 
 .contextual-dock .dock-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-  padding: 6px 14px;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 18px;
   background: #151d24;
   border-bottom: 1px solid #28333c;
+  min-height: 68px;
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .contextual-dock .dock-route-info {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
   flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .contextual-dock .dock-brand {
-  font-size: 12px;
+  font-size: 13px;
   letter-spacing: 1px;
   color: #62c7e8;
   font-weight: 700;
   margin-right: 4px;
+  flex-shrink: 0;
 }
 
 .contextual-dock .dock-selected-object {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
+  padding: 3px 10px;
   background: #1c2730;
   border: 1px solid #3b454d;
   border-radius: 4px;
@@ -426,41 +454,136 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.3px;
-}
-
-.contextual-dock .dock-route-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  flex: 0 0 auto;
-}
-
-.contextual-dock #dock-inspect {
-  border: 1px solid #3b454d;
-  background: #18222a;
-  color: #a7b2bc;
-  font-size: 13px;
-  font-weight: 500;
-  padding: 6px 14px;
-  border-radius: 4px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-}
-
-.contextual-dock #dock-inspect:hover {
-  background: #202b35;
-  border-color: #62c7e8;
-  color: #f2f5f7;
+  flex-shrink: 0;
 }
 
 .contextual-dock .dock-status-message {
   margin: 0;
   font-size: 12px;
-  color: #c5d1db;
+  color: #8b969e;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contextual-dock .dock-route-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.contextual-dock .dock-slot-secondary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.contextual-dock .dock-slot-primary {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 260px;
+}
+
+.contextual-dock .dock-slot-primary .primary-action,
+.contextual-dock .primary-action,
+[data-experience-profile="visitor"] .primary-action {
+  min-height: 54px;
+  height: 54px;
+  min-width: 260px;
+  padding: 0 24px;
+  background: #1b455b;
+  border: 2px solid #62c7e8;
+  border-radius: 6px;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  white-space: nowrap;
+  box-sizing: border-box;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.contextual-dock .dock-slot-primary .primary-action:hover:not(:disabled),
+.contextual-dock .primary-action:hover:not(:disabled),
+[data-experience-profile="visitor"] .primary-action:hover:not(:disabled) {
+  background: #235975;
+  border-color: #7ad8f8;
+  color: #ffffff;
+}
+
+.contextual-dock .dock-slot-primary .primary-action:active:not(:disabled),
+.contextual-dock .primary-action:active:not(:disabled),
+[data-experience-profile="visitor"] .primary-action:active:not(:disabled) {
+  background: #153749;
+}
+
+.contextual-dock .dock-slot-primary .primary-action:disabled,
+.contextual-dock .primary-action:disabled,
+[data-experience-profile="visitor"] .primary-action:disabled {
+  background: #16222a;
+  border-color: #2b3942;
+  color: #6b7780;
+  cursor: not-allowed;
+}
+
+.contextual-dock .dock-slot-secondary button,
+.contextual-dock .secondary-action,
+[data-experience-profile="visitor"] .secondary-action,
+.contextual-dock #dock-inspect {
+  min-height: 48px;
+  height: 48px;
+  padding: 0 16px;
+  background: #18222a;
+  border: 1px solid #3b454d;
+  border-radius: 6px;
+  color: #a7b2bc;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  white-space: nowrap;
+  box-sizing: border-box;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.contextual-dock .dock-slot-secondary button:hover:not(:disabled),
+.contextual-dock .secondary-action:hover:not(:disabled),
+[data-experience-profile="visitor"] .secondary-action:hover:not(:disabled),
+.contextual-dock #dock-inspect:hover:not(:disabled) {
+  background: #202b35;
+  border-color: #62c7e8;
+  color: #f2f5f7;
+}
+
+.contextual-dock .dock-slot-secondary button:disabled,
+.contextual-dock .secondary-action:disabled,
+[data-experience-profile="visitor"] .secondary-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.contextual-dock .execution-frontier-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: #1c2730;
+  border: 1px solid #3b454d;
+  border-radius: 4px;
+  color: #8dd9ad;
+  font-family: PlexMono, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .contextual-dock .dock-tabs,
@@ -558,6 +681,19 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   max-height: calc(40vh - 92px);
 }
 
+.world-workspace.is-public-profile > .contextual-dock .dock-body,
+.world-workspace.is-public-profile > .contextual-dock.is-expanded .dock-body,
+.world-workspace.is-public-profile > .contextual-dock:not(.is-expanded) .dock-body {
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+  padding: 12px 18px;
+}
+
 /* Dock Overview: Stage-appropriate horizontal layout */
 .dock-overview {
   display: flex;
@@ -566,6 +702,16 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   gap: 24px;
   padding: 4px 0;
   min-height: 120px;
+}
+
+.world-workspace.is-public-profile .dock-overview {
+  gap: 28px;
+  padding: 0;
+  min-height: 0;
+}
+
+.world-workspace.is-public-profile .dock-essential-result {
+  min-height: 0;
 }
 
 .dock-stage-meaning {

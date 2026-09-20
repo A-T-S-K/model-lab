@@ -455,12 +455,15 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
   if (opts.attract) {
     return `<section class="contextual-dock short-guide" data-testid="contextual-dock" data-active-depth="explain" aria-label="Contextual explanation dock">
     <div class="dock-header" data-testid="dock-header">
-      <div class="dock-route-info">
+      <div class="dock-route-info dock-slot-context">
         <strong class="dock-brand">MODEL LAB</strong>
         <span class="dock-status-message">Explore how a tiny language model predicts what comes next</span>
       </div>
-      <div class="dock-route-actions">
-        ${primaryAction}
+      <div class="dock-route-actions dock-slot-actions">
+        <div class="dock-slot-secondary"></div>
+        <div class="dock-slot-primary">
+          ${primaryAction}
+        </div>
       </div>
     </div>
     <div class="dock-body" data-testid="dock-body">
@@ -475,33 +478,42 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
 
   return `<section class="contextual-dock short-guide ${isExpanded ? 'is-expanded' : ''}" data-testid="contextual-dock" data-active-depth="${effectiveDepth}" aria-label="Contextual explanation dock">
     <div class="dock-header" data-testid="dock-header">
-      <div class="dock-route-info">
+      <div class="dock-route-info dock-slot-context">
         ${lessonProgress ? `<span class="lesson-progress" data-testid="lesson-progress">${esc(lessonProgress)}</span>` : ''}
         <span class="dock-selected-object" data-testid="selected-world-object" data-semantic-anchor="${opts.address.kind}" data-position="${opts.address.token}" data-layer="${opts.address.layer ?? ''}" data-run-id="${esc(opts.model?.source.sourceRunId ?? '')}">${esc(opts.selectedLabel ?? addressLabel(opts.address))}</span>
         ${routePurpose ? `<span class="route-purpose" data-testid="route-purpose">${esc(routePurpose)}</span>` : ''}
         <p role="status" class="dock-status-message">${esc(opts.shortMessage)} ${opts.shortDetour ? 'Exploring a detour. Resume explicitly to return. ' : ''}</p>
       </div>
-      <div class="dock-route-actions"${opts.trainingState ? ` id="execution-controls" data-execution-id="${esc(opts.trainingState.executionId)}" data-sequence="${opts.trainingState.sequence}" data-training-phase="${esc(opts.trainingState.phase)}"` : ''}>
-        ${inspectAction}
-        ${opts.trainingState ? (
-          opts.trainingState.ready ? `
-            ${hasComparison ? `<button class="secondary-action dock-tab" data-dock-depth="compare">Compare candidate</button>` : ''}
-            <button id="execution-accept" class="primary-action" ${opts.trainingState.disabled ? 'disabled' : ''}>Accept update</button>
-            <button id="execution-cancel" class="secondary-action" ${opts.trainingState.cancelling ? 'disabled' : ''}>Discard candidate</button>
-            <span data-testid="execution-frontier">${esc(opts.trainingState.frontierText)}</span>
-          ` : `
-            <button id="execution-continue" class="primary-action" ${opts.trainingState.disabled ? 'disabled' : ''}>Continue</button>
-            ${opts.trainingState.canPin ? `<button id="execution-pin" class="secondary-action" ${opts.trainingState.disabled ? 'disabled' : ''}>${esc(opts.trainingState.pinLabel)}</button>` : ''}
-            <button id="execution-cancel" class="secondary-action" ${opts.trainingState.cancelling ? 'disabled' : ''}>Cancel training</button>
-            <span data-testid="execution-frontier">${esc(opts.trainingState.frontierText)}</span>
-          `
-        ) : `
-          ${primaryAction}
-          ${attentionAction}
-          ${!isFacilitator && !opts.attract ? `<button id="visitor-explore-toggle">${freeExplore ? 'Close free exploration' : 'Explore freely'}</button>` : ''}
-          ${shortDetour ? `<button id="short-resume">Resume short route</button>` : ''}
-          ${isFacilitator ? `<button id="operator-controls">${operatorControls ? 'Hide operator controls' : 'Show operator controls'}</button>` : ''}
-        `}
+      <div class="dock-route-actions dock-slot-actions"${opts.trainingState ? ` id="execution-controls" data-execution-id="${esc(opts.trainingState.executionId)}" data-sequence="${opts.trainingState.sequence}" data-training-phase="${esc(opts.trainingState.phase)}"` : ''}>
+        <div class="dock-slot-secondary">
+          ${opts.trainingState ? `<span data-testid="execution-frontier" class="execution-frontier-tag">${esc(opts.trainingState.frontierText)}</span>` : ''}
+          ${inspectAction}
+          ${opts.trainingState ? (
+            opts.trainingState.ready ? `
+              ${hasComparison ? `<button class="secondary-action dock-tab" data-dock-depth="compare">Compare candidate</button>` : ''}
+              <button id="execution-cancel" class="secondary-action" ${opts.trainingState.cancelling ? 'disabled' : ''}>Discard candidate</button>
+            ` : `
+              ${opts.trainingState.canPin ? `<button id="execution-pin" class="secondary-action" ${opts.trainingState.disabled ? 'disabled' : ''}>${esc(opts.trainingState.pinLabel)}</button>` : ''}
+              <button id="execution-cancel" class="secondary-action" ${opts.trainingState.cancelling ? 'disabled' : ''}>Cancel training</button>
+            `
+          ) : `
+            ${attentionAction}
+            ${!isFacilitator && !opts.attract ? `<button id="visitor-explore-toggle" class="secondary-action">${freeExplore ? 'Close free exploration' : 'Explore freely'}</button>` : ''}
+            ${shortDetour ? `<button id="short-resume" class="secondary-action">Resume short route</button>` : ''}
+            ${isFacilitator ? `<button id="operator-controls" class="secondary-action">${operatorControls ? 'Hide operator controls' : 'Show operator controls'}</button>` : ''}
+          `}
+        </div>
+        <div class="dock-slot-primary">
+          ${opts.trainingState ? (
+            opts.trainingState.ready ? `
+              <button id="execution-accept" class="primary-action" ${opts.trainingState.disabled ? 'disabled' : ''}>Accept update</button>
+            ` : `
+              <button id="execution-continue" class="primary-action" ${opts.trainingState.disabled ? 'disabled' : ''}>Continue</button>
+            `
+          ) : `
+            ${primaryAction}
+          `}
+        </div>
       </div>
     </div>
     ${isExpanded ? `

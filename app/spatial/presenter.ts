@@ -11,7 +11,7 @@ import { learningScene, learningInspector, parameterLabel, learningStations } fr
 import { learningPhasePresentation, type LearningModel, type LearningPhasePresentation, type LearningStage, type ParameterPin } from "./learning.js";
 export { learningPhasePresentation, type LearningPhasePresentation } from "./learning.js";
 import { isRegisteredWorld, type AnySpatialReadModel, type MicrogptSelection, type SpatialReadModel } from "./bindings.js";
-import { SpatialCamera, HOME, PUBLIC_HOME, type CameraBox } from "./camera.js";
+import { SpatialCamera, HOME, PUBLIC_HOME, PUBLIC_CONTENT_BOUNDS, responsivePublicFrame, type CameraBox } from "./camera.js";
 import { headKinds, operations, parameterOwners, type Address } from "./forward.js";
 import { layerKinds } from "./microgpt-topology.js";
 import { sceneSvg, stationFor, stationForWorld } from "./scene.js";
@@ -105,6 +105,15 @@ export class SpatialPresenter {
   private shortSelection?:MicrogptSelection;
   private shortMessage="";
   private shortDetour=false;
+  private worldPaneObserver?: ResizeObserver;
+
+  getResponsivePublicFrame(): CameraBox {
+    const wp = document.querySelector<HTMLElement>('.world-workspace.is-public-profile > .world-pane') ?? document.querySelector<HTMLElement>('.world-pane');
+    if (wp && wp.clientWidth > 0 && wp.clientHeight > 0) {
+      return responsivePublicFrame(wp.clientWidth, wp.clientHeight, PUBLIC_CONTENT_BOUNDS);
+    }
+    return { ...PUBLIC_CONTENT_BOUNDS };
+  }
 
   isPublicProfile(): boolean {
     const profile = this.profile ?? this.state?.profile;
@@ -115,7 +124,8 @@ export class SpatialPresenter {
   resetVisitor(){
     const wasPublic = this.isPublicProfile();
     this.invalidate(); this.playback.cursor=0; this.playback.phase=2; this.playback.follow=true; this.playback.route="forward"; this.camera.detach();
-    this.camera.box = wasPublic ? { ...PUBLIC_HOME } : { ...HOME };
+    this.worldPaneObserver?.disconnect(); this.worldPaneObserver = undefined;
+    this.camera.box = wasPublic ? this.getResponsivePublicFrame() : { ...HOME };
     this.camera.move(this.camera.box, false);
     this.history=[]; this.boundSelection=undefined; this.boundPin=undefined;
     this.model=undefined; this.state=undefined; this.routeChoice='forward';this.worldIdentity="";this.worldDefinition="";
@@ -129,7 +139,7 @@ export class SpatialPresenter {
   startVisitorSample(){
     this.freeExplore=false; this.dockDepth='explain';
     if (this.isPublicProfile()) {
-      this.camera.box = { ...PUBLIC_HOME };
+      this.camera.box = this.getResponsivePublicFrame();
       this.camera.move(this.camera.box, false);
       this.pendingBox = undefined;
     }
@@ -201,7 +211,7 @@ export class SpatialPresenter {
     if(!sameDefinition||this.selection.layer>=model.forward.layers||this.selection.head>=model.forward.heads||this.selection.query>=model.forward.input.length||this.selection.key>=model.forward.input.length||this.selection.feature>=model.width)
       Object.assign(this.selection,{layer:0,query:Math.max(0,model.forward.input.length-1),key:0,head:0,feature:0});
     this.kind='attentionLogits';this.element=0;this.pin={name:'wte',row:0,column:0};
-    this.camera.move(model.forward.descriptor.presentation==='microgpt-canonical-curated'?(this.isPublicProfile()?{...PUBLIC_HOME}:{...HOME}):{x:0,y:0,width:1250+model.forward.layers*2500,height:Math.max(1500,420+model.forward.heads*270)},false);
+    this.camera.move(model.forward.descriptor.presentation==='microgpt-canonical-curated'?(this.isPublicProfile()?this.getResponsivePublicFrame():{...HOME}):{x:0,y:0,width:1250+model.forward.layers*2500,height:Math.max(1500,420+model.forward.heads*270)},false);
     return true;
   }
   interrupt(preserveFrame=false){this.playback.pause(true);this.camera.stop();if(!preserveFrame)this.pendingBox=undefined;this.detour=this.guided;
@@ -429,7 +439,7 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
       } else {
         primaryAction = `<button id="short-continue" class="primary-action">Return to Mix Context</button>`;
       }
-      attentionAction = `<button id="attention-return">Return to Mix Context</button>`;
+      attentionAction = `<button id="attention-return" class="secondary-action">Return to Mix Context</button>`;
     } else if (currStop === 0) {
       lessonProgress = `Prediction payoff`;
       routePurpose = currentLandmark.purpose;
@@ -558,7 +568,7 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
     on('#visitor-explore-toggle',()=>{
       this.freeExplore=!this.freeExplore;
       if (!this.freeExplore && this.isPublicProfile()) {
-        this.camera.move(PUBLIC_HOME, true);
+        this.camera.move(this.getResponsivePublicFrame(), true);
         this.pendingBox = undefined;
       }
       changed();
@@ -605,7 +615,7 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
         this.shortRoute(Math.max(0,this.shortStop));
       }
       if (this.isPublicProfile()) {
-        this.camera.move(PUBLIC_HOME, true);
+        this.camera.move(this.getResponsivePublicFrame(), true);
         this.pendingBox = undefined;
       }
       changed();
@@ -626,7 +636,7 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
       this.remember();
       this.lens=false;
       if (this.isPublicProfile()) {
-        this.camera.move(PUBLIC_HOME, true);
+        this.camera.move(this.getResponsivePublicFrame(), true);
         this.pendingBox = undefined;
         render();
         return;
@@ -644,6 +654,27 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
     on("#close-spatial-lens",()=>{this.lens=false;render();});
     const gesture=()=>{this.interrupt();const status=root.querySelector('[data-testid="explanation-status"]');if(status&&this.playback.source)status.textContent=`Explore detour · ${this.playback.cursor+1}/${this.playback.length}`;this.remember();this.detour=this.guided;const label=root.querySelector("#waypoint-status");if(label&&this.guided)label.textContent=`Explore detour · ${this.playback.cursor+1}/${this.playback.length} · Resume explanation to return`;};
     const svg=root.querySelector<SVGSVGElement>("#spatial-world");
+    this.worldPaneObserver?.disconnect();
+    const wp = root.querySelector<HTMLElement>(".world-workspace.is-public-profile > .world-pane") ?? root.querySelector<HTMLElement>(".world-pane");
+    if (wp && typeof ResizeObserver !== "undefined") {
+      this.worldPaneObserver = new ResizeObserver(entries => {
+        for (const entry of entries) {
+          const { width, height } = entry.contentRect;
+          if (width > 0 && height > 0 && this.isPublicProfile() && !this.freeExplore) {
+            const frame = responsivePublicFrame(width, height, PUBLIC_CONTENT_BOUNDS);
+            if (
+              this.camera.box.x !== frame.x ||
+              this.camera.box.y !== frame.y ||
+              this.camera.box.width !== frame.width ||
+              this.camera.box.height !== frame.height
+            ) {
+              this.camera.move(frame, false);
+            }
+          }
+        }
+      });
+      this.worldPaneObserver.observe(wp);
+    }
     if(svg){this.camera.attach(svg,()=>{const p=root.querySelector("#camera-footprint"),b=this.camera.box;p?.setAttribute("x",String(b.x));p?.setAttribute("y",String(b.y));p?.setAttribute("width",String(b.width));p?.setAttribute("height",String(b.height));
       const lensEl=root.querySelector<HTMLElement>(".context-lens"),tether=root.querySelector<SVGPathElement>("#context-tether-path");
       if(this.lens && !this.construction && lensEl && tether){
@@ -699,7 +730,7 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
     on('#waypoint-resume',()=>{
       if(!this.playback.source)this.start();
       if (this.isPublicProfile()) {
-        this.camera.move(PUBLIC_HOME, true);
+        this.camera.move(this.getResponsivePublicFrame(), true);
         this.pendingBox = undefined;
       }
       this.playback.resume();

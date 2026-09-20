@@ -1,6 +1,40 @@
 export interface CameraBox { x:number; y:number; width:number; height:number }
 export const HOME:CameraBox={x:0,y:0,width:4500,height:1700};
 export const PUBLIC_HOME:CameraBox={x:0,y:0,width:4500,height:1300};
+export const PUBLIC_CONTENT_BOUNDS:CameraBox={x:0,y:0,width:4480,height:1280};
+
+export function responsivePublicFrame(
+  containerWidth: number,
+  containerHeight: number,
+  bounds: CameraBox = PUBLIC_CONTENT_BOUNDS
+): CameraBox {
+  if (containerWidth <= 0 || containerHeight <= 0) {
+    return { ...bounds };
+  }
+  const containerAspect = containerWidth / containerHeight;
+  const contentAspect = bounds.width / bounds.height;
+  const centerX = bounds.x + bounds.width / 2;
+  const centerY = bounds.y + bounds.height / 2;
+
+  let frameWidth: number;
+  let frameHeight: number;
+
+  if (containerAspect < contentAspect) {
+    frameWidth = bounds.width;
+    frameHeight = bounds.width / containerAspect;
+  } else {
+    frameHeight = bounds.height;
+    frameWidth = bounds.height * containerAspect;
+  }
+
+  return {
+    x: Math.round(centerX - frameWidth / 2),
+    y: Math.round(centerY - frameHeight / 2),
+    width: Math.round(frameWidth),
+    height: Math.round(frameHeight),
+  };
+}
+
 export class SpatialCamera {
   box:CameraBox={...HOME};
   private svg?:SVGSVGElement;

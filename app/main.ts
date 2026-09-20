@@ -173,7 +173,7 @@ let exhibitEntry = new URLSearchParams(location.search).get("kiosk") === "1";
 const facilitatorLaunch = exhibitEntry && new URLSearchParams(location.search).get("facilitator") === "1";
 if (exhibitEntry) {
   spatialPresenter.profile = facilitatorLaunch ? "facilitator" : "visitor";
-  spatialPresenter.camera.box = { ...PUBLIC_HOME };
+  spatialPresenter.camera.box = spatialPresenter.getResponsivePublicFrame();
 }
 let idleResetEnabled = exhibitEntry;
 let kioskEnabled = exhibitEntry;
