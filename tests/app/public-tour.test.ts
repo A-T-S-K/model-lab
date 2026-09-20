@@ -4,9 +4,6 @@ import {
   PUBLIC_TOUR_STATES,
   getPublicTourContent,
   advanceTour,
-  previousTourState,
-  startPart2,
-  facilitatorTourStateForLandmark,
   canAdvanceTour,
   computeLiveTourEvidence,
   formatAdamGlanceNote,
@@ -17,35 +14,20 @@ import {
   type PublicTourState,
   type TourEvidence,
 } from '../../app/spatial/public-tour.js';
-import { SpatialPresenter, computeTrainingActionState } from '../../app/spatial/presenter.js';
+import { computeTrainingActionState } from '../../app/spatial/presenter.js';
 
-test('PUBLIC_TOUR_STATES defines exactly 14 authoritative narrative states', () => {
-  assert.equal(PUBLIC_TOUR_STATES.length, 14);
-  const expectedStates: PublicTourState[] = [
-    'cold',
-    'p1_prediction_preview',
-    'p1_represent',
-    'p1_mix_context',
-    'p1_transform',
-    'p1_score',
-    'p1_probabilities',
-    'p1_complete',
-    'p2_objective',
-    'p2_gradient_contribution',
-    'p2_final_gradient',
-    'p2_adam_proposal',
-    'candidate_ready',
-    'tour_complete',
-  ];
-  assert.deepEqual([...PUBLIC_TOUR_STATES], expectedStates);
-
+test('PUBLIC_TOUR_STATES is a complete current UI representation without freezing a curriculum state count', () => {
+  assert.equal(new Set(PUBLIC_TOUR_STATES).size, PUBLIC_TOUR_STATES.length);
+  for (const required of ['cold', 'p1_complete', 'candidate_ready', 'tour_complete'] as const) {
+    assert(PUBLIC_TOUR_STATES.includes(required), `Missing required current UI anchor ${required}`);
+  }
   for (const st of PUBLIC_TOUR_STATES) {
-    const content = getPublicTourContent(st);
-    assert.equal(content.state, st);
-    assert(content.headline.length > 0, `Headline missing for ${st}`);
-    assert(content.routePurpose.length > 0, `Route purpose missing for ${st}`);
-    assert(content.plainMeaning.length > 0, `Plain meaning missing for ${st}`);
-    assert(content.selectionIntent, `Selection intent missing for ${st}`);
+    const c = getPublicTourContent(st);
+    assert.equal(c.state, st);
+    assert(c.headline.length > 0, `Headline missing for ${st}`);
+    assert(c.routePurpose.length > 0, `Route purpose missing for ${st}`);
+    assert(c.plainMeaning.length > 0, `Plain meaning missing for ${st}`);
+    assert(c.selectionIntent, `Selection intent missing for ${st}`);
   }
 });
 
@@ -119,7 +101,7 @@ test('Part 1 has 6 teaching states followed by an explicit Part 1 Complete state
   assert.equal(completeContent.optionalActions.length, 0, 'Must not expose competing public Part 1 actions');
 });
 
-test('Part 2 has exactly 5 visitor teaching moments that advance with truth guardrails', () => {
+test('Current Part 2 UI representation preserves its truth-guarded teaching moments', () => {
   const p2Expected = [
     { state: 'p2_objective', progress: 'Part 2 of 2 · 1 of 5 · Measure error', headline: 'MEASURE ERROR' },
     { state: 'p2_gradient_contribution', progress: 'Part 2 of 2 · 2 of 5 · Trace gradient contribution', headline: 'TRACE ONE GRADIENT CONTRIBUTION' },
@@ -127,8 +109,6 @@ test('Part 2 has exactly 5 visitor teaching moments that advance with truth guar
     { state: 'p2_adam_proposal', progress: 'Part 2 of 2 · 4 of 5 · Adam proposal', headline: 'ADAM PROPOSES CANDIDATE' },
     { state: 'candidate_ready', progress: 'Part 2 of 2 · 5 of 5 · Compare and decide', headline: 'CANDIDATE UPDATE READY' },
   ] as const;
-
-  assert.equal(startPart2(), 'p2_objective');
 
   for (const exp of p2Expected) {
     const c = getPublicTourContent(exp.state);
@@ -152,17 +132,6 @@ test('Part 2 has exactly 5 visitor teaching moments that advance with truth guar
   // candidate_ready does NOT auto-advance
   assert.equal(advanceTour('candidate_ready'), 'candidate_ready');
 
-  // Backward nominal sequence through Part 2
-  let back: PublicTourState = 'candidate_ready';
-  back = previousTourState(back);
-  assert.equal(back, 'p2_adam_proposal');
-  back = previousTourState(back);
-  assert.equal(back, 'p2_final_gradient');
-  back = previousTourState(back);
-  assert.equal(back, 'p2_gradient_contribution');
-  back = previousTourState(back);
-  assert.equal(back, 'p2_objective');
-  assert.equal(previousTourState('p2_objective'), 'p2_objective');
 });
 
 test('One authentic contribution is distinct from final gradient', () => {
@@ -305,22 +274,6 @@ test('Candidate Ready: peer decision actions, probabilities@q selection, and aut
   assert.equal(discarded.primaryAction?.id, 'tour-restart');
 });
 
-test('Facilitator landmark mapping matches 14-state contract', () => {
-  assert.equal(facilitatorTourStateForLandmark(0, false), 'p1_prediction_preview');
-  assert.equal(facilitatorTourStateForLandmark(1, false), 'p1_represent');
-  assert.equal(facilitatorTourStateForLandmark(2, false), 'p1_mix_context');
-  assert.equal(facilitatorTourStateForLandmark(3, false), 'p1_transform');
-  assert.equal(facilitatorTourStateForLandmark(4, false), 'p1_score');
-  assert.equal(facilitatorTourStateForLandmark(5, false), 'p1_probabilities');
-
-  assert.equal(facilitatorTourStateForLandmark(0, true), 'p2_objective');
-  assert.equal(facilitatorTourStateForLandmark(1, true), 'p2_gradient_contribution');
-  assert.equal(facilitatorTourStateForLandmark(2, true), 'p2_gradient_contribution');
-  assert.equal(facilitatorTourStateForLandmark(3, true), 'p2_gradient_contribution');
-  assert.equal(facilitatorTourStateForLandmark(4, true), 'p2_gradient_contribution');
-  assert.equal(facilitatorTourStateForLandmark(5, true), 'p2_final_gradient');
-  assert.equal(facilitatorTourStateForLandmark(6, true), 'p2_adam_proposal');
-});
 
 test('Part 2 does not begin before successful runtime startup and authentic progress', () => {
   // While startup is pending (or before startup acknowledges), no training progress exists
@@ -596,56 +549,15 @@ test('C3: Gated transitions advance exactly once to the target state and pause u
 });
 
 
-test('C3-R1: final-gradient transition continues normal backward without proposal stop-at-pin', () => {
-  const calls: string[] = [];
-  const presenter = Object.create(SpatialPresenter.prototype) as SpatialPresenter;
-  presenter.profile = 'visitor';
-  presenter.publicTourState = 'p2_gradient_contribution';
-  presenter.tourTargetState = undefined;
-  (presenter as any).state = {
-    profile: 'visitor',
-    execution: {
-      active: true,
-      phase: 'paused',
-      pending: false,
-      pin: 0,
-      progress: {
-        executionId: 'c3-r1-final-gradient',
-        sequence: 1,
-        training: {
-          phase: 'backward',
-          mean: 1,
-          contributions: [{}],
-          final: false,
-          gradient: 0,
-        },
-      },
-      continue: () => calls.push('continue'),
-      runToContribution: () => calls.push('runToContribution'),
-      runToProposal: () => calls.push('runToProposal'),
-    },
-  };
-
-  presenter.advanceTour();
-
-  assert.equal(presenter.publicTourState, 'p2_gradient_contribution');
-  assert.equal(presenter.tourTargetState, 'p2_final_gradient');
-  assert.deepEqual(calls, ['continue']);
-});
-
-test('C3-R1: objective mean pauses in place and unlocks its CTA only after measurement', () => {
-  const presenter = Object.create(SpatialPresenter.prototype) as SpatialPresenter;
-  presenter.profile = 'visitor';
-  presenter.publicTourState = 'p2_objective';
-  presenter.tourTargetState = undefined;
-  let pauseCalls = 0;
+test('Objective action readiness is presentation-only and does not require presenter orchestration', () => {
+  const pin = { name: 'wte', row: 0, column: 0 } as any;
   const execution = {
     active: true,
-    phase: 'running',
+    phase: 'paused',
     pending: false,
     pin: 0,
     progress: {
-      executionId: 'c3-r1-objective',
+      executionId: 'objective-readiness',
       sequence: 2,
       training: {
         phase: 'backward seed',
@@ -655,35 +567,24 @@ test('C3-R1: objective mean pauses in place and unlocks its CTA only after measu
         gradient: 0,
       },
     },
-    pause: () => {
-      pauseCalls++;
-      execution.phase = 'paused';
-    },
   };
-  (presenter as any).state = { profile: 'visitor', execution };
 
-  presenter.checkEvidenceGates();
-
-  assert.equal(pauseCalls, 1);
-  assert.equal(presenter.publicTourState, 'p2_objective');
-  assert.equal(presenter.tourTargetState, undefined);
-
-  const pin = { name: 'wte', row: 0, column: 0 } as any;
   const pendingAction = computeTrainingActionState({
     ...execution,
-    phase: 'paused',
     progress: {
       ...execution.progress,
       training: { ...execution.progress.training, mean: undefined },
     },
   } as any, pin, true, undefined, 'p2_objective');
-  const readyAction = computeTrainingActionState({
-    ...execution,
-    phase: 'paused',
-  } as any, pin, true, undefined, 'p2_objective');
+  const readyAction = computeTrainingActionState(
+    execution as any,
+    pin,
+    true,
+    undefined,
+    'p2_objective',
+  );
 
   assert.equal(pendingAction?.disabled, true);
   assert.equal(readyAction?.disabled, false);
   assert.equal(getPublicTourContent('p2_objective').primaryAction?.label, 'Continue: Trace gradient contribution');
 });
-

@@ -4,8 +4,8 @@ import { operations, parameterOwners } from './forward.js';
 import type { ForwardProgress } from '../worker/protocol.js';
 import type { TrainingProgress } from '../worker/training-execution.js';
 import type { LearningModel, LearningStage, ParameterPin } from './learning.js';
-import type { PublicTourContent, PublicTourOutcome, PublicTourState } from './public-tour.js';
-import { formatAdamGlanceNote, formatCandidateOutcomeMeanLoss, formatCandidateTargetTokenProbability, getPublicTourContent } from './public-tour.js';
+import type { PublicTourContent } from './public-tour.js';
+import { formatAdamGlanceNote, formatCandidateOutcomeMeanLoss, formatCandidateTargetTokenProbability } from './public-tour.js';
 import { outputTokenName, outputSummary, outputMetrics, componentComparison, type OutputPair } from './comparison.js';
 import { geometry, projection } from './view.js';
 import { probabilityColor } from './geometry.js';
@@ -67,17 +67,13 @@ export interface ContextualDockOptions {
   readonly learningRouteStop?: number;
   readonly selectedLabel?: string;
   readonly tourContent?: PublicTourContent;
-  readonly tourOutcome?: PublicTourOutcome;
-  readonly tourTargetState?: PublicTourState;
 }
 
 function renderExplain(opts: ContextualDockOptions): string {
   const { model: m, address: a, element, pin, executionProgress, trainingProgress, learningStage, learningModel, learningRouteStop, attract, trainingState, profile, routePurpose, tourContent, outputPair } = opts;
   if (!m) return '<p>No model loaded.</p>';
   const isPublic = profile !== 'workbench';
-  const effectiveTourContent = (isPublic && !tourContent)
-    ? getPublicTourContent(opts.tourTargetState ?? 'cold', opts.tourOutcome)
-    : tourContent;
+  const effectiveTourContent = tourContent;
 
   if (effectiveTourContent) {
     const tc = effectiveTourContent;
@@ -587,6 +583,7 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
   </section>`;
   }
 
+  const candidateDecisionDisabled = !opts.trainingState?.ready || Boolean(opts.trainingState.disabled);
   const inspectAction = isExpanded
     ? `<button id="dock-inspect" class="secondary-action dock-tab dock-tab-close" data-dock-depth="explain">← Return to overview</button>`
     : `<button id="dock-inspect" class="secondary-action dock-tab" data-dock-depth="values">${isPublic ? 'Details (optional)' : 'Inspect evidence ▾'}</button>`;
@@ -603,10 +600,14 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
         <div class="dock-slot-secondary">
           ${inspectAction}
           ${opts.tourContent ? (
-            opts.tourContent.state === 'candidate_ready' ? `
-              ${hasComparison ? `<button class="secondary-action dock-tab" data-dock-depth="compare">Compare candidate</button>` : ''}
-              <button id="execution-cancel" class="decision-action discard-action" ${opts.trainingState?.cancelling ? 'disabled' : ''}>Discard candidate</button>
-            ` : opts.tourContent.state === 'tour_complete' ? `
+            opts.tourContent.state === 'candidate_ready' ? (
+              shortDetour ? `
+                <button id="short-resume" class="secondary-action">Resume route</button>
+              ` : `
+                ${hasComparison ? `<button class="secondary-action dock-tab" data-dock-depth="compare">Compare candidate</button>` : ''}
+                <button id="execution-cancel" class="decision-action discard-action" ${candidateDecisionDisabled || opts.trainingState?.cancelling ? 'disabled' : ''}>Discard candidate</button>
+              `
+            ) : opts.tourContent.state === 'tour_complete' ? `
               ${!isFacilitator && !opts.attract ? `<button id="visitor-explore-toggle" class="secondary-action">${freeExplore ? 'Close free exploration' : 'Explore freely'}</button>` : ''}
               ${isFacilitator ? `<button id="operator-controls" class="secondary-action">${operatorControls ? 'Hide operator controls' : 'Show operator controls'}</button>` : ''}
             ` : `
@@ -631,8 +632,8 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
         </div>
         <div class="dock-slot-primary">
           ${opts.tourContent ? (
-            opts.tourContent.state === 'candidate_ready' ? `
-              <button id="execution-accept" class="decision-action accept-action primary-action" ${opts.trainingState?.disabled ? 'disabled' : ''}>Accept update</button>
+            opts.tourContent.state === 'candidate_ready' && !shortDetour ? `
+              <button id="execution-accept" class="decision-action accept-action primary-action" ${candidateDecisionDisabled ? 'disabled' : ''}>Accept update</button>
             ` : `
               ${primaryAction}
             `

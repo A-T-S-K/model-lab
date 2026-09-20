@@ -1,3 +1,5 @@
+// Temporary UI/session representation for the current implementation. LS0 instructional
+// beats are not 1:1 with these states, and this list length is not a curriculum invariant.
 export type PublicTourState =
   | 'cold'
   | 'p1_prediction_preview'
@@ -317,46 +319,6 @@ export function advanceTour(current: PublicTourState): PublicTourState {
     case 'tour_complete':
       return 'tour_complete';
   }
-}
-
-export function previousTourState(current: PublicTourState): PublicTourState {
-  switch (current) {
-    case 'candidate_ready':
-      return 'p2_adam_proposal';
-    case 'p2_adam_proposal':
-      return 'p2_final_gradient';
-    case 'p2_final_gradient':
-      return 'p2_gradient_contribution';
-    case 'p2_gradient_contribution':
-      return 'p2_objective';
-    case 'p2_objective':
-      return 'p2_objective';
-    default:
-      return current;
-  }
-}
-
-export function startPart2(): PublicTourState {
-  return 'p2_objective';
-}
-
-export function facilitatorTourStateForLandmark(landmarkIndex: number, reverse?: boolean): PublicTourState {
-  if (reverse) {
-    if (landmarkIndex === 0) return 'p2_objective';
-    if (landmarkIndex >= 1 && landmarkIndex <= 4) return 'p2_gradient_contribution';
-    if (landmarkIndex === 5) return 'p2_final_gradient';
-    if (landmarkIndex === 6) return 'p2_adam_proposal';
-    return 'p2_objective';
-  }
-  const stops: PublicTourState[] = [
-    'p1_prediction_preview',
-    'p1_represent',
-    'p1_mix_context',
-    'p1_transform',
-    'p1_score',
-    'p1_probabilities',
-  ];
-  return stops[landmarkIndex] ?? 'p1_prediction_preview';
 }
 
 export interface TourEvidence {

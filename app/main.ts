@@ -10,7 +10,8 @@ import type { WorldSelection } from './spatial/topology.js';
 import { learningReadModel, resolveParameter, type LearningStage } from "./spatial/learning.js";
 import { SpatialPresenter } from "./spatial/presenter.js";
 import { PUBLIC_HOME } from "./spatial/camera.js";
-import { getPublicExecutionStatus } from "./spatial/public-tour.js";
+import { computeLiveTourEvidence, getPublicExecutionStatus } from "./spatial/public-tour.js";
+import { createPublicLessonSession, getPublicLessonView, transitionPublicLesson, type PublicLessonEvent, type PublicLessonRuntimeEffect, type PublicLessonTransitionContext } from "./presentation/public-lesson-controller.js";
 import { exhibitTiming, exhibitState } from "./presentation/exhibit-state.js";
 import { experienceCapabilities, resolveExperienceProfile, type ExperienceCapabilities, type ExperienceProfile } from "./presentation/experience-profile.js";
 import plexSansLicense from "@ibm/plex-sans/fonts/complete/woff2/license.txt?url";
@@ -112,6 +113,7 @@ const worldSelection: WorldSelection = {node:'',port:'',phase:'',coordinates:{}}
 function clearWorldSelection(){Object.assign(worldSelection,{node:'',port:'',phase:'',coordinates:{}});}
 function focusCanonicalPredict(){queueMicrotask(()=>document.querySelector<HTMLButtonElement>('#predict')?.focus({preventScroll:true}));}
 const spatialPresenter = new SpatialPresenter(spatialSelection);
+let publicLessonSession = createPublicLessonSession();
 let spatialExperimentId = "";
 let spatialExperimentOffset = 0;
 let activeDataExperimentId = "";
@@ -234,18 +236,18 @@ function restoreExecutionView() {
 }
 const forwardDriver = new ForwardDriver(client, forwardChanged, async incoming => {
   const transaction = activeRetentionTransaction; activeRetentionTransaction = undefined;
+  const acceptingPublicCandidate = currentProfile() !== 'workbench'
+    && incoming.learn
+    && publicLessonSession.decisionPending === 'accepted';
   beforeForward = undefined; beforeForwardLocation = undefined;
-  spatialPresenter.tourTargetState = undefined;
   await execute(incoming.learn ? "train" : "predict", 1, false, incoming, transaction);
-  if (spatialPresenter.isPublicProfile() && spatialPresenter.publicTourState === 'candidate_ready') {
-    spatialPresenter.publicTourState = 'tour_complete';
-    spatialPresenter.publicTourOutcome = 'accepted';
-    spatialPresenter.applyTourSelection();
+  if (acceptingPublicCandidate) {
+    dispatchPublicLesson({ type: 'ACCEPT_COMPLETE' });
     render();
   }
 }, failure => {
   cancelRetention(activeRetentionTransaction); activeRetentionTransaction = undefined;
-  spatialPresenter.tourTargetState = undefined;
+  if (currentProfile() !== 'workbench') dispatchPublicLesson({ type: 'EXECUTION_FAILED' });
   result = beforeForward; beforeForward = undefined; restoreExecutionView();
   player = result && new TracePlayer(result.run);
   clearDisplayedInspection();
@@ -255,11 +257,60 @@ const forwardDriver = new ForwardDriver(client, forwardChanged, async incoming =
 client.onFailure = failure => {
   if (!forwardDriver.active) return;
   cancelRetention(activeRetentionTransaction); activeRetentionTransaction = undefined;
-  spatialPresenter.tourTargetState = undefined;
+  if (currentProfile() !== 'workbench') dispatchPublicLesson({ type: 'EXECUTION_FAILED' });
   discardForward(); ready = false;
   status = "Worker failed · partial prediction released · Reset model or Clear session to restart";
   error = failure.message; render();
 };
+function currentPublicLessonContext(): PublicLessonTransitionContext {
+  return {
+    evidence: computeLiveTourEvidence(forwardDriver.progress?.training, forwardDriver.pin),
+    driverPhase: forwardDriver.phase,
+    trainingStarted: Boolean(forwardDriver.progress?.training),
+  };
+}
+function currentPublicLessonView() {
+  return getPublicLessonView(publicLessonSession, currentPublicLessonContext());
+}
+function dispatchPublicLesson(event: PublicLessonEvent): boolean {
+  const before = publicLessonSession;
+  const transition = transitionPublicLesson(before, event, currentPublicLessonContext());
+  publicLessonSession = transition.session;
+  for (const effect of transition.effects) interpretPublicLessonEffect(effect);
+  return transition.session !== before || transition.effects.length > 0;
+}
+function interpretPublicLessonEffect(effect: PublicLessonRuntimeEffect): void {
+  switch (effect) {
+    case 'START_TRAINING':
+      void startForward(true);
+      break;
+    case 'CONTINUE':
+      syncTrainingPin();
+      forwardDriver.continue();
+      break;
+    case 'PAUSE':
+      forwardDriver.pause();
+      break;
+    case 'RUN_TO_CONTRIBUTION':
+      syncTrainingPin();
+      forwardDriver.runToContribution();
+      break;
+    case 'RUN_TO_PROPOSAL':
+      syncTrainingPin();
+      forwardDriver.runToProposal();
+      break;
+    case 'ACCEPT_CANDIDATE':
+      void forwardDriver.acceptUpdate();
+      break;
+    case 'DISCARD_CANDIDATE':
+      void discardPublicCandidate();
+      break;
+    case 'START_PREDICTION':
+      void restartPublicTour();
+      break;
+  }
+}
+
 let inspectedExecutionRevision: string | undefined;
 function forwardChanged() {
   const revision = forwardDriver.progress && `${forwardDriver.progress.executionId}:${forwardDriver.progress.sequence}`;
@@ -269,9 +320,7 @@ function forwardChanged() {
     const profile = currentProfile();
     const training = forwardDriver.progress?.training;
     const boundary = forwardDriver.progress?.last;
-    if (spatialPresenter.isPublicProfile() && spatialPresenter.publicTourState === 'p1_complete' && training) {
-      spatialPresenter.startPart2();
-    }
+    if (currentProfile() !== 'workbench' && training) dispatchPublicLesson({ type: 'TRAINING_PROGRESS' });
     if (forwardDriver.follow) {
       if (training?.phase.endsWith('forward')) {
         // Real forward phases (baseline forward, training forward, candidate forward)
@@ -298,10 +347,11 @@ function forwardChanged() {
         spatialPresenter.followBoundary(boundary);
       }
     }
-    if (spatialPresenter.isPublicProfile()) {
+    if (currentProfile() !== 'workbench') {
+      const lesson = currentPublicLessonView();
       status = getPublicExecutionStatus({
-        currentState: spatialPresenter.publicTourState,
-        targetState: spatialPresenter.tourTargetState,
+        currentState: lesson.canonicalState,
+        targetState: lesson.targetState,
         phase: training?.phase,
         driverPhase: forwardDriver.phase,
         final: training?.final,
@@ -316,7 +366,9 @@ function forwardChanged() {
     syncSpatialSelection();
   } else if (!forwardDriver.active) {
     cancelRetention(activeRetentionTransaction); activeRetentionTransaction = undefined;
-    spatialPresenter.tourTargetState = undefined;
+    if (currentProfile() !== 'workbench' && publicLessonSession.decisionPending !== 'discarded') {
+      dispatchPublicLesson({ type: 'EXECUTION_CANCELLED' });
+    }
     result = beforeForward; beforeForward = undefined; restoreExecutionView(); player = result && new TracePlayer(result.run);
     status = "Execution cancelled · prior completed evidence preserved";
     clearDisplayedInspection();
@@ -325,6 +377,7 @@ function forwardChanged() {
 }
 function executionExplore(event: Event) {
   if (!forwardDriver.active) return;
+  if (currentProfile() !== 'workbench') return;
   const target = event.target as Element;
   if (target.closest('.contextual-dock, #execution-controls')) return;
   if (!target.closest('.world-workspace,.spatial-selection,#spatial-home,#spatial-back,#spatial-focus,#spatial-lens')) return;
@@ -354,16 +407,25 @@ function bindForwardControls() {
       const source = button.dataset.liveSource;
       if (source) void inspect(source, { kind: 'node', nodeId: Number(button.dataset.liveChild) }, 'Actual processed contribution');
     }));
-    mount.querySelector('#step-learning')?.addEventListener('click', () => void startForward(true));
-    mount.querySelector('#short-teach')?.addEventListener('click', () => void startForward(true));
-    mount.querySelector('#execution-accept')?.addEventListener('click', () => void forwardDriver.acceptUpdate());
+    mount.querySelector('#step-learning')?.addEventListener('click', () => {
+      if (currentProfile() !== 'workbench') { dispatchPublicLesson({ type: 'START_PART2' }); render(); return; }
+      void startForward(true);
+    });
+    mount.querySelector('#short-teach')?.addEventListener('click', () => {
+      if (currentProfile() !== 'workbench') { dispatchPublicLesson({ type: 'START_PART2' }); render(); return; }
+      void startForward(true);
+    });
+    mount.querySelector('#execution-accept')?.addEventListener('click', () => {
+      if (currentProfile() !== 'workbench') { dispatchPublicLesson({ type: 'ACCEPT_REQUESTED' }); render(); return; }
+      void forwardDriver.acceptUpdate();
+    });
     mount.querySelector('#execution-pin')?.addEventListener('click', () => {
       syncTrainingPin();
       if (!currentCapabilities().executionDiagnostics) forwardDriver.follow = true;
       if (forwardDriver.progress?.training?.phase === 'optimizer proposal') forwardDriver.runToProposal();
       else forwardDriver.runToContribution();
     });
-    mount.querySelector('#step-prediction')?.addEventListener('click', () => void startForward());
+    mount.querySelector('#step-prediction')?.addEventListener('click', () => { if (currentProfile() === 'workbench') void startForward(); });
     mount.querySelector('#execution-next')?.addEventListener('click', () => { syncTrainingPin(); void forwardDriver.next(); });
     mount.querySelector('#execution-continue')?.addEventListener('click', () => {
       syncTrainingPin();
@@ -371,8 +433,13 @@ function bindForwardControls() {
       forwardDriver.continue();
     });
     mount.querySelector('#execution-pause')?.addEventListener('click', () => forwardDriver.pause());
-    mount.querySelector('#execution-cancel')?.addEventListener('click', () => void cancelForward());
-    mount.querySelector('#tour-restart')?.addEventListener('click', () => void restartPublicTour());
+    mount.querySelector('#execution-cancel')?.addEventListener('click', () => {
+      if (currentProfile() !== 'workbench' && currentPublicLessonView().canonicalState === 'candidate_ready') {
+        dispatchPublicLesson({ type: 'DISCARD_REQUESTED' }); render(); return;
+      }
+      void cancelForward();
+    });
+    mount.querySelector('#tour-restart')?.addEventListener('click', () => { dispatchPublicLesson({ type: 'RESTART_REQUESTED' }); render(); });
     mount.querySelector('#execution-follow')?.addEventListener('change', event => { forwardDriver.follow = (event.target as HTMLInputElement).checked; });
 }
 function syncTrainingPin() {
@@ -383,53 +450,42 @@ function syncTrainingPin() {
   }
 }
 async function startForward(training = false) {
-  if (busy || !ready || forwardDriver.active) return;
-  spatialPresenter.tourTargetState = undefined;
+  if (busy || !ready || forwardDriver.active) {
+    if (training && currentProfile() !== 'workbench') dispatchPublicLesson({ type: 'EXECUTION_FAILED' });
+    return;
+  }
   try { activeRetentionTransaction = await beginRetention('canonical'); }
-  catch (failure) { error = failure instanceof Error ? failure.message : String(failure); status = 'Retention capacity refused · no execution started'; render(); return; }
+  catch (failure) { error = failure instanceof Error ? failure.message : String(failure); status = 'Retention capacity refused · no execution started'; if (currentProfile() !== 'workbench') dispatchPublicLesson({ type: 'EXECUTION_FAILED' }); render(); return; }
   readyComparison=true; beforeForwardLocation = spatialPresenter.captureLocation(); beforeForwardExperiment = spatialExperimentId;
   spatialPresenter.invalidate(); spatialPresenter.learningStage = undefined; spatialExperimentId = '';
   clearDisplayedInspection(); operation++; beforeForward = result; result = undefined; player = undefined; error = ''; status = 'Preparing captured input and checkpoint…';
   spatialSelection.query = 0; spatialSelection.key = 0; spatialSelection.head = 0;
   syncTrainingPin(); await forwardDriver.start(documentText, training);
-  if (
-    training &&
-    spatialPresenter.isPublicProfile() &&
-    spatialPresenter.publicTourState === 'p2_objective' &&
-    forwardDriver.active &&
-    forwardDriver.progress?.training?.mean === undefined
-  ) {
-    forwardDriver.continue();
-  }
 }
 async function cancelForward() {
-  spatialPresenter.tourTargetState = undefined;
   await forwardDriver.cancel();
-  if (spatialPresenter.isPublicProfile() && spatialPresenter.publicTourState === 'candidate_ready') {
-    spatialPresenter.publicTourState = 'tour_complete';
-    spatialPresenter.publicTourOutcome = 'discarded';
-    spatialPresenter.applyTourSelection();
-    render();
-  }
+}
+async function discardPublicCandidate() {
+  await forwardDriver.cancel();
+  dispatchPublicLesson({ type: 'DISCARD_COMPLETE' });
+  render();
 }
 function discardForward() {
   if (!forwardDriver.active) return;
-  spatialPresenter.tourTargetState = undefined;
   cancelRetention(activeRetentionTransaction); activeRetentionTransaction = undefined;
   forwardDriver.discard(); result = beforeForward; beforeForward = undefined; restoreExecutionView();
   player = result && new TracePlayer(result.run); clearDisplayedInspection();
 }
 async function restartPublicTour(): Promise<void> {
-  if (busy || !ready || forwardDriver.active) return;
+  if (busy || !ready || forwardDriver.active) {
+    dispatchPublicLesson({ type: 'EXECUTION_FAILED' });
+    render();
+    return;
+  }
   const receipt = await execute('predict');
-  if (receipt.status === 'completed' && result) {
-    if (spatialPresenter.isPublicProfile()) {
-      spatialPresenter.publicTourState = 'p1_prediction_preview';
-      spatialPresenter.publicTourOutcome = undefined;
-      spatialPresenter.tourTargetState = undefined;
-      spatialPresenter.applyTourSelection();
-      render();
-    }
+  if (receipt.status !== 'completed' || !result) {
+    dispatchPublicLesson({ type: 'EXECUTION_FAILED' });
+    render();
   }
 }
 
@@ -755,8 +811,11 @@ function render(): void {
     const experimentList=[...archive.learningExperiments.values()].map(e=>({id:e.id,step:e.update.step+1})),experimentWindow=presentationWindow(experimentList,spatialExperimentOffset,PRESENTATION_WORK.spatialExperiments),selectedExperiment=experimentList.find(e=>e.id===spatialExperimentId),experimentItems=selectedExperiment&&!experimentWindow.items.includes(selectedExperiment)?[selectedExperiment,...experimentWindow.items.slice(0,PRESENTATION_WORK.spatialExperiments-1)]:experimentWindow.items;
     spatialExperimentOffset=experimentWindow.offset;
     const profile = currentProfile();
+    const publicLesson = profile === 'workbench' ? undefined : currentPublicLessonView();
     mount.innerHTML = spatialPresenter.render(model, {
       profile,
+      publicLesson,
+      publicLessonDispatch: publicLesson ? dispatchPublicLesson : undefined,
       attract: !evidenceRun&&attract&&exhibitEntry, exhibit: !evidenceRun&&exhibitEntry, idleResetEnabled: idleResetEnabled, idleResetSeconds:exhibitConfiguration.resetAfterMs/1000,
       retention:{bytes:retentionStatus?.retained.archiveBytes??0,runs:archive.runs.size,snapshots:archive.snapshots.size,experiments:archive.learningExperiments.size,hardLimitBytes:retentionStatus?.hardLimitBytes??PORTABLE_ARCHIVE_LIMITS.archiveBytes},
       interventionPending: activeIntervention!==undefined,
@@ -1027,7 +1086,7 @@ function bindSpatialLearning() {
   mount.querySelector('#spatial-ablate')?.addEventListener('click',()=>{syncSpatialSelection();void ablateHead();});
   mount.querySelector('#spatial-patch')?.addEventListener('click',()=>{syncSpatialSelection();void patchHeadOutput();});
   const on = (id:string, action:()=>void) => mount.querySelector(id)?.addEventListener("click",action);
-  on("#spatial-learn",()=>{if(result?.run.manifest.runId===liveRunId&&!busy&&ready&&sourceBinding(result.run,config.vocabulary,result.trainingStep,liveRunId,documentText,"LEARN").capturedDocument===documentText)void execute("train");});
+  on("#spatial-learn",()=>{if(currentProfile()!=='workbench'){dispatchPublicLesson({type:'START_PART2'});render();return;}if(result?.run.manifest.runId===liveRunId&&!busy&&ready&&sourceBinding(result.run,config.vocabulary,result.trainingStep,liveRunId,documentText,"LEARN").capturedDocument===documentText)void execute("train");});
   mount.querySelector("#spatial-experiment")?.addEventListener("change",event=>{
     spatialPresenter.invalidate();
     spatialExperimentId=(event.target as HTMLSelectElement).value;
@@ -1908,6 +1967,7 @@ async function execute(
           ? `Live update complete · training step ${result.trainingStep}`
           : `Live prediction complete · ${result.tokenIds.length} positions`;
       if (count > 1) status += ` · ${step + 1}/${count} requested updates`;
+      if (command === 'predict' && currentProfile() !== 'workbench') dispatchPublicLesson({ type: 'PREDICTION_COMPLETE' });
       const retain =
         true;
       recordTrainingSummary(incoming);
@@ -1985,6 +2045,7 @@ async function reset(cancelled: boolean, clear = false): Promise<void> {
   error = "";
   const acceptedAtCancellation = cancelled ? lastAcceptedResult : undefined;
   if (clear) {
+    dispatchPublicLesson({ type: 'RESET' });
     spatialEvidenceRunId = ""; spatialEvidenceReplay = false; clearWorldSelection();
     spatialExperimentId = ""; activeDataExperimentId = ""; spatialPresenter.resetVisitor();
     spatialExperimentOffset = 0;
@@ -2219,10 +2280,6 @@ async function activateAttract(): Promise<void> {
   const receipt = await execute("predict");
   if (receipt.status !== "completed" || !result) return;
   attract = false;
-  if (exhibitEntry && spatialActive) {
-    render();
-    spatialPresenter.startVisitorSample();
-  }
   render();
 }
 // Capture the activation before a stage/control sees its coordinate. It cannot select through A1.
