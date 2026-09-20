@@ -235,6 +235,12 @@ const forwardDriver = new ForwardDriver(client, forwardChanged, async incoming =
   const transaction = activeRetentionTransaction; activeRetentionTransaction = undefined;
   beforeForward = undefined; beforeForwardLocation = undefined;
   await execute(incoming.learn ? "train" : "predict", 1, false, incoming, transaction);
+  if (spatialPresenter.isPublicProfile() && spatialPresenter.publicTourState === 'candidate_ready') {
+    spatialPresenter.publicTourState = 'tour_complete';
+    spatialPresenter.publicTourOutcome = 'accepted';
+    spatialPresenter.applyTourSelection();
+    render();
+  }
 }, failure => {
   cancelRetention(activeRetentionTransaction); activeRetentionTransaction = undefined;
   result = beforeForward; beforeForward = undefined; restoreExecutionView();
@@ -364,7 +370,15 @@ async function startForward(training = false) {
   spatialSelection.query = 0; spatialSelection.key = 0; spatialSelection.head = 0;
   syncTrainingPin(); await forwardDriver.start(documentText, training);
 }
-async function cancelForward() { await forwardDriver.cancel(); }
+async function cancelForward() {
+  await forwardDriver.cancel();
+  if (spatialPresenter.isPublicProfile() && spatialPresenter.publicTourState === 'candidate_ready') {
+    spatialPresenter.publicTourState = 'tour_complete';
+    spatialPresenter.publicTourOutcome = 'discarded';
+    spatialPresenter.applyTourSelection();
+    render();
+  }
+}
 function discardForward() {
   if (!forwardDriver.active) return;
   cancelRetention(activeRetentionTransaction); activeRetentionTransaction = undefined;

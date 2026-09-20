@@ -4,6 +4,7 @@ import { operations, parameterOwners } from './forward.js';
 import type { ForwardProgress } from '../worker/protocol.js';
 import type { TrainingProgress } from '../worker/training-execution.js';
 import type { LearningModel, LearningStage, ParameterPin } from './learning.js';
+import type { PublicTourContent, PublicTourOutcome } from './public-tour.js';
 import { outputTokenName, outputSummary, componentComparison, type OutputPair } from './comparison.js';
 import { geometry, projection } from './view.js';
 import { probabilityColor } from './geometry.js';
@@ -64,12 +65,68 @@ export interface ContextualDockOptions {
   readonly hasComparison: boolean;
   readonly learningRouteStop?: number;
   readonly selectedLabel?: string;
+  readonly tourContent?: PublicTourContent;
+  readonly tourOutcome?: PublicTourOutcome;
 }
 
 function renderExplain(opts: ContextualDockOptions): string {
-  const { model: m, address: a, element, pin, executionProgress, trainingProgress, learningStage, learningModel, learningRouteStop, attract, trainingState, profile, routePurpose } = opts;
+  const { model: m, address: a, element, pin, executionProgress, trainingProgress, learningStage, learningModel, learningRouteStop, attract, trainingState, profile, routePurpose, tourContent } = opts;
   if (!m) return '<p>No model loaded.</p>';
   const isPublic = profile !== 'workbench';
+
+  if (tourContent) {
+    const tc = tourContent;
+    const truthCue = tc.truthGuardrail
+      ? `<p class="reverse-truth-cue" data-testid="reverse-truth-cue">${esc(tc.truthGuardrail)}</p>`
+      : '';
+
+    let stageResult = '';
+    if (tc.state === 'cold') {
+      // Cold represents unstarted tour
+    } else if (tc.part === 1) {
+      const c = operationConstruction(m, a, element, executionProgress);
+      if (c.plainResult) {
+        stageResult = `<div class="dock-stage-result"><div class="teaching-step"><small class="stage-result-label">${esc(tc.resultConcept?.label?.toUpperCase() ?? 'OBSERVED RESULT')}</small><p>${c.plainResult}</p></div></div>`;
+      }
+    } else if (tc.state === 'p2_parameter_gradient' || tc.state === 'p2_adam_proposal' || tc.state === 'candidate_ready') {
+      if (trainingProgress) {
+        const t = trainingProgress;
+        stageResult = `<div class="dock-stage-result">
+          <div class="teaching-step">
+            <small class="stage-result-label">${esc(tc.resultConcept?.label?.toUpperCase() ?? 'OBSERVED ACCUMULATION')}</small>
+            <div class="dock-pin-info"><span data-testid="pin-owner">${esc(pin.name)} → ${esc(operations.find(o=>o.kind===parameterOwners[pin.name])?.title??pin.name)} · same global owner · accepted ${esc(t.startingSnapshotId.slice(0,12))}</span></div>
+            <p class="learning-gradient-summary">${t.final ? 'Final' : 'Partial'} gradient: <span data-testid="live-gradient" data-value="${t.gradient}">${t.gradient === undefined ? 'pending' : fmt(t.gradient)}</span></p>
+            ${t.proposal ? `<p class="learning-provisional">Candidate proposal: θ ${fmt(t.proposal.before)} → ${fmt(t.proposal.after)} · provisional until accepted.</p>` : ''}
+          </div>
+        </div>`;
+      } else if (learningModel?.available) {
+        const lm = learningModel;
+        stageResult = `<div class="dock-stage-result">
+          <div class="teaching-step">
+            <small class="stage-result-label">${esc(tc.resultConcept?.label?.toUpperCase() ?? 'OBSERVED EVIDENCE')}</small>
+            <p class="learning-gradient-summary">Final gradient: <span data-testid="live-gradient" data-value="${lm.backward.gradient}">${fmt(lm.backward.gradient)}</span></p>
+            ${lm.adam?.update ? `<p class="learning-provisional">Candidate proposal: θ ${fmt(lm.adam.update.before)} → ${fmt(lm.adam.update.after)} · provisional until accepted.</p>` : ''}
+          </div>
+        </div>`;
+      } else if (tc.resultConcept) {
+        stageResult = `<div class="dock-stage-result"><div class="teaching-step"><small class="stage-result-label">${esc(tc.resultConcept.label.toUpperCase())}</small><p>${esc(tc.resultConcept.description ?? tc.plainMeaning)}</p></div></div>`;
+      }
+    } else if (tc.resultConcept) {
+      stageResult = `<div class="dock-stage-result"><div class="teaching-step"><small class="stage-result-label">${esc(tc.resultConcept.label.toUpperCase())}</small><p>${esc(tc.resultConcept.description ?? tc.plainMeaning)}</p></div></div>`;
+    }
+
+    return `<div class="dock-explain-content" data-testid="dock-explain">
+      <div class="dock-overview" data-testid="scene-construction" data-run="${esc(m.source.sourceRunId)}">
+        <div class="dock-stage-meaning">
+          ${tc.headline ? `<header class="construction-header"><strong>${esc(tc.headline)}</strong></header>` : ''}
+          ${tc.routePurpose ? `<p class="dock-route-purpose" data-testid="route-purpose">${esc(tc.routePurpose)}</p>` : ''}
+          <p class="dock-meaning-text">${esc(tc.plainMeaning)}</p>
+          ${truthCue}
+        </div>
+        ${stageResult}
+      </div>
+    </div>`;
+  }
 
   if (attract) {
     return `<div class="dock-explain-content" data-testid="dock-explain">
@@ -490,7 +547,17 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
       <div class="dock-route-actions dock-slot-actions"${opts.trainingState ? ` id="execution-controls" data-execution-id="${esc(opts.trainingState.executionId)}" data-sequence="${opts.trainingState.sequence}" data-training-phase="${esc(opts.trainingState.phase)}"` : ''}>
         <div class="dock-slot-secondary">
           ${inspectAction}
-          ${opts.trainingState ? (
+          ${opts.tourContent ? (
+            opts.tourContent.state === 'candidate_ready' ? `
+              ${hasComparison ? `<button class="secondary-action dock-tab" data-dock-depth="compare">Compare candidate</button>` : ''}
+              <button id="execution-cancel" class="decision-action discard-action" ${opts.trainingState?.cancelling ? 'disabled' : ''}>Discard candidate</button>
+            ` : `
+              ${attentionAction}
+              ${!isFacilitator && !opts.attract ? `<button id="visitor-explore-toggle" class="secondary-action">${freeExplore ? 'Close free exploration' : 'Explore freely'}</button>` : ''}
+              ${shortDetour ? `<button id="short-resume" class="secondary-action">Resume route</button>` : ''}
+              ${isFacilitator ? `<button id="operator-controls" class="secondary-action">${operatorControls ? 'Hide operator controls' : 'Show operator controls'}</button>` : ''}
+            `
+          ) : opts.trainingState ? (
             opts.trainingState.ready ? `
               ${hasComparison ? `<button class="secondary-action dock-tab" data-dock-depth="compare">Compare candidate</button>` : ''}
               <button id="execution-cancel" class="secondary-action" ${opts.trainingState.cancelling ? 'disabled' : ''}>Discard candidate</button>
@@ -501,12 +568,18 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
           ) : `
             ${attentionAction}
             ${!isFacilitator && !opts.attract ? `<button id="visitor-explore-toggle" class="secondary-action">${freeExplore ? 'Close free exploration' : 'Explore freely'}</button>` : ''}
-            ${shortDetour ? `<button id="short-resume" class="secondary-action">Resume short route</button>` : ''}
+            ${shortDetour ? `<button id="short-resume" class="secondary-action">Resume route</button>` : ''}
             ${isFacilitator ? `<button id="operator-controls" class="secondary-action">${operatorControls ? 'Hide operator controls' : 'Show operator controls'}</button>` : ''}
           `}
         </div>
         <div class="dock-slot-primary">
-          ${opts.trainingState ? (
+          ${opts.tourContent ? (
+            opts.tourContent.state === 'candidate_ready' ? `
+              <button id="execution-accept" class="decision-action accept-action primary-action" ${opts.trainingState?.disabled ? 'disabled' : ''}>Accept update</button>
+            ` : `
+              ${primaryAction}
+            `
+          ) : opts.trainingState ? (
             opts.trainingState.ready ? `
               <button id="execution-accept" class="primary-action" ${opts.trainingState.disabled ? 'disabled' : ''}>Accept update</button>
             ` : `

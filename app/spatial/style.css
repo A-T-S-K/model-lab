@@ -629,6 +629,66 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   cursor: not-allowed;
 }
 
+/* Peer decision actions for Candidate Ready */
+.contextual-dock button.decision-action,
+.contextual-dock .dock-slot-secondary button.decision-action,
+.contextual-dock .dock-slot-primary button.decision-action {
+  min-height: 54px;
+  height: clamp(54px, 4.2vh, 60px);
+  min-width: clamp(170px, 13vw, 240px);
+  padding: 0 20px;
+  border-radius: 6px;
+  font-size: clamp(15px, 1.05vw, 17px);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  white-space: nowrap;
+  box-sizing: border-box;
+  opacity: 1;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.contextual-dock button.decision-action.accept-action,
+.contextual-dock .dock-slot-primary button.decision-action.accept-action {
+  background: #1b455b;
+  border: 2px solid #62c7e8;
+  color: #ffffff;
+}
+
+.contextual-dock button.decision-action.accept-action:hover:not(:disabled),
+.contextual-dock .dock-slot-primary button.decision-action.accept-action:hover:not(:disabled) {
+  background: #235975;
+  border-color: #7ad8f8;
+  color: #ffffff;
+}
+
+.contextual-dock button.decision-action.discard-action,
+.contextual-dock .dock-slot-secondary button.decision-action.discard-action {
+  background: #2a1c22;
+  border: 2px solid #e06c75;
+  color: #ffffff;
+}
+
+.contextual-dock button.decision-action.discard-action:hover:not(:disabled),
+.contextual-dock .dock-slot-secondary button.decision-action.discard-action:hover:not(:disabled) {
+  background: #3c242e;
+  border-color: #f0828b;
+  color: #ffffff;
+}
+
+.contextual-dock button.decision-action:disabled,
+.contextual-dock .dock-slot-secondary button.decision-action:disabled,
+.contextual-dock .dock-slot-primary button.decision-action:disabled {
+  background: #16222a;
+  border-color: #2b3942;
+  color: #6b7780;
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .contextual-dock .execution-frontier-tag {
   display: inline-flex;
   align-items: center;

@@ -20,6 +20,8 @@ import { escapeHtml as esc } from "../views/evidence.js";
 import { experienceCapabilities, type ExperienceProfile } from "../presentation/experience-profile.js";
 import { renderContextualDock, type DockDepth, type PublicTrainingActionState } from "./contextual-dock.js";
 export { type PublicTrainingActionState } from "./contextual-dock.js";
+import type { PublicTourState, PublicTourOutcome } from './public-tour.js';
+import { getPublicTourContent, advanceTour, previousTourState, startPart2, facilitatorTourStateForLandmark } from './public-tour.js';
 
 export function computeTrainingActionState(
   execution: ForwardDriver | undefined,
@@ -102,10 +104,22 @@ export class SpatialPresenter {
   shortStop=-1;
   attentionSubstep?:number;
   learningRouteStop?:number;
+  publicTourState: PublicTourState = 'cold';
+  publicTourOutcome?: PublicTourOutcome;
   private shortSelection?:MicrogptSelection;
   private shortMessage="";
   private shortDetour=false;
   private worldPaneObserver?: ResizeObserver;
+
+  get derivedShortStop(): number {
+    if (!this.isPublicProfile()) return this.shortStop;
+    return getPublicTourContent(this.publicTourState, this.publicTourOutcome).selectionIntent.derivedShortStop ?? -1;
+  }
+
+  get derivedLearningRouteStop(): number | undefined {
+    if (!this.isPublicProfile()) return this.learningRouteStop;
+    return getPublicTourContent(this.publicTourState, this.publicTourOutcome).selectionIntent.derivedReverseStop;
+  }
 
   getResponsivePublicFrame(): CameraBox {
     const wp = document.querySelector<HTMLElement>('.world-workspace.is-public-profile > .world-pane') ?? document.querySelector<HTMLElement>('.world-pane');
@@ -123,6 +137,8 @@ export class SpatialPresenter {
 
   resetVisitor(){
     const wasPublic = this.isPublicProfile();
+    this.publicTourState = 'cold';
+    this.publicTourOutcome = undefined;
     this.invalidate(); this.playback.cursor=0; this.playback.phase=2; this.playback.follow=true; this.playback.route="forward"; this.camera.detach();
     this.worldPaneObserver?.disconnect(); this.worldPaneObserver = undefined;
     this.camera.box = wasPublic ? this.getResponsivePublicFrame() : { ...HOME };
@@ -139,12 +155,61 @@ export class SpatialPresenter {
   startVisitorSample(){
     this.freeExplore=false; this.dockDepth='explain';
     if (this.isPublicProfile()) {
+      if (!this.model || this.state?.attract || this.state?.busy || this.state?.execution) {
+        return;
+      }
       this.camera.box = this.getResponsivePublicFrame();
       this.camera.move(this.camera.box, false);
       this.pendingBox = undefined;
+      this.publicTourState = 'p1_prediction_preview';
+      this.publicTourOutcome = undefined;
+      this.applyTourSelection();
+      return;
     }
     Object.assign(this.selection,{query:3,key:0,head:0,feature:0});
     this.shortRoute(0);
+  }
+  applyTourSelection() {
+    if (!this.isPublicProfile()) return;
+    const content = getPublicTourContent(this.publicTourState, this.publicTourOutcome);
+    const intent = content.selectionIntent;
+    this.attentionSubstep = undefined;
+    this.dockDepth = 'explain';
+    this.construction = intent.derivedShortStop !== undefined && intent.derivedShortStop >= 0;
+    this.lens = false;
+    this.shortDetour = false;
+    this.shortMessage = '';
+
+    if (intent.derivedReverseStop === 5) {
+      const ownerKind = parameterOwners[this.pin.name] ?? 'tokenEmbedding';
+      this.go({ kind: ownerKind, token: intent.token }, true);
+    } else if (intent.derivedReverseStop === 6) {
+      this.go({ kind: this.pin.name, token: intent.token }, true);
+    } else {
+      this.go({
+        kind: intent.kind,
+        token: intent.token,
+        ...(intent.layer !== undefined ? { layer: intent.layer } : {}),
+        ...(intent.head !== undefined ? { head: intent.head } : {}),
+      }, true);
+    }
+    this.frame();
+  }
+  advanceTour() {
+    if (this.publicTourState === 'p1_probabilities') {
+      this.publicTourState = 'p1_complete';
+    } else {
+      this.publicTourState = advanceTour(this.publicTourState);
+    }
+    this.applyTourSelection();
+  }
+  previousTour() {
+    this.publicTourState = previousTourState(this.publicTourState);
+    this.applyTourSelection();
+  }
+  startPart2() {
+    this.publicTourState = startPart2();
+    this.applyTourSelection();
   }
   private shortRoute(index:number){
     this.attentionSubstep=undefined; this.learningRouteStop=undefined; this.dockDepth='explain';
@@ -400,11 +465,41 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
     let primaryAction = "";
     let attentionAction = "";
 
-    if (state.attract && isPublicProfile) {
-      lessonProgress = "";
-      routePurpose = "One small transformer · real connected computation";
-      primaryAction = `<button id="exhibit-start" class="primary-action" ${state.ready && !state.busy ? '' : 'disabled'}>Start · explore a real prediction</button>`;
-      attentionAction = "";
+    const tourContent = isPublicProfile ? getPublicTourContent(this.publicTourState, this.publicTourOutcome) : undefined;
+    if (tourContent) {
+      if (state.attract) {
+        lessonProgress = "";
+        routePurpose = tourContent.routePurpose;
+        primaryAction = `<button id="exhibit-start" class="primary-action" ${state.ready && !state.busy ? '' : 'disabled'}>Start · explore a real prediction</button>`;
+        attentionAction = "";
+      } else if (isAttn) {
+        lessonProgress = `Attention detail · Step ${currSubstep + 1} of 4 · ${currentAttnStep.name}`;
+        routePurpose = currentAttnStep.purpose;
+        if (currSubstep < 3) {
+          primaryAction = `<button id="short-continue" class="primary-action">Continue: ${ATTENTION_SUBSTEPS[currSubstep + 1].name}</button>`;
+        } else {
+          primaryAction = `<button id="short-continue" class="primary-action">Return to Mix Context</button>`;
+        }
+        attentionAction = `<button id="attention-return" class="secondary-action">Return to Mix Context</button>`;
+      } else if (tourContent.state === 'candidate_ready') {
+        lessonProgress = tourContent.progress;
+        routePurpose = tourContent.routePurpose;
+        primaryAction = '';
+        attentionAction = '';
+      } else {
+        lessonProgress = tourContent.progress;
+        routePurpose = tourContent.routePurpose;
+        if (tourContent.primaryAction) {
+          primaryAction = `<button id="${tourContent.primaryAction.id}" class="primary-action" ${tourContent.primaryAction.disabled ? 'disabled' : ''}>${esc(tourContent.primaryAction.label)}</button>`;
+        }
+        if (tourContent.optionalActions.length > 0) {
+          attentionAction = tourContent.optionalActions.map(act =>
+            `<button id="${act.id}" class="secondary-action" ${act.disabled ? 'disabled' : ''}>${esc(act.label)}</button>`
+          ).join('');
+        } else {
+          attentionAction = '';
+        }
+      }
     } else if (this.learningRouteStop !== undefined && this.learningRouteStop >= 0) {
       const stop = this.learningRouteStop;
       const landmark = REVERSE_LANDMARKS[stop] ?? REVERSE_LANDMARKS[0];
@@ -463,10 +558,10 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
           pin: this.pin,
           training: state.execution?.progress?.training,
           learning: state.learning,
-          learningRouteStop: this.learningRouteStop,
+          learningRouteStop: this.derivedLearningRouteStop,
           isLearningActive: Boolean(
             state.execution?.progress?.training ||
-            this.learningRouteStop !== undefined ||
+            this.derivedLearningRouteStop !== undefined ||
             this.learningStage
           ),
           query: this.selection.query,
@@ -512,8 +607,10 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
         outputPair: pair,
         comparisonLabels: labels,
         hasComparison: Boolean(state.comparison || pair),
-        learningRouteStop: this.learningRouteStop,
+        learningRouteStop: isPublicProfile ? this.derivedLearningRouteStop : this.learningRouteStop,
         selectedLabel: label,
+        tourContent,
+        tourOutcome: this.publicTourOutcome,
       })}</div>` : `<div class="world-workspace ${lensActive?"has-lens":""}"><div class="world-pane ${sceneOpen?"has-construction":""}">${sceneSvg(m.forward,a,s.key,this.learningStage?this.pin.name:this.parameter,m.labels,s.query,state.comparison??(this.learningStage==="compare"&&state.learning?.available?state.learning.comparison:undefined),expertLearningMarkup,state.execution?.progress,this.element)}<div class="camera-controls"><button id="zoom-in" aria-label="Zoom in">+</button><button id="zoom-out" aria-label="Zoom out">−</button><button data-pan="-1,0" aria-label="Pan left">←</button><button data-pan="1,0" aria-label="Pan right">→</button><button data-pan="0,-1" aria-label="Pan up">↑</button><button data-pan="0,1" aria-label="Pan down">↓</button></div>
       <div class="selection-card" data-landmark-anchor="${a.kind}" data-landmark-token="${a.token}" data-landmark-layer="${a.layer ?? ''}" data-landmark-run="${esc(m?.source.sourceRunId ?? '')}"><div data-testid="landmark-occurrence" data-semantic-anchor="${a.kind}" data-position="${a.token}" data-layer="${a.layer !== undefined ? a.layer : ''}" data-run-id="${esc(m?.source.sourceRunId ?? '')}" style="display:none;" aria-hidden="true"></div><small>SELECTED WORLD OBJECT</small><strong data-testid="selected-world-object" data-semantic-anchor="${a.kind}" data-position="${a.token}" data-layer="${a.layer ?? ''}" data-run-id="${esc(m?.source.sourceRunId ?? '')}">${esc(label)}</strong><span>layer ${a.layer??'model'} · position ${a.token} · query ${s.query} / key ${s.key} · head ${s.head}</span><span>${state.comparison?`${labels[0]}: neutral. ${labels[1]}: cyan. Shared scale per pair.`:this.learningStage==="compare"?"Before: neutral. After: cyan. Shared scale per pair.":"Signed strips: independent scales. Q/K lens: shared scale."}</span><div class="selection-actions"><button id="open-spatial-detail">Values / arithmetic / source</button><button id="scene-construction">${this.construction?"Close scene math":"Scene math"}</button></div>${this.kind==="headOutput"&&!state.evidenceWorld?`${capabilities.headAblation?`<button id="spatial-ablate" ${state.execution||state.busy?"disabled":""}>Test without this head</button>`:""}${capabilities.donorPatch?`<button id="spatial-patch" ${state.execution||state.busy?"disabled":""}>Patch from observed donor</button>`:""}<small class="head-action-scope">${state.execution?"Finish/cancel execution or accept/discard candidate first.":`Selected checkpoint ${esc((m.source.sourceSnapshotId??"unavailable").slice(0,19))}… · ablation: all positions; patch target: p${s.query}/h${s.head}, donor: p${state.patchDonor?.token??0}/h${state.patchDonor?.head??0}; after aggregation / before concat.`}</small>`:""}${!m.valid?'<p role="alert">Selection unavailable in this run. Choose valid indices; prior evidence is not rebound.</p>':""}</div>
       <svg class="world-minimap" viewBox="0 0 ${m.forward.descriptor.presentation==='microgpt-canonical-curated'?4500:1250+m.forward.layers*2500} ${m.forward.descriptor.presentation==='microgpt-canonical-curated'?1700:Math.max(1500,420+m.forward.heads*270)}" aria-label="Same world camera footprint"><path d="M100 600 H${m.forward.descriptor.presentation==='microgpt-canonical-curated'?4300:1050+m.forward.layers*2500}"/>${m.forward.operations.map((o)=>{const t=stationForWorld(m.forward,o.kind,s.head,s.layer);return `<rect x="${t.x}" y="${t.y}" width="100" height="160" class="${o.kind===this.kind?"selected":""}"/>`;}).join("")}<rect id="camera-footprint"/></svg>${sceneOpen?sceneConstruction(m,a,this.element,state.execution?.progress):""}</div>
@@ -541,8 +638,20 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
         if (next < ATTENTION_SUBSTEPS.length) {
           this.attentionRoute(next);
         } else {
-          this.shortRoute(2);
+          if (this.isPublicProfile()) {
+            this.attentionSubstep = undefined;
+            this.publicTourState = 'p1_mix_context';
+            this.applyTourSelection();
+          } else {
+            this.shortRoute(2);
+          }
         }
+        changed();
+        render();
+        return;
+      }
+      if (this.isPublicProfile()) {
+        this.advanceTour();
         changed();
         render();
         return;
@@ -556,7 +665,13 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
       render();
     });
     on('#attention-return', () => {
-      this.shortRoute(2);
+      if (this.isPublicProfile()) {
+        this.attentionSubstep = undefined;
+        this.publicTourState = 'p1_mix_context';
+        this.applyTourSelection();
+      } else {
+        this.shortRoute(2);
+      }
       changed();
       render();
     });
@@ -574,9 +689,39 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
       changed();
       render();
     });
-    root.querySelectorAll<HTMLElement>('[data-short-stop]').forEach(el=>el.addEventListener('click',()=>{this.shortRoute(Number(el.dataset.shortStop));changed();render();}));
-    root.querySelectorAll<HTMLElement>('[data-reverse-stop]').forEach(el=>el.addEventListener('click',()=>{this.reverseRoute(Number(el.dataset.reverseStop));changed();render();}));
+    root.querySelectorAll<HTMLElement>('[data-short-stop]').forEach(el=>el.addEventListener('click',()=>{
+      const idx = Number(el.dataset.shortStop);
+      if (this.isPublicProfile()) {
+        this.publicTourState = facilitatorTourStateForLandmark(idx, false);
+        this.applyTourSelection();
+        changed();
+        render();
+        return;
+      }
+      this.shortRoute(idx);
+      changed();
+      render();
+    }));
+    root.querySelectorAll<HTMLElement>('[data-reverse-stop]').forEach(el=>el.addEventListener('click',()=>{
+      const idx = Number(el.dataset.reverseStop);
+      if (this.isPublicProfile()) {
+        this.publicTourState = facilitatorTourStateForLandmark(idx, true);
+        this.applyTourSelection();
+        changed();
+        render();
+        return;
+      }
+      this.reverseRoute(idx);
+      changed();
+      render();
+    }));
     on('#reverse-continue',()=>{
+      if (this.isPublicProfile()) {
+        this.advanceTour();
+        changed();
+        render();
+        return;
+      }
       if (this.learningRouteStop !== undefined) {
         const next = this.learningRouteStop + 1;
         if (next < REVERSE_LANDMARKS.length) {
@@ -589,6 +734,12 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
       }
     });
     on('#reverse-previous',()=>{
+      if (this.isPublicProfile()) {
+        this.previousTour();
+        changed();
+        render();
+        return;
+      }
       if (this.learningRouteStop !== undefined && this.learningRouteStop > 0) {
         this.reverseRoute(this.learningRouteStop - 1);
         changed();
@@ -596,33 +747,73 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
       }
     });
     on('#reverse-exit',()=>{
+      if (this.isPublicProfile()) {
+        this.publicTourState = 'p1_complete';
+        this.applyTourSelection();
+        changed();
+        render();
+        return;
+      }
       this.learningRouteStop = undefined;
       this.shortRoute(0);
       changed();
       render();
     });
     on('#start-reverse-learning',()=>{
+      if (this.isPublicProfile()) {
+        this.startPart2();
+        changed();
+        render();
+        return;
+      }
       this.reverseRoute(0);
       changed();
       render();
     });
+    on('#short-teach', () => {
+      if (this.isPublicProfile()) {
+        this.startPart2();
+        changed();
+        render();
+        return;
+      }
+    });
+    on('#tour-restart', () => {
+      if (this.isPublicProfile()) {
+        this.resetVisitor();
+        changed();
+        render();
+        return;
+      }
+    });
     on('#operator-controls',()=>{this.operatorControls=!this.operatorControls;render();});
     on('#short-resume',()=>{
+      if (this.isPublicProfile()) {
+        this.applyTourSelection();
+        this.camera.move(this.getResponsivePublicFrame(), true);
+        this.pendingBox = undefined;
+        changed();
+        render();
+        return;
+      }
       if(this.shortSelection)Object.assign(this.selection,this.shortSelection);
       if(this.attentionSubstep !== undefined) {
         this.attentionRoute(this.attentionSubstep);
       } else {
         this.shortRoute(Math.max(0,this.shortStop));
       }
-      if (this.isPublicProfile()) {
-        this.camera.move(this.getResponsivePublicFrame(), true);
-        this.pendingBox = undefined;
-      }
       changed();
       render();
     });
     on('#short-sample',()=>{
       if(m?.source.capturedDocument!=='abca'){this.shortMessage='The sample selection needs an abca prediction. Enter abca and explicitly Predict first.';render();return;}
+      if (this.isPublicProfile()) {
+        this.publicTourState = 'p1_prediction_preview';
+        this.applyTourSelection();
+        changed();
+        render();
+        return;
+      }
       Object.assign(this.selection,{query:3,key:0,head:0,feature:0});this.shortRoute(0);changed();render();
     });
     on('#scene-construction',()=>{
@@ -721,7 +912,7 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
       if(token<0||token>=m.forward.input.length){root.querySelector("#parameter-output")?.insertAdjacentHTML("afterend",'<p role="status">This lookup row has no occurrence in the selected run; checkpoint values remain available.</p>');return;}
       this.go({kind,token,...(owner?.layer===undefined?{}:{layer:owner.layer})});this.element=name==="wte"||name==="wpe"?this.column:this.row;change();
     });
-    root.addEventListener('click',event=>{const el=(event.target as Element).closest<HTMLElement>('button,[data-world-kind],[data-learning-stage]');if(el&&!el.id.startsWith('explanation-')&&!el.id.startsWith('waypoint-')&&!el.id.startsWith('short-')&&!el.id.startsWith('attention-')&&!el.id.startsWith('reverse-')&&el.id!=='start-reverse-learning'&&el.id!=='facilitator-attention-detail'&&el.dataset.shortStop===undefined&&el.dataset.reverseStop===undefined&&el.dataset.dockDepth===undefined&&!el.classList.contains('dock-tab')&&!el.classList.contains('dock-tab-close')&&el.id!=='visitor-explore-toggle'&&el.id!=='operator-controls'&&el.id!=='scene-construction'&&el.id!=='open-spatial-detail'&&el.id!=='close-spatial-lens'&&el.id!=='spatial-focus'&&!el.id.startsWith('zoom-')&&el.dataset.pan===undefined){this.interrupt();const status=root.querySelector('[data-testid="explanation-status"]');if(status&&this.playback.source)status.textContent=`Explore detour · ${this.playback.cursor+1}/${this.playback.length}`;}},{capture:true});
+    root.addEventListener('click',event=>{const el=(event.target as Element).closest<HTMLElement>('button,[data-world-kind],[data-learning-stage]');if(el&&!el.id.startsWith('explanation-')&&!el.id.startsWith('waypoint-')&&!el.id.startsWith('short-')&&!el.id.startsWith('attention-')&&!el.id.startsWith('reverse-')&&el.id!=='start-reverse-learning'&&el.id!=='short-teach'&&el.id!=='tour-restart'&&el.id!=='execution-accept'&&el.id!=='execution-cancel'&&el.id!=='facilitator-attention-detail'&&el.dataset.shortStop===undefined&&el.dataset.reverseStop===undefined&&el.dataset.dockDepth===undefined&&!el.classList.contains('dock-tab')&&!el.classList.contains('dock-tab-close')&&el.id!=='visitor-explore-toggle'&&el.id!=='operator-controls'&&el.id!=='scene-construction'&&el.id!=='open-spatial-detail'&&el.id!=='close-spatial-lens'&&el.id!=='spatial-focus'&&!el.id.startsWith('zoom-')&&el.dataset.pan===undefined){this.interrupt();const status=root.querySelector('[data-testid="explanation-status"]');if(status&&this.playback.source)status.textContent=`Explore detour · ${this.playback.cursor+1}/${this.playback.length}`;}},{capture:true});
     root.querySelector('#explanation-route')?.addEventListener('change',event=>{this.invalidate();this.routeChoice=(event.target as HTMLSelectElement).value as 'forward'|'learning';render();});
     root.querySelector('#explanation-follow')?.addEventListener('change',event=>{this.playback.follow=(event.target as HTMLInputElement).checked;this.interrupt();render();});
     on('#explanation-play',()=>{if(this.playback.playing){this.playback.pause();render();}else{if(!this.playback.source)this.start();this.playback.play();}});
