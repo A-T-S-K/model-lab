@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ModelSession } from '../../app/worker/controller.js';
 import { forwardReadModel, Address } from '../../app/spatial/forward.js';
-import { publicLearningScene } from '../../app/spatial/public-learning.js';
+import { objectiveLearningBounds, publicLearningScene } from '../../app/spatial/public-learning.js';
 import type { ParameterPin, LearningModel } from '../../app/spatial/learning.js';
 import type { TrainingProgress } from '../../app/worker/training-execution.js';
 
@@ -24,8 +24,8 @@ test('publicLearningScene keeps reverse dependencies truthful and admits only co
     f,
     pin: defaultPin,
     isLearningActive: true,
-    learningRouteStop: 5,
-    tourState: 'p2_gradient_contribution',
+    learningRouteStop: 0,
+    tourState: 'p2_backward_trace',
     query: 3,
     head: 0,
   });
@@ -98,8 +98,11 @@ test('publicLearningScene keeps reverse dependencies truthful and admits only co
 
   assert(!sceneSvg.includes('reverse-truth-banner'), 'Reverse truth banner must not be duplicated in graph markup');
   assert(!sceneSvg.includes('Backward explanation path over the real computation'), 'Reverse truth prose belongs in the dock, not world-space text');
+  assert(!sceneSvg.includes('parameter-learning-overlay'), 'TRACE must introduce dependency before contribution arithmetic');
+  assert(!sceneSvg.includes('adam-learning-overlay'));
+  assert(!sceneSvg.includes('objective-anchor'));
 
-  // Objective is one compact spatial marker, with truthful provenance and no per-position table.
+  // Objective is a compact authentic multi-position strip with provenance and no backward trace.
   const objectiveSvg = publicLearningScene({
     f,
     pin: defaultPin,
@@ -110,12 +113,19 @@ test('publicLearningScene keeps reverse dependencies truthful and admits only co
 
   assert(objectiveSvg.includes('data-testid="objective-anchor"'));
   assert(objectiveSvg.includes('TRAINING OBJECTIVE'));
-  assert(objectiveSvg.includes('All target positions'));
+  assert(objectiveSvg.includes('POSITION → KNOWN TARGET → LOSS'));
+  assert.equal((objectiveSvg.match(/data-testid="objective-row"/g) ?? []).length, f.targets.length);
+  for (let position = 0; position < f.targets.length; position++) {
+    assert(objectiveSvg.includes(`data-objective-position="${position}"`));
+    assert(objectiveSvg.includes(`data-objective-target="${f.targets[position]}"`));
+  }
   assert(objectiveSvg.includes('Mean loss: pending'));
   assert(objectiveSvg.includes('>PENDING<'));
-  assert(!objectiveSvg.includes('objective-row'));
+  assert(!objectiveSvg.includes('reverse-causal-overlay'), 'MEASURE must not expose backward dependency structure');
   assert(!objectiveSvg.includes('parameter-learning-overlay'));
   assert(!objectiveSvg.includes('adam-learning-overlay'));
+  const objectiveBounds = objectiveLearningBounds(f.targets.length);
+  assert(objectiveBounds.x + objectiveBounds.width <= 4500, 'Objective strip must stay inside the fixed canonical public world');
 
   const mockDerivedLearning: LearningModel = {
     available: true,
@@ -149,6 +159,8 @@ test('publicLearningScene keeps reverse dependencies truthful and admits only co
     learningRouteStop: 0,
     tourState: 'p2_objective',
   });
+  assert.equal((derivedSvg.match(/data-testid="objective-row"/g) ?? []).length, f.targets.length);
+  assert(derivedSvg.includes('Mean loss: 1.386'));
   assert(derivedSvg.includes('>DERIVED<'), 'Must retain DERIVED provenance');
   assert(!derivedSvg.includes('>OBSERVED<'), 'Must never label derived objective evidence observed');
 
@@ -186,8 +198,10 @@ test('publicLearningScene keeps reverse dependencies truthful and admits only co
   assert(contributionSvg.includes('PARTIAL GRADIENT'));
   assert(contributionSvg.includes(' 7.5</tspan>'));
   assert(!contributionSvg.includes('2 × 3'), 'Child-adjoint × local-derivative arithmetic belongs in the dock');
+  assert(!/first contribution|second contribution|arrived then/i.test(contributionSvg), 'Guided must not fabricate backward arrival chronology');
   assert(!contributionSvg.includes('objective-anchor'));
   assert(!contributionSvg.includes('adam-learning-overlay'));
+  assert(contributionSvg.includes('reverse-causal-overlay'), 'Contribution keeps the same truthful backward dependency world');
 
   // Final Gradient reuses the same tether but drops stale contribution detail.
   const finalProgress = {
@@ -210,6 +224,7 @@ test('publicLearningScene keeps reverse dependencies truthful and admits only co
   assert(!finalSvg.includes('param-overlay-accum'));
   assert(!finalSvg.includes('objective-anchor'));
   assert(!finalSvg.includes('adam-learning-overlay'));
+  assert(finalSvg.includes('reverse-causal-overlay'), 'Final gradient remains grounded in the same backward dependency world');
 
   // Adam is a compact provisional marker. Pending never fabricates numbers.
   const pendingAdamSvg = publicLearningScene({
@@ -269,10 +284,12 @@ test('publicLearningScene keeps reverse dependencies truthful and admits only co
   });
   assert(readyAdamSvg.includes('data-status="ready"'));
   assert(readyAdamSvg.includes('wte[0,0] · PROVISIONAL'));
-  assert(readyAdamSvg.includes('θ 0.1234 → θ′ 0.1259'));
+  assert(readyAdamSvg.includes('g -0.055 · stored m 0.01 · stored v 0.002'));
+  assert(readyAdamSvg.includes('ADAM → θ 0.1234 → θ′ 0.1259'));
   assert(readyAdamSvg.includes('ACCEPTED MODEL UNCHANGED'));
   assert(!readyAdamSvg.includes('adam-proposal-table'));
-  assert(!readyAdamSvg.includes('Moments:'));
+  assert(!readyAdamSvg.includes('m′'));
+  assert(!readyAdamSvg.includes('v′'));
   assert(!readyAdamSvg.includes('Delta:'));
 
   // Candidate Ready owns no graph callout boxes; comparison and decision stay in the dock.

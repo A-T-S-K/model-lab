@@ -14,6 +14,7 @@ export type PublicTourState =
   | 'p1_probabilities'
   | 'p1_complete'
   | 'p2_objective'
+  | 'p2_backward_trace'
   | 'p2_gradient_contribution'
   | 'p2_final_gradient'
   | 'p2_adam_proposal'
@@ -34,6 +35,7 @@ export const PUBLIC_TOUR_STATES: readonly PublicTourState[] = [
   'p1_probabilities',
   'p1_complete',
   'p2_objective',
+  'p2_backward_trace',
   'p2_gradient_contribution',
   'p2_final_gradient',
   'p2_adam_proposal',
@@ -102,7 +104,7 @@ export interface PublicTourContent {
   readonly truthGuardrail?: string;
 }
 
-const REVERSE_TRUTH_GUARDRAIL = 'Backward explanation path over the real computation. Visual movement is not runtime timing.';
+const REVERSE_TRUTH_GUARDRAIL = 'The purple backward path explains dependency and sensitivity through the same computation. It is not measured runtime timing, text flowing backward, or execution being undone.';
 const PART_1_TOKEN = 3;
 const PART_1_HEAD = 0;
 const PART_1_KEY = 0;
@@ -473,14 +475,33 @@ export function getPublicTourContent(
       return {
         state,
         part: 2,
-        progress: 'Part 2 of 2 · 1 of 5 · Measure error',
+        progress: 'Part 2 · Measure · Training objective',
         headline: 'MEASURE ERROR',
-        routePurpose: 'Predictions are compared with known targets across all positions to calculate error',
-        plainMeaning: 'The model compares predictions with known targets across all positions to measure error. The mean loss forms the single training objective that supplies the backward pass.',
+        routePurpose: 'Measure one authentic training objective across all teacher-forced target positions.',
+        learnerQuestion: 'What counts as error for this training example?',
+        whyHere: 'Backward needs one scalar objective tied to known targets before sensitivity can be traced.',
+        plainMeaning: 'The model makes teacher-forced predictions across the example’s positions. Each known target contributes a loss, and those losses are averaged into one training objective.',
+        truthGuardrail: 'The objective uses multiple target positions, not only the single prediction followed in Part 1.',
+        resultConcept: { label: 'Mean training objective' },
+        selectionIntent: { kind: 'probabilities', token: 3 },
+        primaryAction: { id: 'reverse-continue', label: 'Continue: Trace backward sensitivity', role: 'primary' },
+        optionalActions: [],
+      };
+
+    case 'p2_backward_trace':
+      return {
+        state,
+        part: 2,
+        progress: 'Part 2 · Trace · Backward sensitivity',
+        headline: 'TRACE BACKWARD SENSITIVITY',
+        routePurpose: 'Follow how the loss depends on earlier values and parameter uses through the same computation world.',
+        learnerQuestion: 'How can earlier computations affect this loss?',
+        whyHere: 'The dependency idea comes before inspecting one scalar gradient contribution.',
+        plainMeaning: 'Backpropagation follows the real dependency graph backward to determine how changes in earlier values would affect the objective.',
         truthGuardrail: REVERSE_TRUTH_GUARDRAIL,
-        resultConcept: { label: 'Mean training loss' },
+        resultConcept: { label: 'Backward dependency and sensitivity' },
         selectionIntent: { kind: 'probabilities', token: 3, derivedReverseStop: 0 },
-        primaryAction: { id: 'reverse-continue', label: 'Continue: Trace gradient contribution', role: 'primary' },
+        primaryAction: { id: 'reverse-continue', label: 'Continue: Inspect one contribution', role: 'primary' },
         optionalActions: [],
       };
 
@@ -488,11 +509,13 @@ export function getPublicTourContent(
       return {
         state,
         part: 2,
-        progress: 'Part 2 of 2 · 2 of 5 · Trace gradient contribution',
-        headline: 'TRACE ONE GRADIENT CONTRIBUTION',
-        routePurpose: 'Loss sensitivity propagates backward through dependencies to compute one parameter contribution',
-        plainMeaning: 'Sensitivities propagate backward through actual computational dependencies. For the selected parameter, each backward occurrence multiplies the incoming child adjoint by the local derivative to produce one contribution added to the accumulator. The accumulator may still be partial.',
-        truthGuardrail: REVERSE_TRUTH_GUARDRAIL,
+        progress: 'Part 2 · Trace · One contribution',
+        headline: 'ONE GRADIENT CONTRIBUTION',
+        routePurpose: 'Inspect one authentic contribution to the selected parameter’s gradient accumulator.',
+        learnerQuestion: 'What does one backward occurrence contribute to this parameter’s gradient?',
+        whyHere: 'One concrete contribution makes accumulation visible before the completed gradient is shown.',
+        plainMeaning: 'For this selected parameter occurrence, the incoming child sensitivity multiplied by the local derivative produces one authentic contribution. That contribution is added to the accumulator, which may still be partial.',
+        truthGuardrail: 'One contribution is not the final parameter gradient. The dependency overlay does not claim an observed serial arrival chronology.',
         resultConcept: { label: 'One gradient contribution' },
         selectionIntent: { kind: 'tokenEmbedding', parameter: 'wte', token: 3, derivedReverseStop: 5 },
         primaryAction: { id: 'reverse-continue', label: 'Continue: Finish parameter gradient', role: 'primary' },
@@ -503,11 +526,13 @@ export function getPublicTourContent(
       return {
         state,
         part: 2,
-        progress: 'Part 2 of 2 · 3 of 5 · Finish gradient',
+        progress: 'Part 2 · Accumulate · Final gradient',
         headline: 'FINAL PARAMETER GRADIENT',
-        routePurpose: 'All backward contributions finish to yield the complete gradient for this parameter',
-        plainMeaning: 'All incoming scalar backward contributions for this parameter have finished accumulating into the final gradient. The gradient measures loss sensitivity for this training objective; it is not the optimizer update.',
-        truthGuardrail: REVERSE_TRUTH_GUARDRAIL,
+        routePurpose: 'Complete accumulation for the same selected parameter.',
+        learnerQuestion: 'What is this parameter’s total sensitivity to this training objective?',
+        whyHere: 'Adam requires the completed parameter gradient, not one illustrative contribution.',
+        plainMeaning: 'All authentic contributions for the selected parameter have finished accumulating into its final gradient for this training objective.',
+        truthGuardrail: 'The final gradient measures sensitivity. It is not the parameter update and not the new parameter value.',
         resultConcept: { label: 'Final parameter gradient' },
         selectionIntent: { kind: 'tokenEmbedding', parameter: 'wte', token: 3, derivedReverseStop: 5 },
         primaryAction: { id: 'reverse-continue', label: 'Continue: Propose candidate with Adam', role: 'primary' },
@@ -518,14 +543,16 @@ export function getPublicTourContent(
       return {
         state,
         part: 2,
-        progress: 'Part 2 of 2 · 4 of 5 · Adam proposal',
-        headline: 'ADAM PROPOSES CANDIDATE',
-        routePurpose: 'Adam combines the final gradient with persistent optimizer state to compute a provisional update',
-        plainMeaning: 'Adam combines the final parameter gradient with persistent moments (m, v) to propose an updated parameter value. The proposal is provisional; the accepted model has not changed.',
-        truthGuardrail: REVERSE_TRUTH_GUARDRAIL,
-        resultConcept: { label: 'Provisional parameter update' },
+        progress: 'Part 2 · Propose · Adam',
+        headline: 'ADAM PROPOSES A CANDIDATE',
+        routePurpose: 'Combine the final gradient with stored optimizer state to create a provisional parameter proposal.',
+        learnerQuestion: 'How does Adam turn the final gradient into a possible new parameter value?',
+        whyHere: 'Optimization is separate from backpropagation and uses persistent state in addition to the gradient.',
+        plainMeaning: 'Adam combines the completed gradient with stored optimizer state m and v to propose a provisional parameter value. The accepted model remains unchanged.',
+        truthGuardrail: 'Adam is not backward; gradient is not update; proposal is not acceptance.',
+        resultConcept: { label: 'Provisional parameter proposal' },
         selectionIntent: { kind: 'wte', parameter: 'wte', token: 3, derivedReverseStop: 6 },
-        primaryAction: { id: 'reverse-continue', label: 'Continue: Compare candidate outcome', role: 'primary' },
+        primaryAction: { id: 'reverse-continue', label: 'Continue: Evaluate candidate', role: 'primary' },
         optionalActions: [],
       };
 
@@ -533,11 +560,13 @@ export function getPublicTourContent(
       return {
         state,
         part: 2,
-        progress: 'Part 2 of 2 · 5 of 5 · Compare and decide',
-        headline: 'CANDIDATE UPDATE READY',
-        routePurpose: 'Provisional candidate prepared. Compare results on this training example before deciding.',
-        plainMeaning: 'A provisional candidate model update has been prepared. Compare the outcome against the accepted baseline on this training example. A changed result or lower loss on this training example is not proof of general model improvement. Choose to accept the update or discard it.',
-        truthGuardrail: REVERSE_TRUTH_GUARDRAIL,
+        progress: 'Part 2 · Decide · Candidate',
+        headline: 'PROVISIONAL CANDIDATE',
+        routePurpose: 'Compare the evaluated provisional candidate with the accepted baseline on this training example.',
+        learnerQuestion: 'What changed on this training example, and should this candidate become the accepted model?',
+        whyHere: 'A proposal must remain separate from accepted state until an explicit decision succeeds.',
+        plainMeaning: 'The provisional candidate has been evaluated against the accepted baseline on this training example. It is not accepted and is not yet the live model. Choose Accept or Discard explicitly.',
+        truthGuardrail: 'A changed result or lower loss on this one training example is not proof of general model improvement.',
         resultConcept: { label: 'Provisional candidate outcome' },
         selectionIntent: { kind: 'probabilities', token: 3, derivedShortStop: 0 },
         decisionActions: [
@@ -595,6 +624,8 @@ export function advanceTour(current: PublicTourState): PublicTourState {
     case 'p1_complete':
       return 'p1_complete';
     case 'p2_objective':
+      return 'p2_backward_trace';
+    case 'p2_backward_trace':
       return 'p2_gradient_contribution';
     case 'p2_gradient_contribution':
       return 'p2_final_gradient';
@@ -620,7 +651,9 @@ export interface TourEvidence {
 export function canAdvanceTour(current: PublicTourState, evidence: TourEvidence): boolean {
   switch (current) {
     case 'p2_objective':
-      return evidence.hasObjective && evidence.hasMatchingContribution;
+      return evidence.hasObjective;
+    case 'p2_backward_trace':
+      return evidence.hasMatchingContribution;
     case 'p2_gradient_contribution':
       return evidence.hasFinalGradient;
     case 'p2_final_gradient':
@@ -709,7 +742,9 @@ export function formatCandidateTargetTokenProbability(
 export function getPendingTourActionLabel(state: PublicTourState): string {
   switch (state) {
     case 'p2_objective':
-      return 'Tracing contribution...';
+      return 'Measuring training objective...';
+    case 'p2_backward_trace':
+      return 'Finding gradient contribution...';
     case 'p2_gradient_contribution':
       return 'Finishing gradient...';
     case 'p2_final_gradient':
@@ -750,13 +785,16 @@ export function getPublicExecutionStatus(opts: PublicStatusOptions): string {
   const effectiveTarget = targetState ?? advanceTour(currentState);
 
   switch (effectiveTarget) {
-    case 'p2_gradient_contribution':
+    case 'p2_backward_trace':
       if (phase && phase.endsWith('forward')) {
         return 'Preparing training objective...';
       }
       if (phase === 'loss') {
         return 'Measuring error across target positions...';
       }
+      return 'Completing training objective...';
+
+    case 'p2_gradient_contribution':
       return "Finding the selected parameter's gradient contribution...";
 
     case 'p2_final_gradient':

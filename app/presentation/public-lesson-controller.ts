@@ -138,6 +138,7 @@ function isDriverUnstable(phase: PublicLessonDriverPhase | undefined): boolean {
 function hasCurrentEvidence(state: PublicTourState, evidence: TourEvidence): boolean {
   switch (state) {
     case 'p2_objective':
+    case 'p2_backward_trace':
       return evidence.hasObjective;
     case 'p2_gradient_contribution':
       return evidence.hasMatchingContribution;
@@ -152,7 +153,7 @@ function hasCurrentEvidence(state: PublicTourState, evidence: TourEvidence): boo
 
 function effectForPublicAdvance(state: PublicTourState): PublicLessonRuntimeEffect | undefined {
   switch (state) {
-    case 'p2_objective':
+    case 'p2_backward_trace':
       return 'RUN_TO_CONTRIBUTION';
     case 'p2_gradient_contribution':
       return 'CONTINUE';
@@ -180,6 +181,7 @@ export function publicLessonDestinationAvailable(
 
   switch (target) {
     case 'p2_objective':
+    case 'p2_backward_trace':
       return context.evidence.hasObjective;
     case 'p2_gradient_contribution':
       return context.evidence.hasMatchingContribution;

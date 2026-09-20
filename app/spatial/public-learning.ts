@@ -47,7 +47,7 @@ export function publicLearningScene(opts: PublicLearningOptions): string {
     ? tourState === 'p2_adam_proposal'
     : learningRouteStop === 6;
   const reverseVisible = tourState
-    ? tourState === 'p2_objective' || tourState === 'p2_gradient_contribution' || tourState === 'p2_final_gradient'
+    ? tourState === 'p2_backward_trace' || tourState === 'p2_gradient_contribution' || tourState === 'p2_final_gradient'
     : learningRouteStop !== undefined && learningRouteStop >= 0 && learningRouteStop <= 5;
 
   if (!objectiveVisible && !parameterVisible && !adamVisible && !reverseVisible) {
@@ -70,13 +70,17 @@ export interface WorldRect {
   height: number;
 }
 
-export function objectiveLearningBounds(_rowsCount = 4): WorldRect {
+const MAX_OBJECTIVE_ROWS = 6;
+
+export function objectiveLearningBounds(rowsCount = 4): WorldRect {
   const probStation = stationFor('probabilities');
+  const visibleRows = Math.min(Math.max(rowsCount, 1), MAX_OBJECTIVE_ROWS);
+  const hiddenRows = Math.max(0, rowsCount - visibleRows);
   return {
     x: probStation.x + probStation.width + 30,
-    y: probStation.y - 76,
-    width: 390,
-    height: 150,
+    y: probStation.y - 110,
+    width: 420,
+    height: 162 + visibleRows * 28 + (hiddenRows > 0 ? 20 : 0),
   };
 }
 
@@ -94,7 +98,7 @@ export function adamLearningBounds(pin: ParameterPin): WorldRect {
   const x = bank.x + bank.width + 25;
   const y = bank.y + 145;
   const width = 560;
-  const height = 176;
+  const height = 232;
   return { x, y, width, height };
 }
 
@@ -204,11 +208,48 @@ function renderObjectiveAnchor(
   t?: TrainingProgress,
   m?: LearningModel,
 ): string {
-  const positionCount = t?.losses.length
-    ?? (m?.available ? m.objective.rows.length : undefined)
-    ?? f.targets?.length
-    ?? f.input?.length
-    ?? 0;
+  type ObjectiveStripRow = {
+    position: number;
+    target: number;
+    targetLabel: string;
+    loss?: number;
+    origin: 'OBSERVED' | 'DERIVED' | 'PENDING';
+  };
+
+  const targetLabel = (target: number) => f.vocabulary?.[target] ?? String(target);
+  let rows: ObjectiveStripRow[];
+
+  if (t) {
+    rows = t.losses.map((row, position) => ({
+      position,
+      target: row.target,
+      targetLabel: targetLabel(row.target),
+      loss: row.value,
+      origin: row.value !== undefined ? 'OBSERVED' : 'PENDING',
+    }));
+  } else if (m?.available) {
+    rows = m.objective.rows.map(row => ({
+      position: row.position,
+      target: row.target,
+      targetLabel: row.targetLabel ?? targetLabel(row.target),
+      loss: row.loss,
+      origin: row.loss === undefined
+        ? 'PENDING'
+        : row.origin === 'OBSERVED'
+          ? 'OBSERVED'
+          : row.origin === 'DERIVED'
+            ? 'DERIVED'
+            : 'PENDING',
+    }));
+  } else {
+    rows = (f.targets ?? []).map((target, position) => ({
+      position,
+      target,
+      targetLabel: targetLabel(target),
+      loss: undefined,
+      origin: 'PENDING',
+    }));
+  }
 
   let mean: number | undefined;
   let meanOrigin: 'OBSERVED' | 'DERIVED' | 'PENDING' = 'PENDING';
@@ -218,24 +259,46 @@ function renderObjectiveAnchor(
     meanOrigin = t.mean !== undefined ? 'OBSERVED' : 'PENDING';
   } else if (m?.available) {
     mean = m.objective.mean;
-    meanOrigin = m.objective.origin === 'OBSERVED'
-      ? 'OBSERVED'
-      : m.objective.origin === 'DERIVED'
-        ? 'DERIVED'
-        : 'PENDING';
+    meanOrigin = mean === undefined
+      ? 'PENDING'
+      : m.objective.origin === 'OBSERVED'
+        ? 'OBSERVED'
+        : m.objective.origin === 'DERIVED'
+          ? 'DERIVED'
+          : 'PENDING';
   }
 
-  const { x, y, width, height } = objectiveLearningBounds(positionCount);
+  const visibleRows = rows.slice(0, MAX_OBJECTIVE_ROWS);
+  const hiddenCount = Math.max(0, rows.length - visibleRows.length);
+  const { x, y, width, height } = objectiveLearningBounds(rows.length);
   const probStation = stationFor('probabilities');
+  const rowsTop = y + 82;
+  const rowHeight = 28;
+  const meanY = y + height - 42;
+  const originY = y + height - 18;
 
-  return `<g class="objective-anchor active-learning-anchor" data-testid="objective-anchor" data-objective-mean="${mean ?? ''}" data-objective-mean-origin="${meanOrigin}" data-objective-availability="${mean !== undefined ? 'available' : 'pending'}" data-objective-positions="${positionCount}">
-    <title>Training objective marker attached to the output probabilities.</title>
+  const rowMarkup = visibleRows.map((row, index) => {
+    const rowY = rowsTop + index * rowHeight;
+    return `<g class="objective-row" data-testid="objective-row" data-objective-position="${row.position}" data-objective-target="${row.target}" data-objective-loss="${row.loss ?? ''}" data-objective-origin="${row.origin}">
+      <text class="objective-row-main" x="${x + 18}" y="${rowY}">position ${row.position} → target '${esc(row.targetLabel)}' → loss ${row.loss === undefined ? 'pending' : n(row.loss)}</text>
+      <text class="objective-row-origin" x="${x + width - 18}" y="${rowY}" text-anchor="end">${row.origin}</text>
+    </g>`;
+  }).join('');
+
+  const hiddenMarkup = hiddenCount > 0
+    ? `<text class="objective-more" x="${x + 18}" y="${rowsTop + visibleRows.length * rowHeight}">+${hiddenCount} more target positions · see Details</text>`
+    : '';
+
+  return `<g class="objective-anchor active-learning-anchor" data-testid="objective-anchor" data-objective-mean="${mean ?? ''}" data-objective-mean-origin="${meanOrigin}" data-objective-availability="${mean !== undefined ? 'available' : 'pending'}" data-objective-positions="${rows.length}">
+    <title>Training objective across the authentic teacher-forced target positions.</title>
     <path class="objective-tether" d="M${probStation.x + probStation.width} ${probStation.y + probStation.height / 2} H${x}"/>
     <rect class="objective-box" x="${x}" y="${y}" width="${width}" height="${height}" rx="6"/>
-    <text class="objective-title" x="${x + 18}" y="${y + 34}">TRAINING OBJECTIVE</text>
-    <text class="objective-scope" x="${x + 18}" y="${y + 66}">All target positions</text>
-    <text class="objective-mean" x="${x + 18}" y="${y + 108}">Mean loss: ${mean === undefined ? 'pending' : n(mean)}</text>
-    <text class="objective-origin" x="${x + 18}" y="${y + 136}">${meanOrigin}</text>
+    <text class="objective-title" x="${x + 18}" y="${y + 30}">TRAINING OBJECTIVE</text>
+    <text class="objective-scope" x="${x + 18}" y="${y + 56}">POSITION → KNOWN TARGET → LOSS</text>
+    ${rowMarkup}
+    ${hiddenMarkup}
+    <text class="objective-mean" x="${x + 18}" y="${meanY}">Mean loss: ${mean === undefined ? 'pending' : n(mean)}</text>
+    <text class="objective-origin" x="${x + 18}" y="${originY}">${meanOrigin}</text>
   </g>`;
 }
 
@@ -502,13 +565,14 @@ function renderAdamLearningOverlay(
 
   if (u) {
     return `<g class="adam-learning-overlay active-learning-anchor" data-testid="adam-learning-overlay" data-provisional="true" data-proposal-status="available" data-status="ready">
-      <title>Adam provisional proposal marker attached to the selected parameter.</title>
+      <title>Adam provisional proposal from the completed gradient and stored optimizer state.</title>
       <path class="adam-learning-tether" d="M${bank.x + bank.width} ${bank.y + 80} H${x}"/>
       <rect class="adam-overlay-box" x="${x}" y="${y}" width="${width}" height="${height}" rx="6"/>
       <text class="adam-overlay-tag" x="${x + 18}" y="${y + 30}">ADAM PROPOSAL</text>
-      <text class="adam-overlay-title" x="${x + 18}" y="${y + 66}">${esc(pinLabel)} · PROVISIONAL</text>
-      <text class="adam-overlay-value" data-testid="adam-proposal-value" x="${x + 18}" y="${y + 108}">θ ${n(u.before)} → θ′ ${n(u.after)}</text>
-      <text class="adam-overlay-status" x="${x + 18}" y="${y + 146}">ACCEPTED MODEL UNCHANGED</text>
+      <text class="adam-overlay-title" x="${x + 18}" y="${y + 64}">${esc(pinLabel)} · PROVISIONAL</text>
+      <text class="adam-overlay-inputs" data-testid="adam-guided-inputs" x="${x + 18}" y="${y + 102}">g ${n(u.gradient)} · stored m ${n(u.mBefore)} · stored v ${n(u.vBefore)}</text>
+      <text class="adam-overlay-value" data-testid="adam-proposal-value" x="${x + 18}" y="${y + 142}">ADAM → θ ${n(u.before)} → θ′ ${n(u.after)}</text>
+      <text class="adam-overlay-status" x="${x + 18}" y="${y + 188}">ACCEPTED MODEL UNCHANGED</text>
     </g>`;
   }
 
@@ -517,8 +581,9 @@ function renderAdamLearningOverlay(
     <path class="adam-learning-tether" d="M${bank.x + bank.width} ${bank.y + 80} H${x}"/>
     <rect class="adam-overlay-box" x="${x}" y="${y}" width="${width}" height="${height}" rx="6"/>
     <text class="adam-overlay-tag" x="${x + 18}" y="${y + 30}">ADAM PROPOSAL</text>
-    <text class="adam-overlay-title" x="${x + 18}" y="${y + 66}">${esc(pinLabel)}</text>
-    <text class="adam-overlay-value" data-testid="adam-proposal-pending" x="${x + 18}" y="${y + 108}">PENDING</text>
-    <text class="adam-overlay-status" x="${x + 18}" y="${y + 146}">ACCEPTED MODEL UNCHANGED</text>
+    <text class="adam-overlay-title" x="${x + 18}" y="${y + 64}">${esc(pinLabel)}</text>
+    <text class="adam-overlay-inputs" data-testid="adam-guided-inputs" x="${x + 18}" y="${y + 102}">final gradient · stored m · stored v</text>
+    <text class="adam-overlay-value" data-testid="adam-proposal-pending" x="${x + 18}" y="${y + 142}">PENDING</text>
+    <text class="adam-overlay-status" x="${x + 18}" y="${y + 188}">ACCEPTED MODEL UNCHANGED</text>
   </g>`;
 }

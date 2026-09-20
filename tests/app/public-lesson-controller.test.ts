@@ -68,14 +68,10 @@ test('ordinary Part 1 primary advancement follows the LS1 spine with no runtime 
   }
 });
 
-test('Part 2 objective cannot advance without objective evidence and requests contribution execution only after it exists', () => {
+test('MEASURE enters TRACE only with objective evidence and requests no runtime effect', () => {
   const objective = sessionAt('p2_objective');
 
-  const unavailable = transitionPublicLesson(
-    objective,
-    { type: 'PRIMARY_ACTION' },
-    context(),
-  );
+  const unavailable = transitionPublicLesson(objective, { type: 'PRIMARY_ACTION' }, context());
   assert.equal(unavailable.session.current, 'p2_objective');
   assert.equal(unavailable.session.pending, undefined);
   assert.deepEqual(unavailable.effects, []);
@@ -85,12 +81,39 @@ test('Part 2 objective cannot advance without objective evidence and requests co
     { type: 'PRIMARY_ACTION' },
     context({ hasObjective: true }),
   );
-  assert.equal(measured.session.current, 'p2_objective');
-  assert.deepEqual(measured.session.pending, {
+  assert.equal(measured.session.current, 'p2_backward_trace');
+  assert.equal(measured.session.pending, undefined);
+  assert.deepEqual(measured.effects, []);
+});
+
+test('TRACE requests contribution execution and only matching contribution evidence completes it', () => {
+  const trace = sessionAt('p2_backward_trace');
+  const requested = transitionPublicLesson(
+    trace,
+    { type: 'PRIMARY_ACTION' },
+    context({ hasObjective: true }),
+  );
+  assert.equal(requested.session.current, 'p2_backward_trace');
+  assert.deepEqual(requested.session.pending, {
     target: 'p2_gradient_contribution',
     effect: 'RUN_TO_CONTRIBUTION',
   });
-  assert.deepEqual(measured.effects, ['RUN_TO_CONTRIBUTION']);
+  assert.deepEqual(requested.effects, ['RUN_TO_CONTRIBUTION']);
+
+  const waiting = transitionPublicLesson(
+    requested.session,
+    { type: 'TRAINING_PROGRESS' },
+    context({ hasObjective: true }),
+  );
+  assert.equal(waiting.session.current, 'p2_backward_trace');
+
+  const arrived = transitionPublicLesson(
+    requested.session,
+    { type: 'TRAINING_PROGRESS' },
+    context({ hasObjective: true, hasMatchingContribution: true }),
+  );
+  assert.equal(arrived.session.current, 'p2_gradient_contribution');
+  assert.equal(arrived.session.pending, undefined);
 });
 
 test('final-gradient transition continues normal backward instead of seeking an optimizer proposal', () => {
@@ -319,6 +342,27 @@ test('Facilitator destinations use the shared lesson identities and refuse unava
     context({}, 'paused', true),
   );
   assert.strictEqual(refused.session, canonical);
+
+  const traceUnavailable = transitionPublicLesson(
+    canonical,
+    { type: 'FACILITATOR_GOTO', target: 'p2_backward_trace' },
+    context({}, 'paused', true),
+  );
+  assert.strictEqual(traceUnavailable.session, canonical);
+
+  const traceContext = context({ hasObjective: true });
+  const traceFocused = transitionPublicLesson(
+    canonical,
+    { type: 'FACILITATOR_GOTO', target: 'p2_backward_trace' },
+    traceContext,
+  );
+  assert.equal(traceFocused.session.current, 'p1_transform');
+  assert.deepEqual(traceFocused.session.navigation, {
+    mode: 'facilitator',
+    returnState: 'p1_transform',
+    focusState: 'p2_backward_trace',
+  });
+  assert.equal(getPublicLessonView(traceFocused.session, traceContext).currentState, 'p2_backward_trace');
 
   const availableContext = context({
     hasObjective: true,

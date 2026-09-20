@@ -18,7 +18,7 @@ import { sceneSvg } from '../../app/spatial/scene.js';
 
 test('PUBLIC_TOUR_STATES is a complete current UI representation without freezing a curriculum state count', () => {
   assert.equal(new Set(PUBLIC_TOUR_STATES).size, PUBLIC_TOUR_STATES.length);
-  for (const required of ['cold', 'p1_complete', 'candidate_ready', 'tour_complete'] as const) {
+  for (const required of ['cold', 'p1_complete', 'p2_backward_trace', 'candidate_ready', 'tour_complete'] as const) {
     assert(PUBLIC_TOUR_STATES.includes(required), `Missing required current UI anchor ${required}`);
   }
   for (const st of PUBLIC_TOUR_STATES) {
@@ -409,31 +409,46 @@ test('C3: Teaching content remains stable across states and is never overwritten
       assert.equal(c1.truthGuardrail, c2.truthGuardrail);
     }
   }
+});
 
-  const p2States: PublicTourState[] = [
-    'p2_objective',
-    'p2_gradient_contribution',
-    'p2_final_gradient',
-    'p2_adam_proposal',
-    'candidate_ready',
-  ];
-  const expectedHeadlines = [
-    'MEASURE ERROR',
-    'TRACE ONE GRADIENT CONTRIBUTION',
-    'FINAL PARAMETER GRADIENT',
-    'ADAM PROPOSES CANDIDATE',
-    'CANDIDATE UPDATE READY',
-  ];
-  for (let i = 0; i < p2States.length; i++) {
-    const c = getPublicTourContent(p2States[i]);
-    assert.equal(c.headline, expectedHeadlines[i]);
-    assert(c.plainMeaning.length > 20);
-    assert(c.routePurpose.length > 10);
+test('Part 2 current UI sequence follows Measure / Trace / Accumulate / Propose / Decide without a global state counter', () => {
+  const expected = [
+    { state: 'p2_objective', next: 'p2_backward_trace', progress: 'Part 2 · Measure · Training objective', headline: 'MEASURE ERROR' },
+    { state: 'p2_backward_trace', next: 'p2_gradient_contribution', progress: 'Part 2 · Trace · Backward sensitivity', headline: 'TRACE BACKWARD SENSITIVITY' },
+    { state: 'p2_gradient_contribution', next: 'p2_final_gradient', progress: 'Part 2 · Trace · One contribution', headline: 'ONE GRADIENT CONTRIBUTION' },
+    { state: 'p2_final_gradient', next: 'p2_adam_proposal', progress: 'Part 2 · Accumulate · Final gradient', headline: 'FINAL PARAMETER GRADIENT' },
+    { state: 'p2_adam_proposal', next: 'candidate_ready', progress: 'Part 2 · Propose · Adam', headline: 'ADAM PROPOSES A CANDIDATE' },
+  ] as const;
+
+  for (const item of expected) {
+    const c = getPublicTourContent(item.state);
+    assert.equal(c.progress, item.progress);
+    assert.equal(c.headline, item.headline);
+    assert.equal(advanceTour(item.state), item.next);
+    assert(!/\d+ of \d+/.test(c.progress), 'Conceptual Part 2 chapter must dominate over a global state counter');
+    assert(c.learnerQuestion);
+    assert(c.whyHere);
   }
+
+  const trace = getPublicTourContent('p2_backward_trace');
+  assert.match(trace.truthGuardrail ?? '', /not measured runtime timing/i);
+  assert.match(trace.truthGuardrail ?? '', /text flowing backward/i);
+  assert.match(trace.plainMeaning, /real dependency graph/i);
+
+  const measure = getPublicTourContent('p2_objective');
+  assert.match(measure.truthGuardrail ?? '', /multiple target positions/i);
+
+  const candidate = getPublicTourContent('candidate_ready');
+  assert.equal(candidate.progress, 'Part 2 · Decide · Candidate');
+  assert.equal(candidate.headline, 'PROVISIONAL CANDIDATE');
+  assert.match(candidate.plainMeaning, /not accepted/i);
+  assert.match(candidate.plainMeaning, /not yet the live model/i);
+  assert.match(candidate.truthGuardrail ?? '', /not proof of general model improvement/i);
 });
 
 test('C3: getPendingTourActionLabel maps pending tour states to distinct working indicators', () => {
-  assert.equal(getPendingTourActionLabel('p2_objective'), 'Tracing contribution...');
+  assert.equal(getPendingTourActionLabel('p2_objective'), 'Measuring training objective...');
+  assert.equal(getPendingTourActionLabel('p2_backward_trace'), 'Finding gradient contribution...');
   assert.equal(getPendingTourActionLabel('p2_gradient_contribution'), 'Finishing gradient...');
   assert.equal(getPendingTourActionLabel('p2_final_gradient'), 'Computing Adam proposal...');
   assert.equal(getPendingTourActionLabel('p2_adam_proposal'), 'Evaluating candidate...');
@@ -445,7 +460,7 @@ test('C3: getPendingTourActionLabel maps pending tour states to distinct working
 test('C3: getPublicExecutionStatus provides truthful secondary status answering what model is doing without worker jargon', () => {
   const statusForward = getPublicExecutionStatus({
     currentState: 'p2_objective',
-    targetState: 'p2_gradient_contribution',
+    targetState: undefined,
     phase: 'training forward',
     driverPhase: 'running',
   });
@@ -453,14 +468,14 @@ test('C3: getPublicExecutionStatus provides truthful secondary status answering 
 
   const statusLoss = getPublicExecutionStatus({
     currentState: 'p2_objective',
-    targetState: 'p2_gradient_contribution',
+    targetState: undefined,
     phase: 'loss',
     driverPhase: 'running',
   });
   assert.equal(statusLoss, 'Measuring error across target positions...');
 
   const statusContrib = getPublicExecutionStatus({
-    currentState: 'p2_objective',
+    currentState: 'p2_backward_trace',
     targetState: 'p2_gradient_contribution',
     phase: 'backward',
     driverPhase: 'running',
@@ -548,7 +563,7 @@ test('C3: getPublicExecutionStatus provides truthful secondary status answering 
   }
 });
 
-test('C3: Gated transitions advance exactly once to the target state and pause until explicit visitor advancement', () => {
+test('Part 2 evidence gates separate objective, trace, contribution, final gradient, Adam, and candidate', () => {
   const ev1: TourEvidence = {
     hasObjective: true,
     hasMatchingContribution: false,
@@ -556,10 +571,11 @@ test('C3: Gated transitions advance exactly once to the target state and pause u
     hasPinnedProposal: false,
     hasCandidateComparison: false,
   };
-  assert.equal(canAdvanceTour('p2_objective', ev1), false);
+  assert.equal(canAdvanceTour('p2_objective', ev1), true);
+  assert.equal(canAdvanceTour('p2_backward_trace', ev1), false);
 
   const ev2: TourEvidence = { ...ev1, hasMatchingContribution: true };
-  assert.equal(canAdvanceTour('p2_objective', ev2), true);
+  assert.equal(canAdvanceTour('p2_backward_trace', ev2), true);
 
   assert.equal(canAdvanceTour('p2_gradient_contribution', ev2), false);
   const ev3: TourEvidence = { ...ev2, hasFinalGradient: true };
@@ -572,7 +588,6 @@ test('C3: Gated transitions advance exactly once to the target state and pause u
   assert.equal(canAdvanceTour('p2_adam_proposal', ev4), false);
   const ev5: TourEvidence = { ...ev4, hasCandidateComparison: true };
   assert.equal(canAdvanceTour('p2_adam_proposal', ev5), true);
-
   assert.equal(canAdvanceTour('candidate_ready', ev5), false);
 });
 
