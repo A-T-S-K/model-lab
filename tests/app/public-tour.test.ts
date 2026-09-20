@@ -30,74 +30,80 @@ test('PUBLIC_TOUR_STATES is a complete current UI representation without freezin
   }
 });
 
-test('Part 1 has 6 teaching states followed by an explicit Part 1 Complete state with truthful semantics', () => {
-  const p1Expected = [
-    { state: 'p1_prediction_preview', progress: 'Part 1 of 2 · 1 of 6 · Prediction', headline: 'PREDICTION', stop: 0 },
-    { state: 'p1_represent', progress: 'Part 1 of 2 · 2 of 6 · Represent', headline: 'REPRESENT', stop: 1 },
-    { state: 'p1_mix_context', progress: 'Part 1 of 2 · 3 of 6 · Mix Context', headline: 'MIX CONTEXT', stop: 2 },
-    { state: 'p1_transform', progress: 'Part 1 of 2 · 4 of 6 · Transform', headline: 'TRANSFORM', stop: 3 },
-    { state: 'p1_score', progress: 'Part 1 of 2 · 5 of 6 · Score', headline: 'SCORE', stop: 4 },
-    { state: 'p1_probabilities', progress: 'Part 1 of 2 · 6 of 6 · Probabilities', headline: 'PROBABILITIES', stop: 5 },
+test('Part 1 current UI sequence follows the LS0 chapter spine without a global state counter', () => {
+  const expected = [
+    { state: 'p1_prediction_preview', next: 'p1_represent', progress: 'Part 1 · Make a Prediction · Opening', anchor: 'probabilities', action: 'See how it got there', guardrail: /authentic prediction/ },
+    { state: 'p1_represent', next: 'p1_qkv', progress: 'Part 1 · Represent · Representation', anchor: 'embeddingNorm', action: 'Continue: Q / K / V', guardrail: /learned numerical features/ },
+    { state: 'p1_qkv', next: 'p1_attention_compare', progress: 'Part 1 · Attend · Q / K / V', anchor: 'q', action: 'Continue: Compare positions', guardrail: /not literal human questions/ },
+    { state: 'p1_attention_compare', next: 'p1_attention_weights', progress: 'Part 1 · Attend · Compare positions', anchor: 'attentionLogits', action: 'Continue: Attention weights', guardrail: /unavailable/ },
+    { state: 'p1_attention_weights', next: 'p1_value_mixture', progress: 'Part 1 · Attend · Attention weights', anchor: 'attentionProbabilities', action: 'Continue: Mix Values', guardrail: /mixing coefficient/ },
+    { state: 'p1_value_mixture', next: 'p1_attention_integration', progress: 'Part 1 · Attend · Value mixture', anchor: 'headOutput', action: 'Continue: Combine heads', guardrail: /Value vectors/ },
+    { state: 'p1_attention_integration', next: 'p1_transform', progress: 'Part 1 · Attend · Combine heads + residual', anchor: 'attentionResidual', action: 'Continue: Transform', guardrail: /distinct operations/ },
+    { state: 'p1_transform', next: 'p1_score', progress: 'Part 1 · Transform · MLP', anchor: 'mlpResidual', action: 'Continue: Logits', guardrail: /ReLU/ },
+    { state: 'p1_score', next: 'p1_probabilities', progress: 'Part 1 · Output · Logits', anchor: 'logits', action: 'Continue: Probabilities', guardrail: /not a probability/ },
+    { state: 'p1_probabilities', next: 'p1_complete', progress: 'Part 1 · Output · Probabilities', anchor: 'probabilities', action: 'Integrate Part 1', guardrail: /different objects/ },
   ] as const;
 
-  for (const exp of p1Expected) {
-    const c = getPublicTourContent(exp.state);
-    assert.equal(c.part, 1);
-    assert.equal(c.progress, exp.progress);
-    assert.equal(c.headline, exp.headline);
-    assert.equal(c.selectionIntent.derivedShortStop, exp.stop);
-    assert(c.primaryAction, `Primary action missing for ${exp.state}`);
+  for (const item of expected) {
+    const content = getPublicTourContent(item.state);
+    assert.equal(content.part, 1);
+    assert.equal(content.progress, item.progress);
+    assert(!/\d+ of \d+/.test(content.progress), 'Conceptual chapter location must dominate over a global counter');
+    assert.equal(content.selectionIntent.kind, item.anchor);
+    assert.equal(content.selectionIntent.key, 0, 'Part 1 must preserve the selected k0 causal witness');
+    assert(content.focus, `Focus span missing for ${item.state}`);
+    assert(content.learnerQuestion, `Learner question missing for ${item.state}`);
+    assert(content.whyHere, `Why-here explanation missing for ${item.state}`);
+    assert.match(content.truthGuardrail ?? '', item.guardrail);
+    assert.equal(content.primaryAction?.label, item.action);
+    assert.equal(content.optionalActions.length, 0, `Required Guided state ${item.state} must not expose a parallel attention mini-tour`);
+    assert.equal(advanceTour(item.state), item.next);
   }
 
-  // Truthful teaching semantics for Part 1
-  const represent = getPublicTourContent('p1_represent');
-  assert(!represent.plainMeaning.includes('in space'), 'p1_represent must not say position represents order in space');
-  assert(represent.plainMeaning.includes('token') && represent.plainMeaning.includes('position'), 'p1_represent combines token and position');
+  const complete = getPublicTourContent('p1_complete');
+  assert.equal(complete.progress, 'Part 1 · Forward integration');
+  assert.equal(complete.headline, 'PART 1 OF 2 COMPLETE');
+  assert.match(complete.truthGuardrail ?? '', /did not update them/);
+  assert.equal(complete.primaryAction?.id, 'short-teach');
+  assert.equal(complete.primaryAction?.label, 'Next: Learn from error');
+  assert.equal(advanceTour('p1_complete'), 'p1_complete');
+});
 
-  const mix = getPublicTourContent('p1_mix_context');
-  assert(!mix.plainMeaning.includes('relevant'), 'p1_mix_context must not imply attention weight = relevance');
-  assert(!mix.plainMeaning.includes('importance'), 'p1_mix_context must not imply attention weight = importance');
-  assert(!mix.plainMeaning.includes('responsibility'), 'p1_mix_context must not imply causal responsibility');
-  assert(mix.plainMeaning.includes('normalized attention weights'), 'p1_mix_context describes normalized attention weights');
+test('Part 1 grouped mechanisms declare the required connected focus spans', () => {
+  const nodeKeys = (state: PublicTourState) => {
+    const focus = getPublicTourContent(state).focus;
+    assert(focus, `Focus missing for ${state}`);
+    return new Set(focus.nodes.map(node => `${node.kind}:${node.head ?? '*'}`));
+  };
+  const edgeKeys = (state: PublicTourState) => {
+    const focus = getPublicTourContent(state).focus;
+    assert(focus, `Focus missing for ${state}`);
+    return new Set(focus.edges.map(edge => `${edge.from}->${edge.to}:${edge.head ?? '*'}:${edge.selected ?? ''}`));
+  };
 
-  const transform = getPublicTourContent('p1_transform');
-  assert(!transform.routePurpose.includes('higher-order features'), 'p1_transform must remove higher-order features');
-  assert(!transform.plainMeaning.includes('higher-order features'), 'p1_transform must remove higher-order features');
-  assert(transform.plainMeaning.includes('normalization') || transform.plainMeaning.includes('normalizes'), 'p1_transform describes normalization');
-  assert(transform.plainMeaning.includes('ReLU') || transform.plainMeaning.includes('relu'), 'p1_transform describes ReLU');
-  assert(transform.plainMeaning.includes('residual'), 'p1_transform describes residual stream');
+  const represent = nodeKeys('p1_represent');
+  for (const kind of ['tokenEmbedding', 'positionEmbedding', 'embeddingSum', 'embeddingNorm']) {
+    assert(represent.has(`${kind}:*`), `Representation focus missing ${kind}`);
+  }
 
-  const score = getPublicTourContent('p1_score');
-  assert(!score.plainMeaning.includes('likely') && !score.plainMeaning.includes('probability'), 'p1_score must not describe logits as likelihoods or probabilities');
-  assert(score.plainMeaning.includes('unnormalized vocabulary scores'), 'p1_score describes raw unnormalized vocabulary scores');
+  const qkv = nodeKeys('p1_qkv');
+  for (const kind of ['preAttentionNorm', 'q', 'k', 'v']) {
+    assert([...qkv].some(key => key.startsWith(`${kind}:`)), `Q/K/V focus missing ${kind}`);
+  }
 
-  const probabilities = getPublicTourContent('p1_probabilities');
-  assert(!probabilities.plainMeaning.includes('determining what comes next'), 'p1_probabilities must not say softmax determines what comes next');
-  assert(probabilities.plainMeaning.includes('current prediction can be identified'), 'p1_probabilities explains prediction identified from resulting distribution');
+  const attention = nodeKeys('p1_attention_integration');
+  assert(attention.has('headOutput:0'));
+  assert(attention.has('headOutput:1'));
+  for (const kind of ['attentionOutput', 'attentionProjection', 'attentionResidual']) {
+    assert([...attention].some(key => key.startsWith(`${kind}:`)), `Attention integration focus missing ${kind}`);
+  }
+  assert(edgeKeys('p1_attention_integration').has('embeddingNorm->attentionResidual:*:'), 'Attention residual bypass must be explicit');
 
-  // Advance sequence through all 6 Part 1 states leads to p1_complete
-  let current: PublicTourState = 'p1_prediction_preview';
-  current = advanceTour(current);
-  assert.equal(current, 'p1_represent');
-  current = advanceTour(current);
-  assert.equal(current, 'p1_mix_context');
-  current = advanceTour(current);
-  assert.equal(current, 'p1_transform');
-  current = advanceTour(current);
-  assert.equal(current, 'p1_score');
-  current = advanceTour(current);
-  assert.equal(current, 'p1_probabilities');
-  current = advanceTour(current);
-  assert.equal(current, 'p1_complete');
-
-  // p1_complete: One obvious Visitor action that starts real training
-  const completeContent = getPublicTourContent('p1_complete');
-  assert.equal(completeContent.part, 1);
-  assert.equal(completeContent.progress, 'Part 1 Complete');
-  assert.equal(completeContent.headline, 'PART 1 COMPLETE');
-  assert.equal(completeContent.primaryAction?.id, 'short-teach');
-  assert.equal(completeContent.primaryAction?.label, 'Start Part 2: See how learning works');
-  assert.equal(completeContent.optionalActions.length, 0, 'Must not expose competing public Part 1 actions');
+  const mlp = nodeKeys('p1_transform');
+  for (const kind of ['preMlpNorm', 'mlpUp', 'mlpRelu', 'mlpDown', 'mlpResidual']) {
+    assert([...mlp].some(key => key.startsWith(`${kind}:`)), `MLP focus missing ${kind}`);
+  }
+  assert(edgeKeys('p1_transform').has('attentionResidual->mlpResidual:*:'), 'MLP residual bypass must be explicit');
 });
 
 test('Current Part 2 UI representation preserves its truth-guarded teaching moments', () => {
@@ -213,25 +219,7 @@ test('Evidence gating protects all Part 2 transitions', () => {
   }), false);
 });
 
-test('Selection intents map exact causal graph kinds and tokens with Candidate Ready at probabilities@q', () => {
-  const p1Kinds = [
-    { state: 'p1_prediction_preview', kind: 'probabilities', token: 3 },
-    { state: 'p1_represent', kind: 'preAttentionNorm', token: 3, layer: 0 },
-    { state: 'p1_mix_context', kind: 'attentionResidual', token: 3, layer: 0, head: 0 },
-    { state: 'p1_transform', kind: 'mlpResidual', token: 3, layer: 0 },
-    { state: 'p1_score', kind: 'logits', token: 3 },
-    { state: 'p1_probabilities', kind: 'probabilities', token: 3 },
-    { state: 'p1_complete', kind: 'probabilities', token: 3 },
-  ] as const;
-
-  for (const item of p1Kinds) {
-    const c = getPublicTourContent(item.state);
-    assert.equal(c.selectionIntent.kind, item.kind);
-    assert.equal(c.selectionIntent.token, item.token);
-    if ('layer' in item) assert.equal(c.selectionIntent.layer, item.layer);
-    if ('head' in item) assert.equal(c.selectionIntent.head, item.head);
-  }
-
+test('Part 2 selection intents remain unchanged while LS1 expands only Part 1', () => {
   const p2Kinds = [
     { state: 'p2_objective', kind: 'probabilities', token: 3 },
     { state: 'p2_gradient_contribution', kind: 'tokenEmbedding', token: 3 },

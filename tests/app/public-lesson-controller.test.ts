@@ -40,14 +40,32 @@ function sessionAt(
   };
 }
 
-test('ordinary Part 1 primary advancement belongs to the controller and requests no runtime effect', () => {
-  const result = transitionPublicLesson(
-    sessionAt('p1_prediction_preview'),
-    { type: 'PRIMARY_ACTION' },
-    context({}, 'idle', false),
-  );
-  assert.equal(result.session.current, 'p1_represent');
-  assert.deepEqual(result.effects, []);
+test('ordinary Part 1 primary advancement follows the LS1 spine with no runtime effects', () => {
+  const states: readonly PublicTourState[] = [
+    'p1_prediction_preview',
+    'p1_represent',
+    'p1_qkv',
+    'p1_attention_compare',
+    'p1_attention_weights',
+    'p1_value_mixture',
+    'p1_attention_integration',
+    'p1_transform',
+    'p1_score',
+    'p1_probabilities',
+    'p1_complete',
+  ];
+
+  let session = sessionAt(states[0]);
+  for (const expected of states.slice(1)) {
+    const result = transitionPublicLesson(
+      session,
+      { type: 'PRIMARY_ACTION' },
+      context({}, 'idle', false),
+    );
+    assert.equal(result.session.current, expected);
+    assert.deepEqual(result.effects, [], `Part 1 navigation to ${expected} must not request execution`);
+    session = result.session;
+  }
 });
 
 test('Part 2 objective cannot advance without objective evidence and requests contribution execution only after it exists', () => {
@@ -224,7 +242,7 @@ test('Part 2 startup enters Objective only after training exists, then runs to a
 });
 
 test('detail and explore detours remember and restore the canonical Guided state', () => {
-  const canonical = sessionAt('p1_mix_context');
+  const canonical = sessionAt('p1_attention_weights');
 
   const detail = transitionPublicLesson(
     canonical,
@@ -233,16 +251,16 @@ test('detail and explore detours remember and restore the canonical Guided state
   );
   assert.deepEqual(detail.session.navigation, {
     mode: 'detail',
-    returnState: 'p1_mix_context',
+    returnState: 'p1_attention_weights',
   });
-  assert.equal(detail.session.current, 'p1_mix_context');
+  assert.equal(detail.session.current, 'p1_attention_weights');
 
   const returned = transitionPublicLesson(
     detail.session,
     { type: 'RETURN_FROM_DETAIL' },
     context({}, 'idle', false),
   );
-  assert.equal(returned.session.current, 'p1_mix_context');
+  assert.equal(returned.session.current, 'p1_attention_weights');
   assert.deepEqual(returned.session.navigation, { mode: 'guided' });
   assert.deepEqual(returned.effects, []);
 

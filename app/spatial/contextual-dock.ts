@@ -169,8 +169,13 @@ function renderExplain(opts: ContextualDockOptions): string {
       <div class="dock-overview" data-testid="scene-construction" data-run="${esc(m.source.sourceRunId)}">
         <div class="dock-stage-meaning">
           ${tc.headline ? `<header class="construction-header"><strong>${esc(tc.headline)}</strong></header>` : ''}
-          ${tc.routePurpose ? `<p class="dock-route-purpose" data-testid="route-purpose">${esc(tc.routePurpose)}</p>` : ''}
+          ${tc.learnerQuestion
+            ? `<p class="dock-route-purpose" data-testid="route-purpose">${esc(tc.learnerQuestion)}</p>`
+            : tc.routePurpose
+              ? `<p class="dock-route-purpose" data-testid="route-purpose">${esc(tc.routePurpose)}</p>`
+              : ''}
           <p class="dock-meaning-text">${esc(tc.plainMeaning)}</p>
+          ${tc.whyHere ? `<p class="construction-purpose">${esc(tc.whyHere)}</p>` : ''}
           ${truthCue}
         </div>
         ${stageResult}
