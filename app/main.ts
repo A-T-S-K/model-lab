@@ -2214,14 +2214,16 @@ async function activateAttract(): Promise<void> {
   if (!attract || !ready || busy || !attractReplay) return;
   lastActivity = Date.now();
   clearExhibitBanner();
-  attract = false;
   guidedMapIndex = 5;
   documentText = fixture.document;
-  await execute("predict");
+  const receipt = await execute("predict");
+  if (receipt.status !== "completed" || !result) return;
+  attract = false;
   if (exhibitEntry && spatialActive) {
-    spatialPresenter.startVisitorSample();
     render();
+    spatialPresenter.startVisitorSample();
   }
+  render();
 }
 // Capture the activation before a stage/control sees its coordinate. It cannot select through A1.
 window.addEventListener(
