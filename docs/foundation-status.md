@@ -34,8 +34,14 @@ qualifies bounded presentation work; M4-D engineering-qualifies stable mutation 
 ambiguous acknowledgement handling and authoritative reconciliation with a simulated
 surviving authority; and M4-E engineering-qualifies candidate repairs MLR-01 and MLR-02,
 cross-slice witness sequences A–I, and integrated browser routes A–D. Independent M5/foundation
-disposition remains pending. See [authority](README.md). Pre-M5 ABQ Visitor Experience
-Stabilization: P0-R3 bounded teaching-hierarchy repair candidate qualified (`2f23353ca388c12f0939683ef1833e0430b8df49`); P0 final visual/product disposition pending (see [Pre-M5 qualification](reviews/pre-M5-ABQ-experience-qualification.md)). M5 independent foundation review and M6 workshop/release readiness remain NOT_RUN.
+disposition remains pending. See [authority](README.md). Pre-M5 ABQ experience stabilization:
+P0-E1 semantic disposition PASS.
+P0-E2 visual / information-architecture disposition PASS.
+P0-E3 learning / spatial disposition PASS.
+P0-E4 candidate engineering / visual qualification BLOCKED on required qualification evidence unavailable (historical C1 near-limit witness `97cc5303...` missing; candidate `3950504e...` passes functionally) on candidate `5d4bd623be2ae3e62245057e4c4251538c7749e3` / `sha256:90c1951ab839ba7772219c6c8e47527fe5df6bfa1cea984363306c0bf6f5535d` (see [Pre-M5 E4 qualification](reviews/pre-M5-ABQ-E4-integration-qualification.md); historical P0-R3 preserved at [Pre-M5 R3 review](reviews/pre-M5-ABQ-experience-qualification.md)).
+P0 final product disposition remains pending.
+M5 independent foundation review remains NOT_RUN.
+M6 remains NOT_RUN.
 
 The [repaired first-M1 qualification](reviews/M1-repair-qualification.md) retains its
 original scope and identity. The original historical preservation failure remains
