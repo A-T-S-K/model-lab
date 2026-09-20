@@ -296,8 +296,41 @@ body.spatial-mode { background:#0B0F12; color:#F2F5F7; font-family:Plex,sans-ser
   .contextual-dock .dock-body { padding: 3px 10px; }
   .dock-essential-result p { margin: 2px 0; }
 }
-.spatial-shell[data-experience-profile="visitor"] .spatial-header {
+.spatial-shell[data-experience-profile="visitor"] .spatial-header,
+.spatial-shell[data-experience-profile="facilitator"] .spatial-header {
   flex-wrap: nowrap;
+  padding: 8px 16px;
+  gap: 12px;
+}
+.spatial-shell[data-experience-profile="visitor"] .world-brand strong,
+.spatial-shell[data-experience-profile="facilitator"] .world-brand strong {
+  font-size: clamp(16px, 1.15vw, 20px);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.spatial-shell[data-experience-profile="visitor"] .world-brand small,
+.spatial-shell[data-experience-profile="facilitator"] .world-brand small {
+  font-size: clamp(12px, 0.85vw, 14px);
+  color: #8b969e;
+}
+.spatial-shell[data-experience-profile="visitor"] .spatial-header button,
+.spatial-shell[data-experience-profile="facilitator"] .spatial-header button {
+  min-height: 44px;
+  padding: 0 16px;
+  font-size: clamp(13px, 0.9vw, 15px);
+  font-weight: 600;
+  border-radius: 5px;
+}
+.spatial-shell[data-experience-profile="visitor"] .spatial-status,
+.spatial-shell[data-experience-profile="facilitator"] .spatial-status {
+  padding: 4px 16px;
+  font-size: clamp(12px, 0.85vw, 14px);
+}
+.spatial-shell[data-experience-profile="visitor"] .spatial-badge,
+.spatial-shell[data-experience-profile="facilitator"] .spatial-badge {
+  font-size: clamp(11px, 0.75vw, 13px);
+  font-weight: 600;
+  letter-spacing: 0.06em;
 }
 [data-experience-profile="visitor"] button,
 [data-experience-profile="facilitator"] button {
@@ -416,10 +449,10 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 8px 18px;
+  padding: 10px 20px;
   background: #151d24;
   border-bottom: 1px solid #28333c;
-  min-height: 68px;
+  min-height: 70px;
   box-sizing: border-box;
   flex-shrink: 0;
 }
@@ -427,7 +460,7 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
 .contextual-dock .dock-route-info {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -435,7 +468,7 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
 }
 
 .contextual-dock .dock-brand {
-  font-size: 13px;
+  font-size: clamp(14px, 1.0vw, 16px);
   letter-spacing: 1px;
   color: #62c7e8;
   font-weight: 700;
@@ -443,23 +476,47 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   flex-shrink: 0;
 }
 
+.contextual-dock .lesson-progress {
+  font-size: clamp(15px, 1.1vw, 18px);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #f2f5f7;
+  flex-shrink: 0;
+}
+
 .contextual-dock .dock-selected-object {
   display: inline-flex;
   align-items: center;
-  padding: 3px 10px;
+  padding: 4px 12px;
   background: #1c2730;
   border: 1px solid #3b454d;
   border-radius: 4px;
   color: #f0d395;
-  font-size: 12px;
+  font-size: clamp(13px, 0.9vw, 15px);
   font-weight: 600;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+.contextual-dock .dock-detour-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  background: rgba(255, 209, 102, 0.12);
+  border: 1px solid #ffd166;
+  border-radius: 4px;
+  color: #ffd166;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   flex-shrink: 0;
 }
 
 .contextual-dock .dock-status-message {
   margin: 0;
-  font-size: 12px;
+  font-size: clamp(12px, 0.85vw, 14px);
   color: #8b969e;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -484,21 +541,21 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  min-width: 260px;
+  min-width: clamp(260px, 18vw, 320px);
 }
 
 .contextual-dock .dock-slot-primary .primary-action,
 .contextual-dock .primary-action,
 [data-experience-profile="visitor"] .primary-action {
   min-height: 54px;
-  height: 54px;
-  min-width: 260px;
+  height: clamp(54px, 4.2vh, 60px);
+  min-width: clamp(260px, 18vw, 320px);
   padding: 0 24px;
   background: #1b455b;
   border: 2px solid #62c7e8;
   border-radius: 6px;
   color: #ffffff;
-  font-size: 15px;
+  font-size: clamp(15px, 1.05vw, 17px);
   font-weight: 700;
   letter-spacing: 0.02em;
   display: inline-flex;
@@ -538,14 +595,14 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
 [data-experience-profile="visitor"] .secondary-action,
 .contextual-dock #dock-inspect {
   min-height: 48px;
-  height: 48px;
-  padding: 0 16px;
+  height: clamp(48px, 3.8vh, 52px);
+  padding: 0 18px;
   background: #18222a;
   border: 1px solid #3b454d;
   border-radius: 6px;
   color: #a7b2bc;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: clamp(13px, 0.92vw, 15px);
+  font-weight: 600;
   letter-spacing: 0.01em;
   display: inline-flex;
   align-items: center;
@@ -581,9 +638,10 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   border-radius: 4px;
   color: #8dd9ad;
   font-family: PlexMono, monospace;
-  font-size: 11px;
+  font-size: clamp(11px, 0.8vw, 13px);
   font-weight: 600;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .contextual-dock .dock-tabs,
@@ -691,7 +749,7 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   flex-direction: column;
   justify-content: flex-start;
   align-items: stretch;
-  padding: 12px 18px;
+  padding: 16px 22px;
 }
 
 /* Dock Overview: Stage-appropriate horizontal layout */
@@ -719,7 +777,7 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .dock-stage-meaning .construction-header {
@@ -744,30 +802,55 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   letter-spacing: 0.5px;
 }
 
+.dock-route-purpose {
+  font-size: clamp(17px, 1.25vw, 22px);
+  font-weight: 600;
+  line-height: 1.4;
+  color: #62c7e8;
+  margin: 0 0 6px 0;
+}
+
 .dock-stage-meaning .construction-purpose {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.45;
+  margin: 0 0 4px 0;
+  font-size: clamp(14px, 0.95vw, 16px);
+  line-height: 1.5;
   color: #c2cad0;
 }
 
 .dock-meaning-text {
   margin: 0;
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: clamp(15px, 1.05vw, 18px);
+  line-height: 1.55;
   color: #e6edf2;
 }
 
 .dock-stage-meaning .learning-mechanism {
   margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: clamp(14px, 1.0vw, 17px);
+  line-height: 1.55;
   color: #c2cad0;
 }
 
+.dock-detour-notice {
+  font-size: clamp(13px, 0.9vw, 15px);
+  color: #ffd166;
+  margin: 4px 0 0;
+}
+
+.idle-explanation {
+  font-size: clamp(15px, 1.1vw, 18px);
+  line-height: 1.55;
+}
+.idle-explanation strong {
+  font-size: clamp(13px, 0.9vw, 15px);
+  color: #f0d395;
+  display: block;
+  margin-bottom: 4px;
+}
+
 .dock-stage-result {
-  flex: 0 1 42%;
-  max-width: 500px;
+  flex: 0 1 clamp(280px, 32vw, 480px);
+  max-width: 520px;
   min-width: 260px;
   display: flex;
   flex-direction: column;
@@ -778,34 +861,34 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   background: #172129;
   border: 1px solid #2a3742;
   border-radius: 4px;
-  padding: 10px 14px;
+  padding: 12px 16px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .dock-stage-result .stage-result-label {
-  font-size: 10px;
-  letter-spacing: 0.8px;
+  font-size: clamp(11px, 0.8vw, 13px);
+  letter-spacing: 0.08em;
   color: #8b969e;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .dock-stage-result p {
   margin: 0;
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: clamp(14px, 1.0vw, 17px);
+  line-height: 1.5;
   color: #e6edf2;
 }
 
 .dock-stage-result .dock-pin-info {
-  font-size: 11px;
+  font-size: clamp(12px, 0.85vw, 14px);
   color: #8b969e;
 }
 
 .dock-stage-result .learning-gradient-summary {
   margin: 0;
-  font-size: 14px;
+  font-size: clamp(15px, 1.05vw, 18px);
   font-weight: 600;
   color: #f0d395;
 }
@@ -817,7 +900,7 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
 
 .dock-stage-result .learning-provisional {
   margin: 0;
-  font-size: 12px;
+  font-size: clamp(13px, 0.9vw, 15px);
   color: #a7b2bc;
 }
 

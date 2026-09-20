@@ -42,7 +42,19 @@ export class SpatialCamera {
   private abort?:AbortController;
   private changed?:()=>void;
   private gesture?:()=>void;
-  private apply() { this.svg?.setAttribute("viewBox",`${this.box.x} ${this.box.y} ${this.box.width} ${this.box.height}`); this.svg?.classList.toggle("overview",this.box.width>2600); const scale=this.svg?.getScreenCTM()?.a??1;this.svg?.style.setProperty("--world-label-size",`${12/scale}px`);this.svg?.style.setProperty("--world-region-size",`${16/scale}px`);this.svg?.style.setProperty("--world-bank-size",`${11/scale}px`); this.changed?.(); }
+  private apply() {
+    this.svg?.setAttribute("viewBox",`${this.box.x} ${this.box.y} ${this.box.width} ${this.box.height}`);
+    this.svg?.classList.toggle("overview",this.box.width>2600);
+    const scale=this.svg?.getScreenCTM()?.a??1;
+    const isPublic = Boolean(this.svg?.closest('.world-workspace.is-public-profile') || this.svg?.closest('[data-experience-profile="visitor"]') || this.svg?.closest('[data-experience-profile="facilitator"]'));
+    const labelBase = isPublic ? 16 : 12;
+    const regionBase = isPublic ? 24 : 16;
+    const bankBase = isPublic ? 14 : 11;
+    this.svg?.style.setProperty("--world-label-size",`${labelBase/scale}px`);
+    this.svg?.style.setProperty("--world-region-size",`${regionBase/scale}px`);
+    this.svg?.style.setProperty("--world-bank-size",`${bankBase/scale}px`);
+    this.changed?.();
+  }
   stop() { cancelAnimationFrame(this.frame); this.frame=0; }
   move(box:CameraBox, animate=true) {
     this.stop();

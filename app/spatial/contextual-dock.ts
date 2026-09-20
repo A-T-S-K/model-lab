@@ -67,8 +67,9 @@ export interface ContextualDockOptions {
 }
 
 function renderExplain(opts: ContextualDockOptions): string {
-  const { model: m, address: a, element, pin, executionProgress, trainingProgress, learningStage, learningModel, learningRouteStop, attract, trainingState } = opts;
+  const { model: m, address: a, element, pin, executionProgress, trainingProgress, learningStage, learningModel, learningRouteStop, attract, trainingState, profile, routePurpose } = opts;
   if (!m) return '<p>No model loaded.</p>';
+  const isPublic = profile !== 'workbench';
 
   if (attract) {
     return `<div class="dock-explain-content" data-testid="dock-explain">
@@ -92,7 +93,8 @@ function renderExplain(opts: ContextualDockOptions): string {
     return `<div class="dock-explain-content" data-testid="dock-explain">
       <div class="dock-overview" data-testid="scene-construction" data-run="${esc(m.source.sourceRunId)}">
         <div class="dock-stage-meaning">
-          <header class="construction-header"><strong>Live training · ${esc(t.phase)}</strong><span>step ${t.acceptedStep} → proposed ${t.acceptedStep + 1}</span></header>
+          ${!isPublic ? `<header class="construction-header"><strong>Live training · ${esc(t.phase)}</strong><span>step ${t.acceptedStep} → proposed ${t.acceptedStep + 1}</span></header>` : ''}
+          ${routePurpose ? `<p class="dock-route-purpose" data-testid="route-purpose">${esc(routePurpose)}</p>` : ''}
           <p class="learning-mechanism">The model compares predictions against known targets to measure error. Sensitivity propagates backward through the network, calculating how much each parameter should adjust. Parameter uses contribute and accumulate into a gradient.</p>
           ${truthCue}
           ${guidance}
@@ -139,8 +141,9 @@ function renderExplain(opts: ContextualDockOptions): string {
   return `<div class="dock-explain-content" data-testid="dock-explain">
     <div class="dock-overview" data-testid="scene-construction" data-run="${esc(m.source.sourceRunId)}">
       <div class="dock-stage-meaning">
-        <header class="construction-header"><strong>${esc(opts.selectedLabel ?? addressLabel(a))}</strong><span>${executionProgress ? 'ACTIVE EXECUTION' : esc(m.source.relationship)} · input ${esc(m.source.capturedDocument)}</span></header>
-        ${c.purpose ? `<p class="construction-purpose">${esc(c.purpose)}</p>` : ''}
+        ${!isPublic ? `<header class="construction-header"><strong>${esc(opts.selectedLabel ?? addressLabel(a))}</strong><span>${executionProgress ? 'ACTIVE EXECUTION' : esc(m.source.relationship)} · input ${esc(m.source.capturedDocument)}</span></header>` : ''}
+        ${routePurpose ? `<p class="dock-route-purpose" data-testid="route-purpose">${esc(routePurpose)}</p>` : ''}
+        ${c.purpose && c.purpose !== routePurpose ? `<p class="construction-purpose">${esc(c.purpose)}</p>` : ''}
         <p class="dock-meaning-text">${esc(c.plainMeaning ?? c.purpose)}</p>
       </div>
       ${c.plainResult ? `<div class="dock-stage-result"><div class="teaching-step"><small class="stage-result-label">OBSERVED RESULT</small><p>${c.plainResult}</p></div></div>` : ''}
@@ -473,7 +476,7 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
   }
 
   const inspectAction = isExpanded
-    ? `<button id="dock-inspect" class="secondary-action dock-tab" data-dock-depth="explain">← Return to overview</button>`
+    ? `<button id="dock-inspect" class="secondary-action dock-tab dock-tab-close" data-dock-depth="explain">← Return to overview</button>`
     : `<button id="dock-inspect" class="secondary-action dock-tab" data-dock-depth="values">Inspect evidence ▾</button>`;
 
   return `<section class="contextual-dock short-guide ${isExpanded ? 'is-expanded' : ''}" data-testid="contextual-dock" data-active-depth="${effectiveDepth}" aria-label="Contextual explanation dock">
@@ -481,12 +484,11 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
       <div class="dock-route-info dock-slot-context">
         ${lessonProgress ? `<span class="lesson-progress" data-testid="lesson-progress">${esc(lessonProgress)}</span>` : ''}
         <span class="dock-selected-object" data-testid="selected-world-object" data-semantic-anchor="${opts.address.kind}" data-position="${opts.address.token}" data-layer="${opts.address.layer ?? ''}" data-run-id="${esc(opts.model?.source.sourceRunId ?? '')}">${esc(opts.selectedLabel ?? addressLabel(opts.address))}</span>
-        ${routePurpose ? `<span class="route-purpose" data-testid="route-purpose">${esc(routePurpose)}</span>` : ''}
-        <p role="status" class="dock-status-message">${esc(opts.shortMessage)} ${opts.shortDetour ? 'Exploring a detour. Resume explicitly to return. ' : ''}</p>
+        ${opts.trainingState ? `<span data-testid="execution-frontier" class="execution-frontier-tag">${esc(opts.trainingState.frontierText)}</span>` : ''}
+        ${shortDetour ? `<span class="dock-detour-badge">Detour</span>` : ''}
       </div>
       <div class="dock-route-actions dock-slot-actions"${opts.trainingState ? ` id="execution-controls" data-execution-id="${esc(opts.trainingState.executionId)}" data-sequence="${opts.trainingState.sequence}" data-training-phase="${esc(opts.trainingState.phase)}"` : ''}>
         <div class="dock-slot-secondary">
-          ${opts.trainingState ? `<span data-testid="execution-frontier" class="execution-frontier-tag">${esc(opts.trainingState.frontierText)}</span>` : ''}
           ${inspectAction}
           ${opts.trainingState ? (
             opts.trainingState.ready ? `
@@ -523,7 +525,6 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
       <button class="dock-tab ${effectiveDepth === 'math' ? 'active' : ''}" data-dock-depth="math" ${effectiveDepth === 'math' ? 'aria-pressed="true"' : ''}>Exact Math</button>
       <button class="dock-tab ${effectiveDepth === 'source' ? 'active' : ''}" data-dock-depth="source" ${effectiveDepth === 'source' ? 'aria-pressed="true"' : ''}>Source</button>
       ${hasComparison ? `<button class="dock-tab ${effectiveDepth === 'compare' ? 'active' : ''}" data-dock-depth="compare" ${effectiveDepth === 'compare' ? 'aria-pressed="true"' : ''}>Compare</button>` : ''}
-      <button class="dock-tab-close" data-dock-depth="explain" title="Return to overview" aria-label="Return to overview">← Return to overview</button>
     </nav>
     ` : ''}
     <div class="dock-body" data-testid="dock-body">
