@@ -14,6 +14,7 @@ import {
   type PublicTourState,
   type TourEvidence,
 } from '../../app/spatial/public-tour.js';
+import { sceneSvg } from '../../app/spatial/scene.js';
 
 test('PUBLIC_TOUR_STATES is a complete current UI representation without freezing a curriculum state count', () => {
   assert.equal(new Set(PUBLIC_TOUR_STATES).size, PUBLIC_TOUR_STATES.length);
@@ -33,7 +34,7 @@ test('PUBLIC_TOUR_STATES is a complete current UI representation without freezin
 test('Part 1 current UI sequence follows the LS0 chapter spine without a global state counter', () => {
   const expected = [
     { state: 'p1_prediction_preview', next: 'p1_represent', progress: 'Part 1 · Make a Prediction · Opening', anchor: 'probabilities', action: 'See how it got there', guardrail: /authentic prediction/ },
-    { state: 'p1_represent', next: 'p1_qkv', progress: 'Part 1 · Represent · Representation', anchor: 'embeddingNorm', action: 'Continue: Q / K / V', guardrail: /learned numerical features/ },
+    { state: 'p1_represent', next: 'p1_qkv', progress: 'Part 1 · Represent · Representation', anchor: 'preAttentionNorm', action: 'Continue: Q / K / V', guardrail: /learned numerical features/ },
     { state: 'p1_qkv', next: 'p1_attention_compare', progress: 'Part 1 · Attend · Q / K / V', anchor: 'q', action: 'Continue: Compare positions', guardrail: /not literal human questions/ },
     { state: 'p1_attention_compare', next: 'p1_attention_weights', progress: 'Part 1 · Attend · Compare positions', anchor: 'attentionLogits', action: 'Continue: Attention weights', guardrail: /unavailable/ },
     { state: 'p1_attention_weights', next: 'p1_value_mixture', progress: 'Part 1 · Attend · Attention weights', anchor: 'attentionProbabilities', action: 'Continue: Mix Values', guardrail: /mixing coefficient/ },
@@ -82,13 +83,20 @@ test('Part 1 grouped mechanisms declare the required connected focus spans', () 
   };
 
   const represent = nodeKeys('p1_represent');
-  for (const kind of ['tokenEmbedding', 'positionEmbedding', 'embeddingSum', 'embeddingNorm']) {
+  for (const kind of ['tokenEmbedding', 'positionEmbedding', 'embeddingSum', 'embeddingNorm', 'preAttentionNorm']) {
     assert(represent.has(`${kind}:*`), `Representation focus missing ${kind}`);
   }
+  const representEdges = edgeKeys('p1_represent');
+  assert(representEdges.has('embeddingNorm->preAttentionNorm:*:'), 'Representation must include the second rescaling before attention');
+  assert(representEdges.has('embeddingNorm->attentionResidual:*:'), 'Representation must establish the saved attention bypass');
 
   const qkv = nodeKeys('p1_qkv');
   for (const kind of ['preAttentionNorm', 'q', 'k', 'v']) {
     assert([...qkv].some(key => key.startsWith(`${kind}:`)), `Q/K/V focus missing ${kind}`);
+  }
+  const qkvEdges = edgeKeys('p1_qkv');
+  for (const kind of ['q', 'k', 'v']) {
+    assert(qkvEdges.has(`preAttentionNorm->${kind}:0:`), `Q/K/V focus missing preAttentionNorm -> ${kind} for head 0`);
   }
 
   const attention = nodeKeys('p1_attention_integration');
@@ -104,6 +112,39 @@ test('Part 1 grouped mechanisms declare the required connected focus spans', () 
     assert([...mlp].some(key => key.startsWith(`${kind}:`)), `MLP focus missing ${kind}`);
   }
   assert(edgeKeys('p1_transform').has('attentionResidual->mlpResidual:*:'), 'MLP residual bypass must be explicit');
+});
+
+test('canonical scene emits the three-way pre-attention input branch for both heads', () => {
+  const visibleKinds = ['preAttentionNorm', 'q', 'k', 'v'];
+  const forward = {
+    descriptor: {
+      presentation: 'microgpt-canonical-curated',
+      nodes: visibleKinds.map(operation => ({ operation })),
+    },
+    activationKind: 'mlpRelu',
+    width: 4,
+    input: [0, 1, 2, 3],
+    values: () => Array(8).fill(0),
+    executionState: () => 'available',
+    operations: [],
+    vocabulary: ['a', 'b', 'c', 'BOS'],
+    matrix: () => undefined,
+  } as any;
+  const svg = sceneSvg(
+    forward,
+    { kind: 'preAttentionNorm', token: 3 },
+    0,
+    undefined,
+    ['a · 0', 'b · 1', 'c · 2', 'a · 3'],
+    3,
+  );
+
+  for (const head of [0, 1]) {
+    for (const kind of ['q', 'k', 'v']) {
+      const edge = `data-edge-from="preAttentionNorm" data-edge-to="${kind}" data-edge-head="${head}"`;
+      assert(svg.includes(edge), `Canonical scene missing ${edge}`);
+    }
+  }
 });
 
 test('Current Part 2 UI representation preserves its truth-guarded teaching moments', () => {
