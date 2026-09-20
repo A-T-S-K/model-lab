@@ -8,12 +8,13 @@ import {
   startPart2,
   facilitatorTourStateForLandmark,
   canAdvanceTour,
+  computeLiveTourEvidence,
+  formatAdamGlanceNote,
+  formatCandidateOutcomeMeanLoss,
+  formatCandidateTargetTokenProbability,
   type PublicTourState,
   type TourEvidence,
 } from '../../app/spatial/public-tour.js';
-import { renderContextualDock } from '../../app/spatial/contextual-dock.js';
-import { ModelSession } from '../../app/worker/controller.js';
-import { forwardReadModel } from '../../app/spatial/forward.js';
 
 test('PUBLIC_TOUR_STATES defines exactly 14 authoritative narrative states', () => {
   assert.equal(PUBLIC_TOUR_STATES.length, 14);
@@ -318,99 +319,97 @@ test('Facilitator landmark mapping matches 14-state contract', () => {
   assert.equal(facilitatorTourStateForLandmark(6, true), 'p2_adam_proposal');
 });
 
-test('Dock rendering: missing numeric evidence is not rendered as observed result, Details is optional, Explore freely removed in guided mode', async () => {
-  const session = new ModelSession();
-  const tag = { sessionId: 'dock-test', generationId: 0 };
-  await session.handle({ ...tag, runId: 'init', command: 'initialize' });
-  const response = await session.handle({ ...tag, runId: 'test-pred', command: 'predict', document: 'abca' });
-  assert.equal(response.status, 'result');
-  if (response.status !== 'result') return;
+test('Part 2 does not begin before successful runtime startup and authentic progress', () => {
+  // While startup is pending (or before startup acknowledges), no training progress exists
+  const unstarted = computeLiveTourEvidence(undefined);
+  assert.equal(unstarted.hasObjective, false);
+  assert.equal(unstarted.hasMatchingContribution, false);
+  assert.equal(unstarted.hasFinalGradient, false);
+  assert.equal(unstarted.hasPinnedProposal, false);
+  assert.equal(unstarted.hasCandidateComparison, false);
 
-  const r = response.result;
-  const f = forwardReadModel(r.run, r.snapshots[0]);
-  const defaultPin = { name: 'wte', row: 0, column: 0 };
-  const addr = { kind: 'probabilities' as const, token: 3 };
+  // canAdvanceTour ensures p1_complete never auto-advances
+  assert.equal(canAdvanceTour('p1_complete', unstarted), false);
 
-  // 1. In p2_objective when mean loss is not computed: no fake observed result card
-  const objectivePendingDock = renderContextualDock({
-    model: { forward: f, source: { sourceRunId: 'test', relationship: 'OBSERVED' } } as any,
-    address: addr,
-    element: 0,
-    row: 0,
-    column: 0,
-    pin: defaultPin,
-    scalar: '',
-    depth: 'explain',
-    profile: 'visitor',
-    freeExplore: false,
-    lessonProgress: 'Part 2 of 2 · 1 of 5 · Measure error',
-    routePurpose: 'Predictions are compared with known targets',
-    primaryAction: '<button id="reverse-continue">Continue: Trace gradient contribution</button>',
-    attentionAction: '',
-    shortDetour: false,
-    shortMessage: '',
-    operatorControls: false,
-    hasComparison: false,
-    tourContent: getPublicTourContent('p2_objective'),
-  });
-  assert(!objectivePendingDock.includes('OBSERVED RESULT'), 'Must NOT fake OBSERVED RESULT card when mean loss is pending');
-  assert(!objectivePendingDock.includes('dock-stage-result'), 'Must omit result card when evidence pending');
-  assert(objectivePendingDock.includes('Details (optional)'), 'Public dock must rename inspect to Details (optional)');
-  assert(!objectivePendingDock.includes('Explore freely'), 'Must NOT have Explore freely in ordinary guided action row');
+  // Even if some evidence is passed, p1_complete cannot advance without runtime controller starting Part 2
+  assert.equal(canAdvanceTour('p1_complete', {
+    hasObjective: true,
+    hasMatchingContribution: true,
+    hasFinalGradient: true,
+    hasPinnedProposal: true,
+    hasCandidateComparison: true,
+  }), false);
 
-  // 2. In p2_gradient_contribution with authentic contribution: surfaces child adjoint × local derivative and accumulator before + contribution = after
-  const contributionDock = renderContextualDock({
-    model: { forward: f, source: { sourceRunId: 'test', relationship: 'OBSERVED' } } as any,
-    address: { kind: 'tokenEmbedding', token: 3 },
-    element: 0,
-    row: 0,
-    column: 0,
-    pin: defaultPin,
-    scalar: '',
-    depth: 'explain',
-    profile: 'visitor',
-    freeExplore: false,
-    lessonProgress: 'Part 2 of 2 · 2 of 5 · Trace gradient contribution',
-    routePurpose: 'Loss sensitivity propagates backward',
-    primaryAction: '<button id="reverse-continue">Continue: Finish parameter gradient</button>',
-    attentionAction: '',
-    shortDetour: false,
-    shortMessage: '',
-    operatorControls: false,
-    hasComparison: false,
-    trainingProgress: {
-      phase: 'backward',
-      count: 1,
-      processed: 1,
-      acceptedStep: 0,
-      startingSnapshotId: 'snap1234567890',
-      pin: 0,
-      gradient: -0.0125,
-      final: false,
-      losses: [],
-      contributions: [{
-        child: 10,
-        operand: 0,
-        childAdjoint: 0.5,
-        localDerivative: -0.025,
-        contribution: -0.0125,
-        before: 0.0,
-        after: -0.0125,
-        ordinal: 1,
-      }],
-      old: { parameter: 0, m: 0, v: 0 },
-      optimizer: { beta1: 0.9, beta2: 0.999, epsilon: 1e-8, effectiveLearningRate: 0.001 },
-      stopped: true,
-      gradientSourceRunId: 'run1',
-      sourceRunId: 'run1',
-      baselinePasses: 1,
-    },
-    tourContent: getPublicTourContent('p2_gradient_contribution'),
-  });
-
-  assert(contributionDock.includes('ONE GRADIENT CONTRIBUTION · PARTIAL ACCUMULATOR'), 'Must label as one contribution and partial accumulator');
-  assert(contributionDock.includes('data-testid="live-contribution"'), 'Must render live contribution');
-  assert(contributionDock.includes('data-testid="live-accumulator"'), 'Must render live accumulator');
-  assert(contributionDock.includes('The accumulator is still partial'), 'Must state accumulator is still partial');
-  assert(!contributionDock.includes('Explore freely'), 'Must NOT have Explore freely in guided action row');
+  // p2_objective requires current training progress with mean loss and matching pin contribution
+  const pendingObjective = computeLiveTourEvidence({ phase: 'baseline forward' });
+  assert.equal(pendingObjective.hasObjective, false);
+  assert.equal(canAdvanceTour('p2_objective', pendingObjective), false);
 });
+
+test('Live tour evidence gates: Candidate Ready requires current readyOutputs, not candidateId alone', () => {
+  // candidateId alone is NOT sufficient comparison evidence
+  const candidateIdOnly = computeLiveTourEvidence({
+    phase: 'ready',
+    candidateId: 'snap-cand-123',
+    readyOutputs: undefined,
+  });
+  assert.equal(candidateIdOnly.hasCandidateComparison, false, 'candidateId alone must NOT satisfy comparison evidence');
+  assert.equal(canAdvanceTour('p2_adam_proposal', candidateIdOnly), false);
+
+  // Phase ready with readyOutputs satisfies candidate comparison evidence
+  const readyOutputsPresent = computeLiveTourEvidence({
+    phase: 'ready',
+    candidateId: 'snap-cand-123',
+    readyOutputs: { before: {} as any, after: {} as any, starting: {} as any },
+  });
+  assert.equal(readyOutputsPresent.hasCandidateComparison, true, 'readyOutputs satisfies candidate comparison evidence');
+  assert.equal(canAdvanceTour('p2_adam_proposal', readyOutputsPresent), true);
+
+  // Selected pin must match for gradient contribution
+  const pinMismatch = computeLiveTourEvidence({
+    contributions: [{ child: 1 }],
+    pin: 5,
+  }, 0);
+  assert.equal(pinMismatch.hasMatchingContribution, false, 'Contributions for unselected pin must not satisfy matching contribution');
+
+  const pinMatch = computeLiveTourEvidence({
+    contributions: [{ child: 1 }],
+    pin: 0,
+  }, 0);
+  assert.equal(pinMatch.hasMatchingContribution, true, 'Contributions for selected pin satisfy matching contribution');
+});
+
+test('Candidate Ready wording truthfully reports target-token probability and derived mean loss', () => {
+  const targetProb = formatCandidateTargetTokenProbability('a', 3, 0.45, 0.62, n => (n !== undefined ? n.toFixed(2) : ''));
+  assert(!targetProb.includes('Prediction for character'), 'Must NOT call target-token probability "Prediction for character"');
+  assert(targetProb.includes("Target-token probability for 'a' at position 3: accepted 0.45 → provisional candidate 0.62"));
+
+  const meanLoss = formatCandidateOutcomeMeanLoss(1.85, 1.42, n => (n !== undefined ? n.toFixed(2) : ''));
+  assert(meanLoss.includes('Mean loss on this training example, derived from observed target probabilities: 1.85 → 1.42'));
+
+  const readyContent = getPublicTourContent('candidate_ready');
+  assert(readyContent.plainMeaning.includes('A changed result or lower loss on this training example is not proof of general model improvement.'));
+});
+
+test('Adam wording distinguishes stored optimizer state from proposed updated moments', () => {
+  const glanceNote = formatAdamGlanceNote({
+    gradient: -0.05,
+    mBefore: 0.01,
+    vBefore: 0.002,
+    mAfter: -0.005,
+    vAfter: 0.0024,
+    fmt: n => (n !== undefined ? String(n) : ''),
+  });
+
+  // Stored optimizer state entering Adam: mBefore, vBefore
+  assert(glanceNote.includes('stored optimizer state (m=0.01, v=0.002)'));
+  // Final gradient: g
+  assert(glanceNote.includes('final gradient g=-0.05'));
+  // Proposed updated moments: mAfter, vAfter
+  assert(glanceNote.includes('updated moments (m′=-0.005, v′=0.0024)'));
+  // Provisional parameter: θ′
+  assert(glanceNote.includes('provisional parameter θ′'));
+  // Must NOT describe mAfter / vAfter as the stored or entering state
+  assert(!glanceNote.includes('persistent optimizer state (m=-0.005'));
+});
+

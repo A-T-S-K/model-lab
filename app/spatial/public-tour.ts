@@ -386,3 +386,73 @@ export function canAdvanceTour(current: PublicTourState, evidence: TourEvidence)
       return true;
   }
 }
+
+export interface LiveTrainingProgressEvidence {
+  readonly phase?: string;
+  readonly mean?: number;
+  readonly pin?: number;
+  readonly contributions?: readonly unknown[];
+  readonly final?: boolean;
+  readonly gradient?: number;
+  readonly proposal?: unknown;
+  readonly readyOutputs?: unknown;
+  readonly candidateId?: string;
+}
+
+export function computeLiveTourEvidence(
+  trainingProgress?: LiveTrainingProgressEvidence,
+  selectedPinIndex?: number,
+): TourEvidence {
+  const t = trainingProgress;
+  const hasObjective = t?.mean !== undefined;
+  const hasMatchingContribution = Boolean(
+    t &&
+    t.contributions &&
+    t.contributions.length > 0 &&
+    (selectedPinIndex === undefined || t.pin === selectedPinIndex)
+  );
+  const hasFinalGradient = Boolean(t && t.final === true && t.gradient !== undefined);
+  const hasPinnedProposal = Boolean(t && t.proposal !== undefined);
+  const hasCandidateComparison = Boolean(t && t.phase === 'ready' && t.readyOutputs);
+
+  return {
+    hasObjective,
+    hasMatchingContribution,
+    hasFinalGradient,
+    hasPinnedProposal,
+    hasCandidateComparison,
+  };
+}
+
+export function formatAdamGlanceNote(u: {
+  gradient: number;
+  mBefore: number;
+  mAfter: number;
+  vBefore: number;
+  vAfter: number;
+  fmt?: (n: number | undefined) => string;
+}): string {
+  const f = u.fmt ?? ((n: number | undefined) => (n !== undefined ? String(n) : ''));
+  return `Adam combines final gradient g=${f(u.gradient)} with stored optimizer state (m=${f(u.mBefore)}, v=${f(u.vBefore)}) to propose updated moments (m′=${f(u.mAfter)}, v′=${f(u.vAfter)}) and provisional parameter θ′. The proposal is provisional; the accepted model has not changed.`;
+}
+
+export function formatCandidateOutcomeMeanLoss(
+  meanBefore: number,
+  meanAfter: number,
+  fmt?: (n: number | undefined) => string,
+): string {
+  const f = fmt ?? ((n: number | undefined) => (n !== undefined ? String(n) : ''));
+  return `Mean loss on this training example, derived from observed target probabilities: ${f(meanBefore)} → ${f(meanAfter)}`;
+}
+
+export function formatCandidateTargetTokenProbability(
+  targetTokenLabel: string,
+  targetPos: number,
+  probBefore: number | undefined,
+  probAfter: number | undefined,
+  fmt?: (n: number | undefined) => string,
+): string {
+  const f = fmt ?? ((n: number | undefined) => (n !== undefined ? String(n) : ''));
+  return `Target-token probability for '${targetTokenLabel}' at position ${targetPos}: accepted ${f(probBefore)} → provisional candidate ${f(probAfter)}`;
+}
+

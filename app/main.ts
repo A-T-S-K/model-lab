@@ -265,6 +265,9 @@ function forwardChanged() {
     const profile = currentProfile();
     const training = forwardDriver.progress?.training;
     const boundary = forwardDriver.progress?.last;
+    if (spatialPresenter.isPublicProfile() && spatialPresenter.publicTourState === 'p1_complete' && training) {
+      spatialPresenter.startPart2();
+    }
     if (forwardDriver.follow) {
       if (training?.phase.endsWith('forward')) {
         // Real forward phases (baseline forward, training forward, candidate forward)
@@ -351,6 +354,7 @@ function bindForwardControls() {
     });
     mount.querySelector('#execution-pause')?.addEventListener('click', () => forwardDriver.pause());
     mount.querySelector('#execution-cancel')?.addEventListener('click', () => void cancelForward());
+    mount.querySelector('#tour-restart')?.addEventListener('click', () => void restartPublicTour());
     mount.querySelector('#execution-follow')?.addEventListener('change', event => { forwardDriver.follow = (event.target as HTMLInputElement).checked; });
 }
 function syncTrainingPin() {
@@ -384,6 +388,19 @@ function discardForward() {
   cancelRetention(activeRetentionTransaction); activeRetentionTransaction = undefined;
   forwardDriver.discard(); result = beforeForward; beforeForward = undefined; restoreExecutionView();
   player = result && new TracePlayer(result.run); clearDisplayedInspection();
+}
+async function restartPublicTour(): Promise<void> {
+  if (busy || !ready || forwardDriver.active) return;
+  const receipt = await execute('predict');
+  if (receipt.status === 'completed' && result) {
+    if (spatialPresenter.isPublicProfile()) {
+      spatialPresenter.publicTourState = 'p1_prediction_preview';
+      spatialPresenter.publicTourOutcome = undefined;
+      spatialPresenter.tourTargetState = undefined;
+      spatialPresenter.applyTourSelection();
+      render();
+    }
+  }
 }
 
 let selectedToken = 0;

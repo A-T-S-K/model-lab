@@ -21,7 +21,7 @@ import { experienceCapabilities, type ExperienceProfile } from "../presentation/
 import { renderContextualDock, type DockDepth, type PublicTrainingActionState } from "./contextual-dock.js";
 export { type PublicTrainingActionState } from "./contextual-dock.js";
 import type { PublicTourState, PublicTourOutcome, TourEvidence } from './public-tour.js';
-import { getPublicTourContent, advanceTour, previousTourState, startPart2, facilitatorTourStateForLandmark, canAdvanceTour } from './public-tour.js';
+import { getPublicTourContent, advanceTour, previousTourState, startPart2, facilitatorTourStateForLandmark, canAdvanceTour, computeLiveTourEvidence } from './public-tour.js';
 
 export function computeTrainingActionState(
   execution: ForwardDriver | undefined,
@@ -137,7 +137,11 @@ export class SpatialPresenter {
   }
 
   getTourEvidence(): TourEvidence {
-    const t = this.state?.execution?.progress?.training;
+    const exec = this.state?.execution;
+    const t = exec?.progress?.training;
+    if (this.isPublicProfile()) {
+      return computeLiveTourEvidence(t, exec?.pin);
+    }
     const lm = this.state?.learning;
     const hasObjective = (t?.mean !== undefined) || (lm?.available === true && lm.objective?.mean !== undefined);
     const hasMatchingContribution = Boolean((t?.contributions && t.contributions.length > 0) || (lm?.available === true && lm.backward?.contributions?.length > 0));
@@ -837,22 +841,6 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
       this.reverseRoute(0);
       changed();
       render();
-    });
-    on('#short-teach', () => {
-      if (this.isPublicProfile()) {
-        this.startPart2();
-        changed();
-        render();
-        return;
-      }
-    });
-    on('#tour-restart', () => {
-      if (this.isPublicProfile()) {
-        this.resetVisitor();
-        changed();
-        render();
-        return;
-      }
     });
     on('#operator-controls',()=>{this.operatorControls=!this.operatorControls;render();});
     on('#short-resume',()=>{

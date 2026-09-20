@@ -5,6 +5,7 @@ import type { ForwardProgress } from '../worker/protocol.js';
 import type { TrainingProgress } from '../worker/training-execution.js';
 import type { LearningModel, LearningStage, ParameterPin } from './learning.js';
 import type { PublicTourContent, PublicTourOutcome } from './public-tour.js';
+import { formatAdamGlanceNote, formatCandidateOutcomeMeanLoss, formatCandidateTargetTokenProbability } from './public-tour.js';
 import { outputTokenName, outputSummary, outputMetrics, componentComparison, type OutputPair } from './comparison.js';
 import { geometry, projection } from './view.js';
 import { probabilityColor } from './geometry.js';
@@ -92,7 +93,7 @@ function renderExplain(opts: ContextualDockOptions): string {
         stageResult = `<div class="dock-stage-result"><div class="teaching-step"><small class="stage-result-label">${esc(tc.resultConcept?.label?.toUpperCase() ?? 'OBSERVED RESULT')}</small><p>${c.plainResult}</p></div></div>`;
       }
     } else if (tc.state === 'p2_objective') {
-      const meanVal = trainingProgress?.mean ?? (learningModel?.available ? learningModel.objective.mean : undefined);
+      const meanVal = trainingProgress?.mean;
       if (meanVal !== undefined) {
         stageResult = `<div class="dock-stage-result">
           <div class="teaching-step">
@@ -102,7 +103,7 @@ function renderExplain(opts: ContextualDockOptions): string {
         </div>`;
       }
     } else if (tc.state === 'p2_gradient_contribution') {
-      const event = trainingProgress?.contributions.at(-1) ?? (learningModel?.available && learningModel.backward.contributions.length > 0 ? learningModel.backward.contributions[0] : undefined);
+      const event = trainingProgress?.contributions.at(-1);
       if (event) {
         const beforeVal = 'before' in event ? (event as any).before as number : undefined;
         const afterVal = 'after' in event ? (event as any).after as number : undefined;
@@ -117,8 +118,8 @@ function renderExplain(opts: ContextualDockOptions): string {
         </div>`;
       }
     } else if (tc.state === 'p2_final_gradient') {
-      const gradient = trainingProgress ? trainingProgress.gradient : (learningModel?.available ? learningModel.backward.gradient : undefined);
-      const isFinal = trainingProgress ? trainingProgress.final : (learningModel?.available ? true : false);
+      const gradient = (trainingProgress && trainingProgress.final) ? trainingProgress.gradient : undefined;
+      const isFinal = Boolean(trainingProgress?.final);
       if (gradient !== undefined && isFinal) {
         stageResult = `<div class="dock-stage-result">
           <div class="teaching-step">
@@ -130,19 +131,19 @@ function renderExplain(opts: ContextualDockOptions): string {
         </div>`;
       }
     } else if (tc.state === 'p2_adam_proposal') {
-      const u = trainingProgress?.proposal ?? (learningModel?.available ? learningModel.adam?.update : undefined);
+      const u = trainingProgress?.proposal;
       if (u) {
         stageResult = `<div class="dock-stage-result">
           <div class="teaching-step">
             <small class="stage-result-label">PROVISIONAL ADAM PROPOSAL</small>
             <div class="dock-pin-info"><span data-testid="pin-owner">${esc(pinLabel)}</span></div>
             <p class="learning-provisional">Candidate proposal: θ ${fmt(u.before)} → provisional θ′ <span data-testid="live-proposal" data-value="${u.after}">${fmt(u.after)}</span></p>
-            <p class="learning-adam-note">Adam uses the final gradient and persistent optimizer state (m=${fmt(u.mAfter)}, v=${fmt(u.vAfter)}). This proposal is provisional; the accepted model has not changed.</p>
+            <p class="learning-adam-note">${esc(formatAdamGlanceNote({ ...u, fmt }))}</p>
           </div>
         </div>`;
       }
     } else if (tc.state === 'candidate_ready') {
-      const pair = outputPair ?? (trainingProgress?.readyOutputs ? { before: trainingProgress.readyOutputs.before, after: trainingProgress.readyOutputs.after } : undefined);
+      const pair = trainingProgress?.readyOutputs ? { before: trainingProgress.readyOutputs.before, after: trainingProgress.readyOutputs.after } : undefined;
       if (pair && pair.before?.manifest?.input && pair.after?.manifest?.input) {
         const ma = outputMetrics(pair.before);
         const mb = outputMetrics(pair.after);
@@ -156,8 +157,8 @@ function renderExplain(opts: ContextualDockOptions): string {
         stageResult = `<div class="dock-stage-result">
           <div class="teaching-step">
             <small class="stage-result-label">PROVISIONAL CANDIDATE OUTCOME</small>
-            <p class="candidate-outcome-summary">Loss on this training example: <span data-testid="before-mean" data-value="${ma.mean}">${fmt(ma.mean)}</span> → <span data-testid="after-mean" data-value="${mb.mean}">${fmt(mb.mean)}</span></p>
-            <p class="candidate-prediction-change">Prediction for character '${esc(targetTokenLabel)}' at position ${targetPos}: accepted ${fmt(probBefore)} → provisional candidate ${fmt(probAfter)}</p>
+            <p class="candidate-outcome-summary">Mean loss on this training example, derived from observed target probabilities: <span data-testid="before-mean" data-value="${ma.mean}">${fmt(ma.mean)}</span> → <span data-testid="after-mean" data-value="${mb.mean}">${fmt(mb.mean)}</span></p>
+            <p class="candidate-prediction-change">Target-token probability for '${esc(targetTokenLabel)}' at position ${targetPos}: accepted ${fmt(probBefore)} → provisional candidate ${fmt(probAfter)}</p>
             <p class="candidate-generalization-note">A changed result or lower loss on this training example is not proof of general model improvement.</p>
           </div>
         </div>`;
