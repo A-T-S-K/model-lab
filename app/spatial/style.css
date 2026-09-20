@@ -590,6 +590,15 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   cursor: not-allowed;
 }
 
+.contextual-dock .dock-slot-primary .primary-action.is-working,
+.contextual-dock .primary-action.is-working,
+[data-experience-profile="visitor"] .primary-action.is-working {
+  background: #19313d;
+  border-color: #3b5f73;
+  color: #a0d4eb;
+  cursor: wait;
+}
+
 .contextual-dock .dock-slot-secondary button,
 .contextual-dock .secondary-action,
 [data-experience-profile="visitor"] .secondary-action,

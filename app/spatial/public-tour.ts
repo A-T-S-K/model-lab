@@ -456,3 +456,77 @@ export function formatCandidateTargetTokenProbability(
   return `Target-token probability for '${targetTokenLabel}' at position ${targetPos}: accepted ${f(probBefore)} → provisional candidate ${f(probAfter)}`;
 }
 
+export function getPendingTourActionLabel(state: PublicTourState): string {
+  switch (state) {
+    case 'p2_objective':
+      return 'Tracing contribution...';
+    case 'p2_gradient_contribution':
+      return 'Finishing gradient...';
+    case 'p2_final_gradient':
+      return 'Computing Adam proposal...';
+    case 'p2_adam_proposal':
+      return 'Evaluating candidate...';
+    case 'p1_complete':
+      return 'Starting learning...';
+    default:
+      return 'Working...';
+  }
+}
+
+export interface PublicStatusOptions {
+  readonly currentState: PublicTourState;
+  readonly targetState?: PublicTourState;
+  readonly phase?: string;
+  readonly driverPhase?: string;
+  readonly final?: boolean;
+}
+
+export function getPublicExecutionStatus(opts: PublicStatusOptions): string {
+  const { currentState, targetState, phase, driverPhase, final } = opts;
+
+  if (driverPhase === 'cancelling') {
+    return 'Cancelling execution...';
+  }
+
+  if (phase === 'ready' || currentState === 'candidate_ready') {
+    return 'Candidate ready — not accepted';
+  }
+
+  const isWorking = Boolean(targetState) || driverPhase === 'running';
+  if (!isWorking) {
+    return '';
+  }
+
+  const effectiveTarget = targetState ?? advanceTour(currentState);
+
+  switch (effectiveTarget) {
+    case 'p2_gradient_contribution':
+      if (phase && phase.endsWith('forward')) {
+        return 'Preparing training objective...';
+      }
+      if (phase === 'loss') {
+        return 'Measuring error across target positions...';
+      }
+      return "Finding the selected parameter's gradient contribution...";
+
+    case 'p2_final_gradient':
+      if (final) {
+        return "Finding the selected parameter's final gradient...";
+      }
+      return 'Finishing backward pass...';
+
+    case 'p2_adam_proposal':
+      return 'Computing Adam proposal...';
+
+    case 'candidate_ready':
+      return 'Evaluating provisional candidate...';
+
+    case 'p2_objective':
+      return 'Starting learning pass...';
+
+    default:
+      return 'Working...';
+  }
+}
+
+

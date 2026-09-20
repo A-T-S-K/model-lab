@@ -10,6 +10,7 @@ import type { WorldSelection } from './spatial/topology.js';
 import { learningReadModel, resolveParameter, type LearningStage } from "./spatial/learning.js";
 import { SpatialPresenter } from "./spatial/presenter.js";
 import { PUBLIC_HOME } from "./spatial/camera.js";
+import { getPublicExecutionStatus } from "./spatial/public-tour.js";
 import { exhibitTiming, exhibitState } from "./presentation/exhibit-state.js";
 import { experienceCapabilities, resolveExperienceProfile, type ExperienceCapabilities, type ExperienceProfile } from "./presentation/experience-profile.js";
 import plexSansLicense from "@ibm/plex-sans/fonts/complete/woff2/license.txt?url";
@@ -234,6 +235,7 @@ function restoreExecutionView() {
 const forwardDriver = new ForwardDriver(client, forwardChanged, async incoming => {
   const transaction = activeRetentionTransaction; activeRetentionTransaction = undefined;
   beforeForward = undefined; beforeForwardLocation = undefined;
+  spatialPresenter.tourTargetState = undefined;
   await execute(incoming.learn ? "train" : "predict", 1, false, incoming, transaction);
   if (spatialPresenter.isPublicProfile() && spatialPresenter.publicTourState === 'candidate_ready') {
     spatialPresenter.publicTourState = 'tour_complete';
@@ -243,6 +245,7 @@ const forwardDriver = new ForwardDriver(client, forwardChanged, async incoming =
   }
 }, failure => {
   cancelRetention(activeRetentionTransaction); activeRetentionTransaction = undefined;
+  spatialPresenter.tourTargetState = undefined;
   result = beforeForward; beforeForward = undefined; restoreExecutionView();
   player = result && new TracePlayer(result.run);
   clearDisplayedInspection();
@@ -252,6 +255,7 @@ const forwardDriver = new ForwardDriver(client, forwardChanged, async incoming =
 client.onFailure = failure => {
   if (!forwardDriver.active) return;
   cancelRetention(activeRetentionTransaction); activeRetentionTransaction = undefined;
+  spatialPresenter.tourTargetState = undefined;
   discardForward(); ready = false;
   status = "Worker failed · partial prediction released · Reset model or Clear session to restart";
   error = failure.message; render();
@@ -294,11 +298,25 @@ function forwardChanged() {
         spatialPresenter.followBoundary(boundary);
       }
     }
-    status = `${forwardDriver.phase === 'pausing' ? 'Pausing · admitted operator may finish' : forwardDriver.pending && forwardDriver.phase === 'paused' ? 'Executing one admitted operator' : forwardDriver.phase === 'running' ? 'Running · paced operator execution' : forwardDriver.phase === 'starting' ? 'Preparing input and checkpoint' : forwardDriver.phase === 'cancelling' ? 'Cancelling execution' : 'Paused · no future permits'} · ${forwardDriver.progress?.sequence}/${forwardDriver.progress?.total}`;
-    if (training) status = `Accepted step ${training.acceptedStep} · ${training.phase === 'ready' ? 'Candidate ready — not accepted' : training.phase} · candidate is provisional`;
+    if (spatialPresenter.isPublicProfile()) {
+      status = getPublicExecutionStatus({
+        currentState: spatialPresenter.publicTourState,
+        targetState: spatialPresenter.tourTargetState,
+        phase: training?.phase,
+        driverPhase: forwardDriver.phase,
+        final: training?.final,
+      });
+      if (!status) {
+        status = training?.phase === 'ready' ? 'Candidate ready — not accepted' : 'Live training';
+      }
+    } else {
+      status = `${forwardDriver.phase === 'pausing' ? 'Pausing · admitted operator may finish' : forwardDriver.pending && forwardDriver.phase === 'paused' ? 'Executing one admitted operator' : forwardDriver.phase === 'running' ? 'Running · paced operator execution' : forwardDriver.phase === 'starting' ? 'Preparing input and checkpoint' : forwardDriver.phase === 'cancelling' ? 'Cancelling execution' : 'Paused · no future permits'} · ${forwardDriver.progress?.sequence}/${forwardDriver.progress?.total}`;
+      if (training) status = `Accepted step ${training.acceptedStep} · ${training.phase === 'ready' ? 'Candidate ready — not accepted' : training.phase} · candidate is provisional`;
+    }
     syncSpatialSelection();
   } else if (!forwardDriver.active) {
     cancelRetention(activeRetentionTransaction); activeRetentionTransaction = undefined;
+    spatialPresenter.tourTargetState = undefined;
     result = beforeForward; beforeForward = undefined; restoreExecutionView(); player = result && new TracePlayer(result.run);
     status = "Execution cancelled · prior completed evidence preserved";
     clearDisplayedInspection();
@@ -366,6 +384,7 @@ function syncTrainingPin() {
 }
 async function startForward(training = false) {
   if (busy || !ready || forwardDriver.active) return;
+  spatialPresenter.tourTargetState = undefined;
   try { activeRetentionTransaction = await beginRetention('canonical'); }
   catch (failure) { error = failure instanceof Error ? failure.message : String(failure); status = 'Retention capacity refused · no execution started'; render(); return; }
   readyComparison=true; beforeForwardLocation = spatialPresenter.captureLocation(); beforeForwardExperiment = spatialExperimentId;
@@ -375,6 +394,7 @@ async function startForward(training = false) {
   syncTrainingPin(); await forwardDriver.start(documentText, training);
 }
 async function cancelForward() {
+  spatialPresenter.tourTargetState = undefined;
   await forwardDriver.cancel();
   if (spatialPresenter.isPublicProfile() && spatialPresenter.publicTourState === 'candidate_ready') {
     spatialPresenter.publicTourState = 'tour_complete';
@@ -385,6 +405,7 @@ async function cancelForward() {
 }
 function discardForward() {
   if (!forwardDriver.active) return;
+  spatialPresenter.tourTargetState = undefined;
   cancelRetention(activeRetentionTransaction); activeRetentionTransaction = undefined;
   forwardDriver.discard(); result = beforeForward; beforeForward = undefined; restoreExecutionView();
   player = result && new TracePlayer(result.run); clearDisplayedInspection();

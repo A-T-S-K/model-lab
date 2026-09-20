@@ -4,8 +4,8 @@ import { operations, parameterOwners } from './forward.js';
 import type { ForwardProgress } from '../worker/protocol.js';
 import type { TrainingProgress } from '../worker/training-execution.js';
 import type { LearningModel, LearningStage, ParameterPin } from './learning.js';
-import type { PublicTourContent, PublicTourOutcome } from './public-tour.js';
-import { formatAdamGlanceNote, formatCandidateOutcomeMeanLoss, formatCandidateTargetTokenProbability } from './public-tour.js';
+import type { PublicTourContent, PublicTourOutcome, PublicTourState } from './public-tour.js';
+import { formatAdamGlanceNote, formatCandidateOutcomeMeanLoss, formatCandidateTargetTokenProbability, getPublicTourContent } from './public-tour.js';
 import { outputTokenName, outputSummary, outputMetrics, componentComparison, type OutputPair } from './comparison.js';
 import { geometry, projection } from './view.js';
 import { probabilityColor } from './geometry.js';
@@ -68,15 +68,19 @@ export interface ContextualDockOptions {
   readonly selectedLabel?: string;
   readonly tourContent?: PublicTourContent;
   readonly tourOutcome?: PublicTourOutcome;
+  readonly tourTargetState?: PublicTourState;
 }
 
 function renderExplain(opts: ContextualDockOptions): string {
   const { model: m, address: a, element, pin, executionProgress, trainingProgress, learningStage, learningModel, learningRouteStop, attract, trainingState, profile, routePurpose, tourContent, outputPair } = opts;
   if (!m) return '<p>No model loaded.</p>';
   const isPublic = profile !== 'workbench';
+  const effectiveTourContent = (isPublic && !tourContent)
+    ? getPublicTourContent(opts.tourTargetState ?? 'cold', opts.tourOutcome)
+    : tourContent;
 
-  if (tourContent) {
-    const tc = tourContent;
+  if (effectiveTourContent) {
+    const tc = effectiveTourContent;
     const truthCue = tc.truthGuardrail
       ? `<p class="reverse-truth-cue" data-testid="reverse-truth-cue">${esc(tc.truthGuardrail)}</p>`
       : '';
@@ -592,7 +596,7 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
       <div class="dock-route-info dock-slot-context">
         ${lessonProgress ? `<span class="lesson-progress" data-testid="lesson-progress">${esc(lessonProgress)}</span>` : ''}
         <span class="dock-selected-object" data-testid="selected-world-object" data-semantic-anchor="${opts.address.kind}" data-position="${opts.address.token}" data-layer="${opts.address.layer ?? ''}" data-run-id="${esc(opts.model?.source.sourceRunId ?? '')}">${esc(opts.selectedLabel ?? addressLabel(opts.address))}</span>
-        ${opts.trainingState ? `<span data-testid="execution-frontier" class="execution-frontier-tag">${esc(opts.trainingState.frontierText)}</span>` : ''}
+        ${opts.trainingState && opts.trainingState.frontierText ? `<span data-testid="execution-frontier" class="execution-frontier-tag">${esc(opts.trainingState.frontierText)}</span>` : ''}
         ${shortDetour ? `<span class="dock-detour-badge">Detour</span>` : ''}
       </div>
       <div class="dock-route-actions dock-slot-actions"${opts.trainingState ? ` id="execution-controls" data-execution-id="${esc(opts.trainingState.executionId)}" data-sequence="${opts.trainingState.sequence}" data-training-phase="${esc(opts.trainingState.phase)}"` : ''}>

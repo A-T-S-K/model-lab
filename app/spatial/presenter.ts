@@ -21,11 +21,14 @@ import { experienceCapabilities, type ExperienceProfile } from "../presentation/
 import { renderContextualDock, type DockDepth, type PublicTrainingActionState } from "./contextual-dock.js";
 export { type PublicTrainingActionState } from "./contextual-dock.js";
 import type { PublicTourState, PublicTourOutcome, TourEvidence } from './public-tour.js';
-import { getPublicTourContent, advanceTour, previousTourState, startPart2, facilitatorTourStateForLandmark, canAdvanceTour, computeLiveTourEvidence } from './public-tour.js';
+import { getPublicTourContent, advanceTour, previousTourState, startPart2, facilitatorTourStateForLandmark, canAdvanceTour, computeLiveTourEvidence, getPendingTourActionLabel, getPublicExecutionStatus } from './public-tour.js';
 
 export function computeTrainingActionState(
   execution: ForwardDriver | undefined,
   pin: ParameterPin,
+  isPublic = false,
+  tourTargetState?: PublicTourState,
+  currentTourState?: PublicTourState,
 ): PublicTrainingActionState | undefined {
   if (!execution) return undefined;
   const progress = execution.progress;
@@ -39,9 +42,17 @@ export function computeTrainingActionState(
   const pinLabel = t.phase === 'optimizer proposal'
     ? 'Continue to next proposal to pinned parameter'
     : 'Run to next gradient contribution';
-  const frontierText = ready
-    ? 'Candidate ready — not accepted'
-    : `${t.phase} · ${e.phase}${e.runningToGradient ? ' · seeking pinned contribution' : ''}${t.stopped ? (t.final ? (t.phase === 'optimizer proposal' && t.count === 0 ? ' · backward complete — no remaining contributions for this parameter in this pass' : ' · stopped at pinned proposal boundary') : ' · stopped after matching backward node') : ''}`;
+  const frontierText = isPublic
+    ? getPublicExecutionStatus({
+        currentState: currentTourState ?? 'cold',
+        targetState: tourTargetState,
+        phase: t.phase,
+        driverPhase: e.phase,
+        final: t.final,
+      })
+    : ready
+      ? 'Candidate ready — not accepted'
+      : `${t.phase} · ${e.phase}${e.runningToGradient ? ' · seeking pinned contribution' : ''}${t.stopped ? (t.final ? (t.phase === 'optimizer proposal' && t.count === 0 ? ' · backward complete — no remaining contributions for this parameter in this pass' : ' · stopped at pinned proposal boundary') : ' · stopped after matching backward node') : ''}`;
   return {
     executionId: progress.executionId,
     sequence: progress.sequence,
@@ -222,6 +233,9 @@ export class SpatialPresenter {
     this.frame();
   }
   advanceTour() {
+    if (this.tourTargetState !== undefined) {
+      return;
+    }
     if (this.publicTourState === 'p1_probabilities') {
       this.publicTourState = 'p1_complete';
       this.tourTargetState = undefined;
@@ -252,7 +266,7 @@ export class SpatialPresenter {
           exec.runToContribution();
           break;
         case 'p2_gradient_contribution':
-          exec.continue();
+          exec.runToProposal();
           break;
         case 'p2_final_gradient':
           exec.runToProposal();
@@ -270,6 +284,10 @@ export class SpatialPresenter {
       this.publicTourState = this.tourTargetState;
       this.tourTargetState = undefined;
       this.applyTourSelection();
+      const exec = this.state?.execution;
+      if (exec && exec.active && exec.phase === 'running') {
+        exec.pause();
+      }
     }
   }
   previousTour() {
@@ -381,6 +399,7 @@ export class SpatialPresenter {
     this.playback.bind(source,this.routeChoice,this.routeChoice==='forward'?waypoints.length:5);
   }
   followBoundary(boundary: ForwardBoundary) {
+    if (this.isPublicProfile()) return;
     if(this.kind === boundary.kind && this.address().token === boundary.token && (boundary.head===undefined || this.selection.head === boundary.head)) return;
     this.go(boundary, true);
   }
@@ -414,6 +433,7 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
   openLearning(stage:LearningStage){if(this.shortStop>=0)this.shortDetour=true;this.learningStage=stage;this.lens=true;this.construction=false;}
   focusLearning(stage:LearningStage){if(this.shortStop>=0)this.shortDetour=true;this.interrupt();this.remember();this.openLearning(stage);const node=learningStations.find(s=>s.stage===stage)??learningStations[2];this.pendingBox={x:node.x-50,y:1160,width:820,height:460};}
   followLearning(stage: LearningStage) {
+    if (this.isPublicProfile()) return;
     if (this.learningStage === stage && this.lens) return;
     this.openLearning(stage); const node = learningStations.find(s => s.stage === stage) ?? learningStations[2];
     this.pendingBox = { x: node.x-50, y:1160, width:820, height:460 };
@@ -562,7 +582,12 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
         lessonProgress = tourContent.progress;
         routePurpose = tourContent.routePurpose;
         if (tourContent.primaryAction) {
-          primaryAction = `<button id="${tourContent.primaryAction.id}" class="primary-action" ${tourContent.primaryAction.disabled ? 'disabled' : ''}>${esc(tourContent.primaryAction.label)}</button>`;
+          const isPending = Boolean(this.tourTargetState);
+          const label = isPending
+            ? getPendingTourActionLabel(this.publicTourState)
+            : tourContent.primaryAction.label;
+          const disabled = isPending || Boolean(tourContent.primaryAction.disabled);
+          primaryAction = `<button id="${tourContent.primaryAction.id}" class="primary-action${isPending ? ' is-working' : ''}" ${disabled ? 'disabled' : ''}>${esc(label)}</button>`;
         }
         if (tourContent.optionalActions.length > 0) {
           attentionAction = tourContent.optionalActions.map(act =>
@@ -646,7 +671,7 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
           : learningScene(state.learning, this.learningStage, this.pin))
       : '';
 
-    return `<div data-retention="${esc(JSON.stringify(state.retention))}" class="spatial-shell ${state.attract?"spatial-attract":""} ${isVisitor&&!this.operatorControls?"visitor-controls":""}" data-experience-profile="${profile}"><header class="spatial-header"><div class="world-brand"><strong>MODEL LAB</strong><small>${esc(m?.forward.descriptor.label??"one tiny transformer")} · one connected computation</small></div>${state.evidenceWorld?`<strong>${esc(state.evidenceWorld.label)}</strong><button id="return-canonical-world">Return to canonical world</button>`:isVisitor?`${this.freeExplore?`<label>Input<input id="document" type="text" maxlength="7" value="${esc(state.document)}" ${state.busy?"disabled":""}></label><button id="predict" ${state.busy||state.execution||!state.ready?"disabled":""}>Predict</button>`:""}<button id="clear-session">Public Reset</button>`:`<label>Input<input id="document" type="text" maxlength="7" value="${esc(state.document)}" ${state.busy?"disabled":""}></label><button id="predict" ${state.busy||state.execution||!state.ready?"disabled":""}>Predict</button>${state.execution?"":`<button id="step-prediction" ${state.busy||!state.ready?"disabled":""}>Step through prediction</button><button id="step-learning" ${state.busy||!state.ready?"disabled":""}>Step through learning</button>`}<button id="spatial-learn" ${state.canLearn?"":"disabled"}>Learn · one update</button>${capabilities.classicToggle?`<button id="presentation-toggle">Classic presentation</button>`:""}<button id="clear-session">${isVisitor||state.exhibit?'Public Reset':'Clear session'}</button>`}<button id="spatial-home">⌂ Home</button><button id="spatial-back" ${!this.history.length?"disabled":""}>← Back</button>${showDeeperControls?`<button id="spatial-focus">◎ Focus</button><button id="spatial-lens">Q/K lens</button>`:""}<span class="spatial-badge">${state.evidenceWorld?(state.evidenceWorld.replay?"SAVED REPLAY · NO EXECUTION":"RETAINED EVIDENCE · READ ONLY"):state.attract?"RECORDED RUN · REPLAY":state.execution?(state.execution.progress?.training?"LIVE TRAINING · WAVE 2B":"LIVE FORWARD · WAVE 2A"):"COMPLETED EVIDENCE · WAVE 1D"}</span></header>
+    return `<div data-retention="${esc(JSON.stringify(state.retention))}" class="spatial-shell ${state.attract?"spatial-attract":""} ${isVisitor&&!this.operatorControls?"visitor-controls":""}" data-experience-profile="${profile}"><header class="spatial-header"><div class="world-brand"><strong>MODEL LAB</strong><small>${esc(m?.forward.descriptor.label??"one tiny transformer")} · one connected computation</small></div>${state.evidenceWorld?`<strong>${esc(state.evidenceWorld.label)}</strong><button id="return-canonical-world">Return to canonical world</button>`:isVisitor?`${this.freeExplore?`<label>Input<input id="document" type="text" maxlength="7" value="${esc(state.document)}" ${state.busy?"disabled":""}></label><button id="predict" ${state.busy||state.execution||!state.ready?"disabled":""}>Predict</button>`:""}<button id="clear-session">Public Reset</button>`:`<label>Input<input id="document" type="text" maxlength="7" value="${esc(state.document)}" ${state.busy?"disabled":""}></label><button id="predict" ${state.busy||state.execution||!state.ready?"disabled":""}>Predict</button>${state.execution?"":`<button id="step-prediction" ${state.busy||!state.ready?"disabled":""}>Step through prediction</button><button id="step-learning" ${state.busy||!state.ready?"disabled":""}>Step through learning</button>`}<button id="spatial-learn" ${state.canLearn?"":"disabled"}>Learn · one update</button>${capabilities.classicToggle?`<button id="presentation-toggle">Classic presentation</button>`:""}<button id="clear-session">${isVisitor||state.exhibit?'Public Reset':'Clear session'}</button>`}<button id="spatial-home">⌂ Home</button><button id="spatial-back" ${!this.history.length?"disabled":""}>← Back</button>${showDeeperControls?`<button id="spatial-focus">◎ Focus</button><button id="spatial-lens">Q/K lens</button>`:""}<span class="spatial-badge">${state.evidenceWorld?(state.evidenceWorld.replay?"SAVED REPLAY · NO EXECUTION":"RETAINED EVIDENCE · READ ONLY"):state.attract?"RECORDED RUN · REPLAY":state.execution?(state.execution.progress?.training?(isPublicProfile?"LIVE TRAINING":"LIVE TRAINING · WAVE 2B"):(isPublicProfile?"LIVE PREDICTION":"LIVE FORWARD · WAVE 2A")):(isPublicProfile?"COMPLETED EVIDENCE":"COMPLETED EVIDENCE · WAVE 1D")}</span></header>
       <div class="spatial-status"><span role="status" data-testid="status">${esc(state.status.replace(/ · [a-f0-9-]{36}:.*$/, ""))}</span>${state.interventionPending?'<button id="cancel-ablation">Cancel intervention</button>':""}<span data-testid="spatial-relationship">${m?`${state.execution?'ACTIVE EXECUTION':m.source.relationship} · captured input ${esc(m.source.capturedDocument)}`:"NO SELECTED RUN"}</span></div>${state.error?`<p role="alert">${esc(state.error)}</p>`:""}${!isPublicProfile && !m&&state.execution?this.controls():""}${!isPublicProfile && state.attract?`<section class="exhibit-entry"><div><strong>RECORDED RUN · REPLAY</strong><h1>How does a tiny model choose what comes next?</h1><p>Recorded real run. Not live. Start to make a fresh prediction, then follow the numbers through attention.</p></div><button id="exhibit-start" ${state.ready&&!state.busy?'':'disabled'}>Start · explore a real prediction</button></section>`:m&&!state.execution&&!state.intervention&&!state.evidenceWorld?`${isVisitor?'':isFacilitator?(this.operatorControls?`<div class="facilitator-panel" data-testid="facilitator-panel"><p class="facilitator-retention">${retentionWording}</p><nav class="facilitator-landmarks" aria-label="Short teaching route"><button id="operator-controls">Hide operator controls</button><button id="short-sample">Sample abca · q3 / h0 / k0</button><button data-short-stop="0">Prediction</button><button data-short-stop="1">Represent</button><button data-short-stop="2">Mix Context</button><button data-short-stop="3">Transform</button><button data-short-stop="4">Score</button><button data-short-stop="5">Predict</button><button id="facilitator-attention-detail">Attention detail</button>${capabilities.configurableIdleReset?`<button id="exhibit-opt-out">${state.idleResetEnabled?"Disable idle reset · facilitated session":`Enable idle reset · ${state.idleResetSeconds} seconds`}</button>`:""}</nav><div class="facilitator-reverse" aria-label="Reverse learning route"><span class="facilitator-subhead">Reverse:</span><button data-reverse-stop="0">Predict</button><button data-reverse-stop="1">Score</button><button data-reverse-stop="2">Transform</button><button data-reverse-stop="3">Mix Context</button><button data-reverse-stop="4">Represent</button><button data-reverse-stop="5">Parameter</button><button data-reverse-stop="6">Adam</button></div><p role="status">${esc(this.shortMessage)} ${this.shortDetour?'Exploring a detour. Resume explicitly to return. ':''}</p></div>`:''):`<details class="short-guide" ${state.exhibit?'open':''}><summary>Short teaching route · causal prediction explanation</summary><div class="short-guide-body">${this.operatorControls?`<div class="facilitator-panel" data-testid="facilitator-panel"><p class="facilitator-retention">${retentionWording}</p><p class="route-purpose" data-testid="route-purpose"><strong style="color:#F2F5F7;">${isAttn ? currentAttnStep.name : currentLandmark.name}:</strong> ${esc(isAttn ? currentAttnStep.purpose : currentLandmark.purpose)}</p></div>`:""}<nav aria-label="Short teaching route"><button id="operator-controls">${this.operatorControls?"Hide":"Show"} operator controls</button><button id="short-sample">Sample abca · q3 / h0 / k0</button><button data-short-stop="0">Prediction</button><button data-short-stop="1">Represent</button><button data-short-stop="2">Mix Context</button><button data-short-stop="3">Transform</button><button data-short-stop="4">Score</button><button data-short-stop="5">Predict</button><button id="facilitator-attention-detail">Attention detail</button>${this.shortDetour?'<button id="short-resume">Resume short route</button>':''}</nav><p role="status">${esc(this.shortMessage)} ${this.shortDetour?'Exploring a detour. Resume explicitly to return. ':''}${currStop<1?"Teacher-forced prediction · selected position and known target; learning uses all positions.":"Follow the selected operands → calculation → result. Exact values and source remain available."}</p></div></details>`}`:''}
       ${m?`${showDeeperControls?`<nav class="spatial-selection" aria-label="Semantic selection"><label>Layer<select id="spatial-layer">${options(Array.from({length:m.forward.layers},(_,i)=>`Layer ${i}`),s.layer)}</select></label><label>Position<select id="spatial-query">${options(m.labels,s.query)}</select></label><label>Head<select id="spatial-head">${options(m.heads.map(h=>`Head ${h.head}`),s.head)}</select></label><label>Key<select id="spatial-key">${options(m.labels,s.key)}</select></label><label>Q feature<select id="spatial-feature">${options(Array.from({length:m.width},(_,i)=>String(i)),s.feature)}</select></label><label>${state.execution?.progress?.training?"Forward selection":"Operation"}<select id="spatial-operation">${m.forward.operations.map(o=>`<option value="${o.kind}" ${o.kind===this.kind?"selected":""}>${esc(o.title)}</option>`).join("")}</select></label><span class="scope-note">Full semantic identity · run / node / port / layer / position / head</span></nav>`:""}
       ${capabilities.teachingSelectors && (capabilities.profile === 'workbench' || (state.experiments?.length ?? 0) > 0) ? `<nav ${state.execution||state.intervention||state.evidenceWorld?'hidden':''} class="learning-toolbar" aria-label="Learning transition"><strong>Live model step <span data-testid="spatial-live-step">${state.liveStep??0}</span></strong><span>Pinned ${esc(parameterLabel(this.pin))}</span><button id="learning-owner">Owner</button><label>Transition<select id="spatial-experiment"><option value="">Choose completed transition</option>${state.experiments?.map(e=>`<option value="${esc(e.id)}" ${e.id===state.experimentId?"selected":""}>Update ${e.step}</option>`).join("")??""}</select></label><button id="spatial-experiment-prev" ${state.experimentsWindow?.hasPrevious?'':'disabled'}>Previous transitions</button><button id="spatial-experiment-next" ${state.experimentsWindow?.hasNext?'':'disabled'}>Next transitions</button><span>${state.experimentsWindow?`showing ${state.experimentsWindow.total?state.experimentsWindow.offset+1:0}–${state.experimentsWindow.end} of ${state.experimentsWindow.total} retained transitions`:''}</span><button data-learning-phase="before">Before</button><button data-learning-phase="training">Training</button><button data-learning-phase="after">After</button><button ${state.intervention?'':'id="spatial-current"'}>Return to current model</button><button data-learning-stage="gradient">Contributions</button><button data-learning-stage="adam">Adam</button><button data-learning-stage="compare">Compare</button></nav>`:""}
@@ -663,7 +688,13 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
         profile,
         freeExplore: this.freeExplore,
         attract: Boolean(state.attract && isPublicProfile),
-        trainingState: computeTrainingActionState(state.execution, this.pin),
+        trainingState: computeTrainingActionState(
+          state.execution,
+          this.pin,
+          isPublicProfile,
+          this.tourTargetState,
+          this.publicTourState,
+        ),
         lessonProgress,
         routePurpose,
         primaryAction,
@@ -683,6 +714,7 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
         selectedLabel: label,
         tourContent,
         tourOutcome: this.publicTourOutcome,
+        tourTargetState: this.tourTargetState,
       })}</div>` : `<div class="world-workspace ${lensActive?"has-lens":""}"><div class="world-pane ${sceneOpen?"has-construction":""}">${sceneSvg(m.forward,a,s.key,this.learningStage?this.pin.name:this.parameter,m.labels,s.query,state.comparison??(this.learningStage==="compare"&&state.learning?.available?state.learning.comparison:undefined),expertLearningMarkup,state.execution?.progress,this.element)}<div class="camera-controls"><button id="zoom-in" aria-label="Zoom in">+</button><button id="zoom-out" aria-label="Zoom out">−</button><button data-pan="-1,0" aria-label="Pan left">←</button><button data-pan="1,0" aria-label="Pan right">→</button><button data-pan="0,-1" aria-label="Pan up">↑</button><button data-pan="0,1" aria-label="Pan down">↓</button></div>
       <div class="selection-card" data-landmark-anchor="${a.kind}" data-landmark-token="${a.token}" data-landmark-layer="${a.layer ?? ''}" data-landmark-run="${esc(m?.source.sourceRunId ?? '')}"><div data-testid="landmark-occurrence" data-semantic-anchor="${a.kind}" data-position="${a.token}" data-layer="${a.layer !== undefined ? a.layer : ''}" data-run-id="${esc(m?.source.sourceRunId ?? '')}" style="display:none;" aria-hidden="true"></div><small>SELECTED WORLD OBJECT</small><strong data-testid="selected-world-object" data-semantic-anchor="${a.kind}" data-position="${a.token}" data-layer="${a.layer ?? ''}" data-run-id="${esc(m?.source.sourceRunId ?? '')}">${esc(label)}</strong><span>layer ${a.layer??'model'} · position ${a.token} · query ${s.query} / key ${s.key} · head ${s.head}</span><span>${state.comparison?`${labels[0]}: neutral. ${labels[1]}: cyan. Shared scale per pair.`:this.learningStage==="compare"?"Before: neutral. After: cyan. Shared scale per pair.":"Signed strips: independent scales. Q/K lens: shared scale."}</span><div class="selection-actions"><button id="open-spatial-detail">Values / arithmetic / source</button><button id="scene-construction">${this.construction?"Close scene math":"Scene math"}</button></div>${this.kind==="headOutput"&&!state.evidenceWorld?`${capabilities.headAblation?`<button id="spatial-ablate" ${state.execution||state.busy?"disabled":""}>Test without this head</button>`:""}${capabilities.donorPatch?`<button id="spatial-patch" ${state.execution||state.busy?"disabled":""}>Patch from observed donor</button>`:""}<small class="head-action-scope">${state.execution?"Finish/cancel execution or accept/discard candidate first.":`Selected checkpoint ${esc((m.source.sourceSnapshotId??"unavailable").slice(0,19))}… · ablation: all positions; patch target: p${s.query}/h${s.head}, donor: p${state.patchDonor?.token??0}/h${state.patchDonor?.head??0}; after aggregation / before concat.`}</small>`:""}${!m.valid?'<p role="alert">Selection unavailable in this run. Choose valid indices; prior evidence is not rebound.</p>':""}</div>
       <svg class="world-minimap" viewBox="0 0 ${m.forward.descriptor.presentation==='microgpt-canonical-curated'?4500:1250+m.forward.layers*2500} ${m.forward.descriptor.presentation==='microgpt-canonical-curated'?1700:Math.max(1500,420+m.forward.heads*270)}" aria-label="Same world camera footprint"><path d="M100 600 H${m.forward.descriptor.presentation==='microgpt-canonical-curated'?4300:1050+m.forward.layers*2500}"/>${m.forward.operations.map((o)=>{const t=stationForWorld(m.forward,o.kind,s.head,s.layer);return `<rect x="${t.x}" y="${t.y}" width="100" height="160" class="${o.kind===this.kind?"selected":""}"/>`;}).join("")}<rect id="camera-footprint"/></svg>${sceneOpen?sceneConstruction(m,a,this.element,state.execution?.progress):""}</div>

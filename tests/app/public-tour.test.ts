@@ -12,6 +12,8 @@ import {
   formatAdamGlanceNote,
   formatCandidateOutcomeMeanLoss,
   formatCandidateTargetTokenProbability,
+  getPendingTourActionLabel,
+  getPublicExecutionStatus,
   type PublicTourState,
   type TourEvidence,
 } from '../../app/spatial/public-tour.js';
@@ -411,5 +413,184 @@ test('Adam wording distinguishes stored optimizer state from proposed updated mo
   assert(glanceNote.includes('provisional parameter θ′'));
   // Must NOT describe mAfter / vAfter as the stored or entering state
   assert(!glanceNote.includes('persistent optimizer state (m=-0.005'));
+});
+
+test('C3: Teaching content remains stable across states and is never overwritten by runtime execution phase', () => {
+  for (const st of PUBLIC_TOUR_STATES) {
+    const c1 = getPublicTourContent(st);
+    const c2 = getPublicTourContent(st);
+    assert.equal(c1.headline, c2.headline);
+    assert.equal(c1.routePurpose, c2.routePurpose);
+    assert.equal(c1.plainMeaning, c2.plainMeaning);
+    assert.equal(c1.progress, c2.progress);
+    if (c1.truthGuardrail) {
+      assert.equal(c1.truthGuardrail, c2.truthGuardrail);
+    }
+  }
+
+  const p2States: PublicTourState[] = [
+    'p2_objective',
+    'p2_gradient_contribution',
+    'p2_final_gradient',
+    'p2_adam_proposal',
+    'candidate_ready',
+  ];
+  const expectedHeadlines = [
+    'MEASURE ERROR',
+    'TRACE ONE GRADIENT CONTRIBUTION',
+    'FINAL PARAMETER GRADIENT',
+    'ADAM PROPOSES CANDIDATE',
+    'CANDIDATE UPDATE READY',
+  ];
+  for (let i = 0; i < p2States.length; i++) {
+    const c = getPublicTourContent(p2States[i]);
+    assert.equal(c.headline, expectedHeadlines[i]);
+    assert(c.plainMeaning.length > 20);
+    assert(c.routePurpose.length > 10);
+  }
+});
+
+test('C3: getPendingTourActionLabel maps pending tour states to distinct working indicators', () => {
+  assert.equal(getPendingTourActionLabel('p2_objective'), 'Tracing contribution...');
+  assert.equal(getPendingTourActionLabel('p2_gradient_contribution'), 'Finishing gradient...');
+  assert.equal(getPendingTourActionLabel('p2_final_gradient'), 'Computing Adam proposal...');
+  assert.equal(getPendingTourActionLabel('p2_adam_proposal'), 'Evaluating candidate...');
+  assert.equal(getPendingTourActionLabel('p1_complete'), 'Starting learning...');
+  assert.equal(getPendingTourActionLabel('cold'), 'Working...');
+  assert.equal(getPendingTourActionLabel('p1_prediction_preview'), 'Working...');
+});
+
+test('C3: getPublicExecutionStatus provides truthful secondary status answering what model is doing without worker jargon', () => {
+  const statusForward = getPublicExecutionStatus({
+    currentState: 'p2_objective',
+    targetState: 'p2_gradient_contribution',
+    phase: 'training forward',
+    driverPhase: 'running',
+  });
+  assert.equal(statusForward, 'Preparing training objective...');
+
+  const statusLoss = getPublicExecutionStatus({
+    currentState: 'p2_objective',
+    targetState: 'p2_gradient_contribution',
+    phase: 'loss',
+    driverPhase: 'running',
+  });
+  assert.equal(statusLoss, 'Measuring error across target positions...');
+
+  const statusContrib = getPublicExecutionStatus({
+    currentState: 'p2_objective',
+    targetState: 'p2_gradient_contribution',
+    phase: 'backward',
+    driverPhase: 'running',
+  });
+  assert.equal(statusContrib, "Finding the selected parameter's gradient contribution...");
+
+  const statusFinishing = getPublicExecutionStatus({
+    currentState: 'p2_gradient_contribution',
+    targetState: 'p2_final_gradient',
+    phase: 'backward',
+    driverPhase: 'running',
+    final: false,
+  });
+  assert.equal(statusFinishing, 'Finishing backward pass...');
+
+  const statusFinal = getPublicExecutionStatus({
+    currentState: 'p2_gradient_contribution',
+    targetState: 'p2_final_gradient',
+    phase: 'backward',
+    driverPhase: 'running',
+    final: true,
+  });
+  assert.equal(statusFinal, "Finding the selected parameter's final gradient...");
+
+  const statusAdam = getPublicExecutionStatus({
+    currentState: 'p2_final_gradient',
+    targetState: 'p2_adam_proposal',
+    phase: 'optimizer proposal',
+    driverPhase: 'running',
+  });
+  assert.equal(statusAdam, 'Computing Adam proposal...');
+
+  const statusCand = getPublicExecutionStatus({
+    currentState: 'p2_adam_proposal',
+    targetState: 'candidate_ready',
+    phase: 'candidate forward',
+    driverPhase: 'running',
+  });
+  assert.equal(statusCand, 'Evaluating provisional candidate...');
+
+  const statusReady = getPublicExecutionStatus({
+    currentState: 'candidate_ready',
+    phase: 'ready',
+    driverPhase: 'paused',
+  });
+  assert.equal(statusReady, 'Candidate ready — not accepted');
+
+  const statusCancel = getPublicExecutionStatus({
+    currentState: 'p2_gradient_contribution',
+    targetState: 'p2_final_gradient',
+    driverPhase: 'cancelling',
+  });
+  assert.equal(statusCancel, 'Cancelling execution...');
+
+  const statusIdle = getPublicExecutionStatus({
+    currentState: 'p2_objective',
+    targetState: undefined,
+    driverPhase: 'paused',
+  });
+  assert.equal(statusIdle, '');
+
+  const allStatuses = [
+    statusForward,
+    statusLoss,
+    statusContrib,
+    statusFinishing,
+    statusFinal,
+    statusAdam,
+    statusCand,
+    statusReady,
+    statusCancel,
+  ];
+  const forbiddenJargon = [
+    /permit/i,
+    /sequence/i,
+    /admitted operator/i,
+    /wave\s*2/i,
+    /wave\s*1/i,
+    /internal phase/i,
+  ];
+  for (const s of allStatuses) {
+    for (const pattern of forbiddenJargon) {
+      assert(!pattern.test(s), `Status "${s}" matches forbidden jargon pattern ${pattern}`);
+    }
+  }
+});
+
+test('C3: Gated transitions advance exactly once to the target state and pause until explicit visitor advancement', () => {
+  const ev1: TourEvidence = {
+    hasObjective: true,
+    hasMatchingContribution: false,
+    hasFinalGradient: false,
+    hasPinnedProposal: false,
+    hasCandidateComparison: false,
+  };
+  assert.equal(canAdvanceTour('p2_objective', ev1), false);
+
+  const ev2: TourEvidence = { ...ev1, hasMatchingContribution: true };
+  assert.equal(canAdvanceTour('p2_objective', ev2), true);
+
+  assert.equal(canAdvanceTour('p2_gradient_contribution', ev2), false);
+  const ev3: TourEvidence = { ...ev2, hasFinalGradient: true };
+  assert.equal(canAdvanceTour('p2_gradient_contribution', ev3), true);
+
+  assert.equal(canAdvanceTour('p2_final_gradient', ev3), false);
+  const ev4: TourEvidence = { ...ev3, hasPinnedProposal: true };
+  assert.equal(canAdvanceTour('p2_final_gradient', ev4), true);
+
+  assert.equal(canAdvanceTour('p2_adam_proposal', ev4), false);
+  const ev5: TourEvidence = { ...ev4, hasCandidateComparison: true };
+  assert.equal(canAdvanceTour('p2_adam_proposal', ev5), true);
+
+  assert.equal(canAdvanceTour('candidate_ready', ev5), false);
 });
 
