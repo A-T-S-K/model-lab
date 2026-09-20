@@ -3,6 +3,7 @@ import { parameterOwners, addressId } from './forward.js';
 import { stationFor } from './scene.js';
 import type { TrainingProgress } from '../worker/training-execution.js';
 import type { LearningModel, ParameterPin } from './learning.js';
+import type { PublicTourState } from './public-tour.js';
 import { escapeHtml as esc } from '../views/evidence.js';
 
 const n = (v: number | undefined) => (v === undefined ? 'pending' : Number(v.toPrecision(8)).toString());
@@ -13,6 +14,7 @@ export interface PublicLearningOptions {
   readonly training?: TrainingProgress;
   readonly learning?: LearningModel;
   readonly learningRouteStop?: number; // 0 = Objective, 1 = Predict, 2 = Score, 3 = Transform, 4 = Mix Context, 5 = Represent, 6 = Parameter, 7 = Adam
+  readonly tourState?: PublicTourState;
   readonly isLearningActive: boolean;
   readonly query?: number;
   readonly head?: number;
@@ -25,27 +27,38 @@ export function publicLearningScene(opts: PublicLearningOptions): string {
     training: t,
     learning: m,
     learningRouteStop,
+    tourState,
     isLearningActive,
     query = (f.input && f.input.length > 3 ? 3 : (f.input && f.input.length > 0 ? f.input.length - 1 : 0)),
     head = 0,
   } = opts;
-  if (!isLearningActive && !t && !m?.available && learningRouteStop === undefined) {
+
+  if (!isLearningActive && learningRouteStop === undefined && tourState === undefined) {
+    return '';
+  }
+
+  const objectiveVisible = tourState
+    ? tourState === 'p2_objective'
+    : learningRouteStop === 0;
+  const parameterVisible = tourState
+    ? tourState === 'p2_gradient_contribution' || tourState === 'p2_final_gradient'
+    : learningRouteStop === 5;
+  const adamVisible = tourState
+    ? tourState === 'p2_adam_proposal'
+    : learningRouteStop === 6;
+  const reverseVisible = tourState
+    ? tourState === 'p2_objective' || tourState === 'p2_gradient_contribution' || tourState === 'p2_final_gradient'
+    : learningRouteStop !== undefined && learningRouteStop >= 0 && learningRouteStop <= 5;
+
+  if (!objectiveVisible && !parameterVisible && !adamVisible && !reverseVisible) {
     return '';
   }
 
   const parts: string[] = [];
-
-  // 1. Objective Anchor (anchored adjacent to probabilities station)
-  parts.push(renderObjectiveAnchor(f, t, m, learningRouteStop));
-
-  // 2. Reverse Causal Overlay across the 5 E1 landmarks
-  parts.push(renderReverseCausalOverlay(f, pin, learningRouteStop, t, query, head));
-
-  // 3. Parameter Learning Overlay (attached near selected parameter bank)
-  parts.push(renderParameterLearningOverlay(pin, t, m, learningRouteStop));
-
-  // 4. Adam Proposal Overlay (when proposal exists or pending Adam stop)
-  parts.push(renderAdamLearningOverlay(pin, t, m, learningRouteStop));
+  if (objectiveVisible) parts.push(renderObjectiveAnchor(f, t, m));
+  if (reverseVisible) parts.push(renderReverseCausalOverlay(f, pin, learningRouteStop, t, query, head));
+  if (parameterVisible) parts.push(renderParameterLearningOverlay(pin, t, m, tourState));
+  if (adamVisible) parts.push(renderAdamLearningOverlay(pin, t, m));
 
   return `<g class="public-learning-world" data-testid="public-learning-world">${parts.join('')}</g>`;
 }
@@ -57,30 +70,22 @@ export interface WorldRect {
   height: number;
 }
 
-export function objectiveLearningBounds(rowsCount = 4): WorldRect {
+export function objectiveLearningBounds(_rowsCount = 4): WorldRect {
   const probStation = stationFor('probabilities');
-  const x = probStation.x + probStation.width + 30;
-  const y = probStation.y - 120;
-  const width = 400;
-  const maxDisplayRows = 8;
-  const count = Math.min(maxDisplayRows, rowsCount);
-  const truncated = rowsCount > maxDisplayRows;
-  const lineCount = count + (truncated ? 1 : 0);
-  const rowHeight = 28;
-  const dividerY = y + 114 + lineCount * rowHeight + 8;
-  const meanY = dividerY + 28;
-  const note1Y = meanY + 28;
-  const note2Y = note1Y + 22;
-  const height = note2Y - y + 26;
-  return { x, y, width, height };
+  return {
+    x: probStation.x + probStation.width + 30,
+    y: probStation.y - 76,
+    width: 390,
+    height: 150,
+  };
 }
 
 export function parameterLearningBounds(pin: ParameterPin): WorldRect {
   const bank = stationFor(pin.name);
   const x = bank.x + bank.width + 25;
   const y = bank.y - 45;
-  const width = 450;
-  const height = 180;
+  const width = 540;
+  const height = 190;
   return { x, y, width, height };
 }
 
@@ -88,8 +93,8 @@ export function adamLearningBounds(pin: ParameterPin): WorldRect {
   const bank = stationFor(pin.name);
   const x = bank.x + bank.width + 25;
   const y = bank.y + 145;
-  const width = 450;
-  const height = 160;
+  const width = 560;
+  const height = 176;
   return { x, y, width, height };
 }
 
@@ -198,110 +203,39 @@ function renderObjectiveAnchor(
   f: ForwardModel,
   t?: TrainingProgress,
   m?: LearningModel,
-  learningRouteStop?: number,
 ): string {
-  const isHighlighted = learningRouteStop === 0 || t?.phase === 'loss';
+  const positionCount = t?.losses.length
+    ?? (m?.available ? m.objective.rows.length : undefined)
+    ?? f.targets?.length
+    ?? f.input?.length
+    ?? 0;
 
-  // Per-position losses and mean
-  const vocabulary = f.vocabulary ?? [];
-  let rows: { position: number; target: string; loss?: number; probability?: number; origin: 'OBSERVED' | 'DERIVED' | 'PENDING' }[] = [];
   let mean: number | undefined;
   let meanOrigin: 'OBSERVED' | 'DERIVED' | 'PENDING' = 'PENDING';
 
   if (t) {
     mean = t.mean;
     meanOrigin = t.mean !== undefined ? 'OBSERVED' : 'PENDING';
-    rows = t.losses.map((l, i) => ({
-      position: i,
-      target: vocabulary[l.target] ?? String(l.target),
-      loss: l.value,
-      origin: l.value !== undefined ? 'OBSERVED' : 'PENDING',
-    }));
   } else if (m?.available) {
     mean = m.objective.mean;
-    meanOrigin = m.objective.origin === 'OBSERVED' ? 'OBSERVED' : m.objective.origin === 'DERIVED' ? 'DERIVED' : 'PENDING';
-    rows = m.objective.rows.map(r => ({
-      position: r.position,
-      target: r.targetLabel,
-      loss: r.loss,
-      probability: r.probability,
-      origin: r.origin === 'OBSERVED' ? 'OBSERVED' : r.origin === 'DERIVED' ? 'DERIVED' : 'PENDING',
-    }));
-  } else {
-    // Structural preview from authoritative ForwardModel.targets; never shift input
-    const input = f.input ?? [];
-    const targets = f.targets;
-    rows = input.map((_, i) => {
-      let targetLabel = 'unavailable';
-      if (targets && i < targets.length && targets[i] !== undefined) {
-        const tid = targets[i];
-        targetLabel = vocabulary[tid] ?? String(tid);
-      }
-      return {
-        position: i,
-        target: targetLabel,
-        origin: 'PENDING' as const,
-      };
-    });
+    meanOrigin = m.objective.origin === 'OBSERVED'
+      ? 'OBSERVED'
+      : m.objective.origin === 'DERIVED'
+        ? 'DERIVED'
+        : 'PENDING';
   }
 
-  const bounds = objectiveLearningBounds(rows.length);
-  const { x, y, width, height } = bounds;
+  const { x, y, width, height } = objectiveLearningBounds(positionCount);
   const probStation = stationFor('probabilities');
 
-  const maxDisplayRows = 8;
-  const displayRows = rows.slice(0, maxDisplayRows);
-  const truncated = rows.length > maxDisplayRows;
-  const rowHeight = 28;
-
-  const lines = displayRows.map(
-    (r, idx) => `<text class="objective-row" data-testid="objective-row-p${r.position}" data-origin="${r.origin}" x="${x + 16}" y="${y + 114 + idx * rowHeight}">p${r.position} target '${esc(r.target)}' [${r.origin}]: -log P = ${r.loss === undefined ? 'pending' : n(r.loss)}</text>`
-  );
-  if (truncated) {
-    lines.push(`<text class="objective-row objective-truncated" x="${x + 16}" y="${y + 114 + displayRows.length * rowHeight}">… showing ${maxDisplayRows} of ${rows.length} positions</text>`);
-  }
-
-  const lineCount = lines.length;
-  const dividerY = y + 114 + lineCount * rowHeight + 8;
-  const meanY = dividerY + 28;
-  const note1Y = meanY + 28;
-  const note2Y = note1Y + 22;
-
-  let titleText: string;
-  let tagText: string;
-  let subText: string;
-
-  if (meanOrigin === 'OBSERVED') {
-    titleText = 'Training Objective Anchor · Observed output evidence across all positions. Not a permanent inference node.';
-    tagText = 'TEACHING OVERLAY · OBSERVED OUTPUT EVIDENCE';
-    subText = `All ${rows.length} positions combine into mean loss · observed`;
-  } else if (meanOrigin === 'DERIVED') {
-    titleText = 'Training Objective Anchor · Derived output evidence across all positions. Not a permanent inference node.';
-    tagText = 'TEACHING OVERLAY · DERIVED OUTPUT EVIDENCE';
-    subText = `All ${rows.length} positions combine into mean loss · derived`;
-  } else {
-    titleText = 'Training Objective Anchor · Known training targets · loss evidence pending. Not a permanent inference node.';
-    tagText = 'TEACHING OVERLAY · TARGETS KNOWN · LOSS PENDING';
-    subText = `Known training targets · loss evidence pending across all ${rows.length} positions`;
-  }
-
-  return `<g class="objective-anchor ${isHighlighted ? 'active-learning-anchor' : ''}" data-testid="objective-anchor" data-objective-mean="${mean ?? ''}" data-objective-mean-origin="${meanOrigin}" data-objective-availability="${mean !== undefined ? 'available' : 'pending'}" data-objective-positions="${rows.length}">
-    <title>${esc(titleText)}</title>
-    <!-- Connecting tether from probabilities to objective anchor -->
+  return `<g class="objective-anchor active-learning-anchor" data-testid="objective-anchor" data-objective-mean="${mean ?? ''}" data-objective-mean-origin="${meanOrigin}" data-objective-availability="${mean !== undefined ? 'available' : 'pending'}" data-objective-positions="${positionCount}">
+    <title>Training objective marker attached to the output probabilities.</title>
     <path class="objective-tether" d="M${probStation.x + probStation.width} ${probStation.y + probStation.height / 2} H${x}"/>
-    <!-- Container -->
     <rect class="objective-box" x="${x}" y="${y}" width="${width}" height="${height}" rx="6"/>
-    <text class="objective-tag" x="${x + 16}" y="${y + 28}">${esc(tagText)}</text>
-    <text class="objective-title" x="${x + 16}" y="${y + 58}">TRAINING OBJECTIVE</text>
-    <text class="objective-sub" x="${x + 16}" y="${y + 82}">${esc(subText)}</text>
-    <!-- Position losses -->
-    ${lines.join('')}
-    <!-- Mean objective -->
-    <line class="objective-divider" x1="${x + 16}" y1="${dividerY}" x2="${x + width - 16}" y2="${dividerY}"/>
-    <text class="objective-mean" x="${x + 16}" y="${meanY}">Mean loss [${meanOrigin}]: ${mean === undefined ? 'pending' : n(mean)}</text>
-    <!-- Truth boundary cue -->
-    <text class="objective-scope-note" x="${x + 16}" y="${note1Y}">The forward lesson followed one prediction slice.</text>
-    <text class="objective-scope-note" x="${x + 16}" y="${note2Y}">Training combines losses across all target positions.</text>
+    <text class="objective-title" x="${x + 18}" y="${y + 34}">TRAINING OBJECTIVE</text>
+    <text class="objective-scope" x="${x + 18}" y="${y + 66}">All target positions</text>
+    <text class="objective-mean" x="${x + 18}" y="${y + 108}">Mean loss: ${mean === undefined ? 'pending' : n(mean)}</text>
+    <text class="objective-origin" x="${x + 18}" y="${y + 136}">${meanOrigin}</text>
   </g>`;
 }
 
@@ -496,11 +430,6 @@ function renderReverseCausalOverlay(
     : '';
 
   return `<g class="reverse-causal-overlay" data-testid="reverse-causal-overlay" data-active-reverse-landmark="${activeLandmark ?? ''}" data-reverse-route-stop="${learningRouteStop ?? ''}">
-    <!-- Truth cue: visual path is explanation playback over real computation, not runtime timing -->
-    <g class="reverse-truth-banner">
-      <rect class="reverse-truth-bg" x="1350" y="115" width="800" height="34" rx="4"/>
-      <text class="reverse-truth-cue" data-testid="reverse-truth-cue" x="1750" y="137" text-anchor="middle">Backward explanation path over the real computation. Visual movement is not runtime timing.</text>
-    </g>
     <!-- Conceptual / aggregated region guides -->
     ${guides.join('\n    ')}
     <!-- Real reverse operation edges -->
@@ -514,55 +443,49 @@ function renderParameterLearningOverlay(
   pin: ParameterPin,
   t?: TrainingProgress,
   m?: LearningModel,
-  learningRouteStop?: number,
+  tourState?: PublicTourState,
 ): string {
-  const bounds = parameterLearningBounds(pin);
-  const { x, y, width, height } = bounds;
+  const { x, y, width, height } = parameterLearningBounds(pin);
   const bank = stationFor(pin.name);
-
-  const isHighlighted = learningRouteStop === 5 || (t && ['backward', 'backward seed', 'optimizer proposal'].includes(t.phase));
-
-  // Determine gradient and contribution evidence
-  const gradient = t ? t.gradient : m?.available ? m.backward.gradient : undefined;
-  const isFinal = t ? t.final : m?.available ? true : false;
-  const event = t?.contributions.at(-1);
-
   const pinLabel = `${pin.name}[${pin.row},${pin.column}]`;
-  let contributionText = 'Contribution pending: awaiting scalar autograd traversal';
-  let accumulatorText = 'Gradient accumulator: partial sum across occurrences';
-  let ordinalText = `Selected parameter slice: ${pinLabel}`;
+  const event = t?.contributions.at(-1);
+  const showFinal = tourState === 'p2_final_gradient'
+    || (tourState === undefined && (t?.final === true || m?.available === true));
 
-  if (event) {
-    contributionText = `Occurrence #${event.ordinal}: ${n(event.childAdjoint)} × ${n(event.localDerivative)} = ${n(event.contribution)}`;
-    accumulatorText = `Accumulator: ${n(event.before)} + ${n(event.contribution)} → ${n(event.after)}`;
-    ordinalText = `Operand ${event.operand} · child adjoint scalar`;
-  } else if (m?.available && m.backward.contributions.length > 0) {
-    const first = m.backward.contributions[0];
-    contributionText = `Occurrence: ${n(first.childAdjoint)} × ${n(first.localDerivative)} = ${n(first.contribution)}`;
-    accumulatorText = `Sum across visible occurrences accounts for gradient`;
-    ordinalText = `${m.backward.contributions.length} occurrences recorded`;
-  } else if (isFinal) {
-    contributionText = 'Backward traversal complete. Final gradient computed.';
-    accumulatorText = 'All incoming scalar backward contributions accumulated.';
+  if (showFinal) {
+    const gradient = t?.final === true
+      ? t.gradient
+      : m?.available
+        ? m.backward.gradient
+        : undefined;
+
+    return `<g class="parameter-learning-overlay active-learning-anchor" data-testid="parameter-learning-overlay" data-parameter-name="${esc(pin.name)}" data-gradient-status="final">
+      <title>Selected parameter final-gradient marker.</title>
+      <path class="parameter-learning-tether" d="M${bank.x + bank.width} ${bank.y + 40} H${x}"/>
+      <rect class="parameter-overlay-box" x="${x}" y="${y}" width="${width}" height="${height}" rx="6"/>
+      <text class="param-overlay-tag" x="${x + 18}" y="${y + 32}">SELECTED PARAMETER</text>
+      <text class="param-overlay-title" x="${x + 18}" y="${y + 68}">${esc(pinLabel)}</text>
+      <text class="param-overlay-gradient" data-testid="param-overlay-gradient" x="${x + 18}" y="${y + 126}">
+        <tspan class="gradient-final">FINAL GRADIENT</tspan>
+        <tspan class="gradient-val"> ${gradient === undefined ? 'pending' : n(gradient)}</tspan>
+      </text>
+    </g>`;
   }
 
-  return `<g class="parameter-learning-overlay ${isHighlighted ? 'active-learning-anchor' : ''}" data-testid="parameter-learning-overlay" data-parameter-name="${esc(pin.name)}" data-gradient-status="${isFinal ? 'final' : 'partial'}">
-    <title>Parameter Learning Overlay · Selected parameter accumulation adjacent to its owner.</title>
-    <!-- Tether connecting overlay to parameter bank -->
+  const contribution = event?.contribution;
+  const partialGradient = event?.after;
+
+  return `<g class="parameter-learning-overlay active-learning-anchor" data-testid="parameter-learning-overlay" data-parameter-name="${esc(pin.name)}" data-gradient-status="partial" data-contribution-status="${event ? 'available' : 'pending'}">
+    <title>Selected parameter gradient-contribution marker.</title>
     <path class="parameter-learning-tether" d="M${bank.x + bank.width} ${bank.y + 40} H${x}"/>
-    <!-- Container -->
     <rect class="parameter-overlay-box" x="${x}" y="${y}" width="${width}" height="${height}" rx="6"/>
-    <text class="param-overlay-tag" x="${x + 16}" y="${y + 24}">SELECTED PARAMETER · ACCUMULATION</text>
-    <text class="param-overlay-title" x="${x + 16}" y="${y + 50}">${esc(pinLabel)} → ${esc(parameterOwners[pin.name] ?? 'tokenEmbedding')}</text>
-    <!-- Contribution and Accumulator evidence -->
-    <text class="param-overlay-calc" data-testid="param-overlay-calc" x="${x + 16}" y="${y + 78}">${esc(contributionText)}</text>
-    <text class="param-overlay-accum" data-testid="param-overlay-accum" x="${x + 16}" y="${y + 104}">${esc(accumulatorText)}</text>
-    <text class="param-overlay-ordinal" x="${x + 16}" y="${y + 128}">${esc(ordinalText)}</text>
-    <!-- Status badge: partial vs final -->
-    <line class="param-overlay-divider" x1="${x + 16}" y1="${y + 140}" x2="${x + width - 16}" y2="${y + 140}"/>
-    <text class="param-overlay-gradient" data-testid="param-overlay-gradient" x="${x + 16}" y="${y + 164}">
-      <tspan class="${isFinal ? 'gradient-final' : 'gradient-partial'}">${isFinal ? 'FINAL' : 'PARTIAL'} GRADIENT:</tspan>
-      <tspan class="gradient-val"> ${gradient === undefined ? 'pending' : n(gradient)}</tspan>
+    <text class="param-overlay-tag" x="${x + 18}" y="${y + 30}">SELECTED PARAMETER</text>
+    <text class="param-overlay-title" x="${x + 18}" y="${y + 64}">${esc(pinLabel)}</text>
+    <text class="param-overlay-calc" data-testid="param-overlay-calc" x="${x + 18}" y="${y + 102}">CONTRIBUTION ${contribution === undefined ? 'pending' : n(contribution)}</text>
+    <text class="param-overlay-accum" data-testid="param-overlay-accum" x="${x + 18}" y="${y + 136}">${event ? `${n(event.before)} + ${n(event.contribution)} → ${n(event.after)}` : 'Accumulation pending'}</text>
+    <text class="param-overlay-gradient" data-testid="param-overlay-gradient" x="${x + 18}" y="${y + 170}">
+      <tspan class="gradient-partial">PARTIAL GRADIENT</tspan>
+      <tspan class="gradient-val"> ${partialGradient === undefined ? 'pending' : n(partialGradient)}</tspan>
     </text>
   </g>`;
 }
@@ -571,56 +494,31 @@ function renderAdamLearningOverlay(
   pin: ParameterPin,
   t?: TrainingProgress,
   m?: LearningModel,
-  learningRouteStop?: number,
 ): string {
-  // Take numerical Adam evidence STRICTLY from live TrainingProgress.proposal or validated completed LearningModel.adam.update
   const u = t?.proposal ?? (m?.available ? m.adam.update : undefined);
-  const isAdamStop = learningRouteStop === 6;
-  const isHighlighted = isAdamStop || (t && ['optimizer proposal', 'candidate application'].includes(t.phase));
-
-  // If neither proposal evidence exists nor Adam stop/highlight is active, do not render overlay
-  if (!u && !isHighlighted) return '';
-
-  const bounds = adamLearningBounds(pin);
-  const { x, y, width, height } = bounds;
+  const { x, y, width, height } = adamLearningBounds(pin);
   const bank = stationFor(pin.name);
   const pinLabel = `${pin.name}[${pin.row},${pin.column}]`;
 
   if (u) {
-    // Authentic proposal evidence available
-    return `<g class="adam-learning-overlay ${isHighlighted ? 'active-learning-anchor' : ''}" data-testid="adam-learning-overlay" data-provisional="true" data-proposal-status="available" data-status="ready">
-    <title>Adam Optimizer Proposal · Persistent moments and provisional candidate update attached to selected parameter.</title>
-    <!-- Tether connecting Adam overlay to parameter bank -->
-    <path class="adam-learning-tether" d="M${bank.x + bank.width} ${bank.y + 80} H${x}"/>
-    <!-- Container -->
-    <rect class="adam-overlay-box" x="${x}" y="${y}" width="${width}" height="${height}" rx="6"/>
-    <text class="adam-overlay-tag" x="${x + 16}" y="${y + 24}">ADAM OPTIMIZER · PROVISIONAL PROPOSAL</text>
-    <text class="adam-overlay-title" x="${x + 16}" y="${y + 48}">θ ${n(u.before)} → provisional candidate θ′ ${n(u.after)}</text>
-    <!-- Formulas & values -->
-    <g data-testid="adam-proposal-table">
-      <text class="adam-overlay-row" x="${x + 16}" y="${y + 74}">State: m ${n(u.mBefore)} / v ${n(u.vBefore)} + final g ${n(u.gradient)}</text>
-      <text class="adam-overlay-row" x="${x + 16}" y="${y + 98}">Moments: proposed m′ ${n(u.mAfter)} / v′ ${n(u.vAfter)} · m̂ ${n(u.mHat)} / v̂ ${n(u.vHat)}</text>
-      <text class="adam-overlay-row" x="${x + 16}" y="${y + 122}">Delta: stored Δ ${n(u.delta)} · candidate parameter created</text>
-    </g>
-    <!-- Scope and provisional boundary -->
-    <text class="adam-overlay-scope" x="${x + 16}" y="${y + 144}">One slice of full candidate update. Accepted model has not changed.</text>
-  </g>`;
+    return `<g class="adam-learning-overlay active-learning-anchor" data-testid="adam-learning-overlay" data-provisional="true" data-proposal-status="available" data-status="ready">
+      <title>Adam provisional proposal marker attached to the selected parameter.</title>
+      <path class="adam-learning-tether" d="M${bank.x + bank.width} ${bank.y + 80} H${x}"/>
+      <rect class="adam-overlay-box" x="${x}" y="${y}" width="${width}" height="${height}" rx="6"/>
+      <text class="adam-overlay-tag" x="${x + 18}" y="${y + 30}">ADAM PROPOSAL</text>
+      <text class="adam-overlay-title" x="${x + 18}" y="${y + 66}">${esc(pinLabel)} · PROVISIONAL</text>
+      <text class="adam-overlay-value" data-testid="adam-proposal-value" x="${x + 18}" y="${y + 108}">θ ${n(u.before)} → θ′ ${n(u.after)}</text>
+      <text class="adam-overlay-status" x="${x + 18}" y="${y + 146}">ACCEPTED MODEL UNCHANGED</text>
+    </g>`;
   }
 
-  // Pending state: No synthetic numbers manufactured
-  return `<g class="adam-learning-overlay ${isHighlighted ? 'active-learning-anchor' : ''}" data-testid="adam-learning-overlay" data-provisional="true" data-proposal-status="pending" data-status="pending">
-    <title>Adam Optimizer Proposal Pending · No numerical optimizer proposal has been produced yet.</title>
-    <!-- Tether connecting Adam overlay to parameter bank -->
+  return `<g class="adam-learning-overlay active-learning-anchor" data-testid="adam-learning-overlay" data-provisional="true" data-proposal-status="pending" data-status="pending">
+    <title>Adam proposal pending for the selected parameter.</title>
     <path class="adam-learning-tether" d="M${bank.x + bank.width} ${bank.y + 80} H${x}"/>
-    <!-- Container -->
     <rect class="adam-overlay-box" x="${x}" y="${y}" width="${width}" height="${height}" rx="6"/>
-    <text class="adam-overlay-tag" x="${x + 16}" y="${y + 24}">ADAM OPTIMIZER · OPTIMIZER PROPOSAL PENDING</text>
-    <text class="adam-overlay-title" x="${x + 16}" y="${y + 48}">Adam proposal pending · candidate unavailable</text>
-    <!-- Truthful structural/pending description with dynamic pin label -->
-    <text class="adam-overlay-row" x="${x + 16}" y="${y + 74}">Adam combines final gradient with persistent optimizer state (m, v).</text>
-    <text class="adam-overlay-row" data-testid="adam-proposal-pending" x="${x + 16}" y="${y + 98}">Optimizer proposal pending: No numerical optimizer proposal has been produced yet.</text>
-    <text class="adam-overlay-row" x="${x + 16}" y="${y + 122}">Persistent optimizer state belongs to ${esc(pinLabel)}; proposal is pending.</text>
-    <!-- Scope and provisional boundary -->
-    <text class="adam-overlay-scope" x="${x + 16}" y="${y + 144}">Accepted model has not changed. Proposal awaits backward pass completion.</text>
+    <text class="adam-overlay-tag" x="${x + 18}" y="${y + 30}">ADAM PROPOSAL</text>
+    <text class="adam-overlay-title" x="${x + 18}" y="${y + 66}">${esc(pinLabel)}</text>
+    <text class="adam-overlay-value" data-testid="adam-proposal-pending" x="${x + 18}" y="${y + 108}">PENDING</text>
+    <text class="adam-overlay-status" x="${x + 18}" y="${y + 146}">ACCEPTED MODEL UNCHANGED</text>
   </g>`;
 }

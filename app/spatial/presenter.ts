@@ -685,6 +685,7 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
           training: state.execution?.progress?.training,
           learning: state.learning,
           learningRouteStop: this.derivedLearningRouteStop,
+          tourState: this.publicTourState,
           isLearningActive: Boolean(
             state.execution?.progress?.training ||
             this.derivedLearningRouteStop !== undefined ||

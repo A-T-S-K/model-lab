@@ -6,7 +6,7 @@ import { publicLearningScene } from '../../app/spatial/public-learning.js';
 import type { ParameterPin, LearningModel } from '../../app/spatial/learning.js';
 import type { TrainingProgress } from '../../app/worker/training-execution.js';
 
-test('publicLearningScene enforces exact-address reverse-causal edges, truthful targets, dynamic pins, and removes fabricated Adam numbers', async () => {
+test('publicLearningScene keeps reverse dependencies truthful and admits only compact state-specific spatial evidence', async () => {
   const session = new ModelSession();
   const tag = { sessionId: 'public-learning-test', generationId: 0 };
   await session.handle({ ...tag, runId: 'init', command: 'initialize' });
@@ -19,12 +19,13 @@ test('publicLearningScene enforces exact-address reverse-causal edges, truthful 
   const f = forwardReadModel(r.run, r.snapshots[0]);
   const defaultPin: ParameterPin = { name: 'wte', row: 0, column: 0 };
 
-  // 1. Exact address attributes on every .reverse-causal-edge and upstream validity
+  // Reverse-path truth remains exact and spatial.
   const sceneSvg = publicLearningScene({
     f,
     pin: defaultPin,
     isLearningActive: true,
-    learningRouteStop: 1,
+    learningRouteStop: 5,
+    tourState: 'p2_gradient_contribution',
     query: 3,
     head: 0,
   });
@@ -66,7 +67,6 @@ test('publicLearningScene enforces exact-address reverse-causal edges, truthful 
       head: toHead !== undefined ? parseInt(toHead, 10) : undefined,
     };
 
-    // Assert that toAddr is an authoritative upstream dependency of fromAddr in forward model
     const upstream = f.upstream(fromAddr);
     const matchesUpstream = upstream.some(dep => {
       const u = dep.address;
@@ -83,45 +83,40 @@ test('publicLearningScene enforces exact-address reverse-causal edges, truthful 
     );
   }
 
-  // 2. Residual branches: mlpResidual -> attentionResidual, and attentionResidual -> embeddingNorm
   const mlpResidualEdge = edgeMatches.find(e => e.includes('data-reverse-from-kind="mlpResidual"') && e.includes('data-reverse-to-kind="attentionResidual"'));
   assert(mlpResidualEdge, 'Must have reverse-causal-edge for residual branch mlpResidual -> attentionResidual');
 
   const attnResidualEdge = edgeMatches.find(e => e.includes('data-reverse-from-kind="attentionResidual"') && e.includes('data-reverse-to-kind="embeddingNorm"'));
   assert(attnResidualEdge, 'Must have reverse-causal-edge for residual branch attentionResidual -> embeddingNorm');
 
-  // 3. Prohibit false shortcut: headOutput <- preAttentionNorm
   const falseShortcut = edgeMatches.find(e => e.includes('data-reverse-from-kind="headOutput"') && e.includes('data-reverse-to-kind="preAttentionNorm"'));
   assert.equal(falseShortcut, undefined, 'Must NOT have false shortcut headOutput <- preAttentionNorm');
 
-  // 4. Multi-key fan-in and conceptual landmarks use .reverse-region-guide
   const guideRegex = /<path\s+[^>]*class="[^"]*reverse-region-guide[^"]*"[^>]*>/g;
   const guideMatches = sceneSvg.match(guideRegex);
   assert(guideMatches && guideMatches.length > 0, 'Must have .reverse-region-guide elements for fan-in/conceptual guides');
 
-  // 5. Objective Anchor: All 5 canonical positions, targets from f.targets, and truthful provenance
-  assert(f.targets && f.targets.length >= 5, 'ForwardModel must have authoritative targets');
+  assert(!sceneSvg.includes('reverse-truth-banner'), 'Reverse truth banner must not be duplicated in graph markup');
+  assert(!sceneSvg.includes('Backward explanation path over the real computation'), 'Reverse truth prose belongs in the dock, not world-space text');
+
+  // Objective is one compact spatial marker, with truthful provenance and no per-position table.
   const objectiveSvg = publicLearningScene({
     f,
     pin: defaultPin,
     isLearningActive: true,
     learningRouteStop: 0,
+    tourState: 'p2_objective',
   });
 
-  for (let i = 0; i < 5; i++) {
-    assert(objectiveSvg.includes(`p${i}`), `Objective anchor must include position p${i}`);
-    const expectedTarget = f.targets[i];
-    const expectedTargetLabel = (f.vocabulary && f.vocabulary[expectedTarget]) ?? String(expectedTarget);
-    assert(
-      objectiveSvg.includes(`target ${expectedTarget}`) || objectiveSvg.includes(expectedTargetLabel),
-      `Objective anchor must present authoritative target ${expectedTarget} at p${i}`
-    );
-  }
-  // Pending provenance when uncalculated
-  assert(objectiveSvg.includes('[PENDING]'), 'Objective anchor must show [PENDING] when uncomputed');
-  assert(!objectiveSvg.includes('[OBSERVED]'), 'Objective anchor must NOT claim [OBSERVED] when uncomputed');
+  assert(objectiveSvg.includes('data-testid="objective-anchor"'));
+  assert(objectiveSvg.includes('TRAINING OBJECTIVE'));
+  assert(objectiveSvg.includes('All target positions'));
+  assert(objectiveSvg.includes('Mean loss: pending'));
+  assert(objectiveSvg.includes('>PENDING<'));
+  assert(!objectiveSvg.includes('objective-row'));
+  assert(!objectiveSvg.includes('parameter-learning-overlay'));
+  assert(!objectiveSvg.includes('adam-learning-overlay'));
 
-  // Objective provenance with completed LearningModel: DERIVED must never be labeled OBSERVED
   const mockDerivedLearning: LearningModel = {
     available: true,
     start: {} as any,
@@ -152,48 +147,98 @@ test('publicLearningScene enforces exact-address reverse-causal edges, truthful 
     isLearningActive: true,
     learning: mockDerivedLearning,
     learningRouteStop: 0,
+    tourState: 'p2_objective',
   });
-  assert(derivedSvg.includes('[DERIVED]'), 'Must retain [DERIVED] provenance');
-  assert(!derivedSvg.includes('[OBSERVED]'), 'Must NEVER label DERIVED as [OBSERVED]');
+  assert(derivedSvg.includes('>DERIVED<'), 'Must retain DERIVED provenance');
+  assert(!derivedSvg.includes('>OBSERVED<'), 'Must never label derived objective evidence observed');
 
-  // 6. Dynamic Parameter Pin derivation (no hardcoded wte[0,0] fallback)
+  // Gradient contribution is a parameter-local marker only.
   const nonWtePin: ParameterPin = { name: 'mlp.fc', row: 1, column: 2 };
-  const customPinSvg = publicLearningScene({
+  const contributionProgress = {
+    phase: 'backward',
+    pin: 0,
+    gradient: 7.5,
+    final: false,
+    contributions: [{
+      child: 1,
+      operand: 0,
+      childAdjoint: 2,
+      localDerivative: 3,
+      contribution: 6,
+      before: 1.5,
+      after: 7.5,
+      ordinal: 4,
+    }],
+    losses: [],
+  } as unknown as TrainingProgress;
+
+  const contributionSvg = publicLearningScene({
     f,
     pin: nonWtePin,
+    training: contributionProgress,
     isLearningActive: true,
-    learningRouteStop: 6,
+    learningRouteStop: 5,
+    tourState: 'p2_gradient_contribution',
   });
-  assert(customPinSvg.includes('mlp.fc[1,2]'), 'Must dynamically derive parameter pin label mlp.fc[1,2]');
-  assert(!customPinSvg.includes('wte[0,0]'), 'Must NOT have hard-coded wte[0,0] fallback');
+  assert(contributionSvg.includes('mlp.fc[1,2]'), 'Selected parameter label must remain dynamic');
+  assert(contributionSvg.includes('CONTRIBUTION 6'));
+  assert(contributionSvg.includes('1.5 + 6 → 7.5'));
+  assert(contributionSvg.includes('PARTIAL GRADIENT'));
+  assert(contributionSvg.includes(' 7.5</tspan>'));
+  assert(!contributionSvg.includes('2 × 3'), 'Child-adjoint × local-derivative arithmetic belongs in the dock');
+  assert(!contributionSvg.includes('objective-anchor'));
+  assert(!contributionSvg.includes('adam-learning-overlay'));
 
-  // 7. Adam Proposal truth: honest pending state with zero fabricated numbers
+  // Final Gradient reuses the same tether but drops stale contribution detail.
+  const finalProgress = {
+    ...contributionProgress,
+    final: true,
+    gradient: 7.5,
+  } as unknown as TrainingProgress;
+  const finalSvg = publicLearningScene({
+    f,
+    pin: nonWtePin,
+    training: finalProgress,
+    isLearningActive: true,
+    learningRouteStop: 5,
+    tourState: 'p2_final_gradient',
+  });
+  assert(finalSvg.includes('mlp.fc[1,2]'));
+  assert(finalSvg.includes('FINAL GRADIENT'));
+  assert(finalSvg.includes(' 7.5</tspan>'));
+  assert(!finalSvg.includes('CONTRIBUTION 6'), 'Final-gradient marker must not preserve an old contribution as the teaching result');
+  assert(!finalSvg.includes('param-overlay-accum'));
+  assert(!finalSvg.includes('objective-anchor'));
+  assert(!finalSvg.includes('adam-learning-overlay'));
+
+  // Adam is a compact provisional marker. Pending never fabricates numbers.
   const pendingAdamSvg = publicLearningScene({
     f,
     pin: nonWtePin,
     isLearningActive: true,
     learningRouteStop: 6,
+    tourState: 'p2_adam_proposal',
   });
-  assert(pendingAdamSvg.includes('data-status="pending"'), 'Adam overlay must be pending when proposal is undefined');
-  assert(pendingAdamSvg.includes('data-testid="adam-proposal-pending"'), 'Must contain adam-proposal-pending testid');
-  assert(pendingAdamSvg.includes('Optimizer proposal pending'), 'Must state optimizer proposal is pending');
-  assert(pendingAdamSvg.includes('Persistent optimizer state belongs to mlp.fc[1,2]'), 'Must explain persistent optimizer state belongs to pin');
-  // Confirm absence of fabricated numbers
-  assert(!pendingAdamSvg.includes('-0.042'), 'Must NOT contain fabricated gradient -0.042');
-  assert(!pendingAdamSvg.includes('-0.0042'), 'Must NOT contain fabricated moment -0.0042');
-  assert(!pendingAdamSvg.includes('0.0270'), 'Must NOT contain fabricated update 0.0270');
+  assert(pendingAdamSvg.includes('data-status="pending"'));
+  assert(pendingAdamSvg.includes('data-testid="adam-proposal-pending"'));
+  assert(pendingAdamSvg.includes('ADAM PROPOSAL'));
+  assert(pendingAdamSvg.includes('mlp.fc[1,2]'));
+  assert(pendingAdamSvg.includes('>PENDING<'));
+  assert(pendingAdamSvg.includes('ACCEPTED MODEL UNCHANGED'));
+  assert(!pendingAdamSvg.includes('-0.042'));
+  assert(!pendingAdamSvg.includes('-0.0042'));
+  assert(!pendingAdamSvg.includes('0.0270'));
+  assert(!pendingAdamSvg.includes('objective-anchor'));
+  assert(!pendingAdamSvg.includes('parameter-learning-overlay'));
+  assert(!pendingAdamSvg.includes('reverse-causal-overlay'));
 
-  // Authentic proposal rendering when proposal is provided
-  const realProposalProgress: TrainingProgress = {
-    phase: 'ready',
-    startingSnapshotId: 'snap1234567890',
-    acceptedStep: 1,
+  const realProposalProgress = {
+    phase: 'optimizer proposal',
+    pin: 0,
     gradient: -0.055,
     final: true,
-    gradientSourceRunId: 'run1',
     contributions: [],
     losses: [],
-    pin: 0,
     proposal: {
       index: 0,
       name: 'wte',
@@ -216,13 +261,27 @@ test('publicLearningScene enforces exact-address reverse-causal edges, truthful 
 
   const readyAdamSvg = publicLearningScene({
     f,
-    pin: nonWtePin,
+    pin: defaultPin,
     training: realProposalProgress,
     isLearningActive: true,
     learningRouteStop: 6,
+    tourState: 'p2_adam_proposal',
   });
-  assert(readyAdamSvg.includes('data-status="ready"'), 'Adam overlay must be ready when proposal exists');
-  assert(readyAdamSvg.includes('data-testid="adam-proposal-table"'), 'Must contain proposal table');
-  assert(readyAdamSvg.includes('0.1234'), 'Must contain authentic proposal before value');
-  assert(readyAdamSvg.includes('0.1259'), 'Must contain authentic proposal after value');
+  assert(readyAdamSvg.includes('data-status="ready"'));
+  assert(readyAdamSvg.includes('wte[0,0] · PROVISIONAL'));
+  assert(readyAdamSvg.includes('θ 0.1234 → θ′ 0.1259'));
+  assert(readyAdamSvg.includes('ACCEPTED MODEL UNCHANGED'));
+  assert(!readyAdamSvg.includes('adam-proposal-table'));
+  assert(!readyAdamSvg.includes('Moments:'));
+  assert(!readyAdamSvg.includes('Delta:'));
+
+  // Candidate Ready owns no graph callout boxes; comparison and decision stay in the dock.
+  const candidateSvg = publicLearningScene({
+    f,
+    pin: defaultPin,
+    training: { ...realProposalProgress, phase: 'ready' } as unknown as TrainingProgress,
+    isLearningActive: true,
+    tourState: 'candidate_ready',
+  });
+  assert.equal(candidateSvg, '');
 });

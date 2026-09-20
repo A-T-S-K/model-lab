@@ -1063,7 +1063,7 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   pointer-events: none;
 }
 
-/* Objective Anchor Overlay */
+/* Compact objective marker */
 .objective-anchor {
   pointer-events: all;
   transition: opacity 0.2s ease;
@@ -1083,45 +1083,29 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   stroke-dasharray: 4 3;
 }
 
-.spatial-world .objective-tag {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  fill: #ffb74d;
-}
-
 .spatial-world .objective-title {
-  font-size: 16px;
+  font-size: 26px;
   font-weight: 700;
   fill: #f0f6fc;
 }
 
-.spatial-world .objective-sub {
-  font-size: 12px;
-  fill: #8b949e;
-}
-
-.spatial-world .objective-row {
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 12px;
+.spatial-world .objective-scope {
+  font-size: 20px;
+  font-weight: 600;
   fill: #c9d1d9;
 }
 
-.spatial-world .objective-divider {
-  stroke: #30363d;
-  stroke-width: 1;
-}
-
 .spatial-world .objective-mean {
-  font-size: 14px;
+  font-size: 24px;
   font-weight: 700;
   fill: #ffb74d;
 }
 
-.spatial-world .objective-scope-note {
-  font-size: 11px;
+.spatial-world .objective-origin {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   fill: #8b949e;
-  font-style: italic;
 }
 
 /* Reverse Causal Overlay & Edges */
@@ -1151,23 +1135,6 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   }
 }
 
-.reverse-truth-banner {
-  pointer-events: none;
-}
-
-.reverse-truth-bg {
-  fill: #221a28;
-  stroke: #ba68c8;
-  stroke-width: 1;
-}
-
-.reverse-truth-cue {
-  font-size: 12px;
-  font-weight: 600;
-  fill: #f5d0fe;
-  letter-spacing: 0.02em;
-}
-
 .reverse-landmark-reticle {
   fill: none;
   stroke: #e5a0ff;
@@ -1181,7 +1148,7 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   50% { stroke-opacity: 1; stroke-width: 2.5; }
 }
 
-/* Parameter Learning Overlay */
+/* Compact parameter marker */
 .parameter-learning-overlay {
   pointer-events: all;
   transition: opacity 0.2s ease;
@@ -1202,34 +1169,28 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
 }
 
 .spatial-world .param-overlay-tag {
-  font-size: 10px;
+  font-size: 18px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   fill: #58a6ff;
 }
 
 .spatial-world .param-overlay-title {
-  font-size: 15px;
+  font-size: 24px;
   font-weight: 700;
   fill: #f0f6fc;
 }
 
 .spatial-world .param-overlay-calc,
-.spatial-world .param-overlay-accum,
-.spatial-world .param-overlay-ordinal {
+.spatial-world .param-overlay-accum {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 11.5px;
+  font-size: 22px;
   fill: #c9d1d9;
-}
-
-.spatial-world .param-overlay-divider {
-  stroke: #30363d;
-  stroke-width: 1;
 }
 
 .spatial-world .param-overlay-gradient {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 12.5px;
+  font-size: 24px;
 }
 
 .gradient-final {
@@ -1247,7 +1208,7 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   font-weight: 600;
 }
 
-/* Adam Optimizer Overlay */
+/* Compact Adam proposal marker */
 .adam-learning-overlay {
   pointer-events: all;
   transition: opacity 0.2s ease;
@@ -1269,28 +1230,30 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
 }
 
 .spatial-world .adam-overlay-tag {
-  font-size: 10px;
+  font-size: 18px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   fill: #62c7e8;
 }
 
 .spatial-world .adam-overlay-title {
-  font-size: 14px;
+  font-size: 23px;
   font-weight: 700;
+  fill: #f0f6fc;
+}
+
+.spatial-world .adam-overlay-value {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 22px;
+  font-weight: 650;
   fill: #62c7e8;
 }
 
-.spatial-world .adam-overlay-row {
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 11px;
-  fill: #c9d1d9;
-}
-
-.spatial-world .adam-overlay-scope {
-  font-size: 10.5px;
+.spatial-world .adam-overlay-status {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   fill: #8b949e;
-  font-style: italic;
 }
 
 .active-learning-anchor {
