@@ -19,6 +19,20 @@ export type DockDepth = 'explain' | 'values' | 'math' | 'source' | 'compare';
 
 const val = (v: number | undefined, id = '') => `<span ${id ? `data-testid="${id}"` : ''} data-value="${v ?? ''}" title="${v ?? 'unavailable'}">${fmt(v)}</span>`;
 
+export interface PublicTrainingActionState {
+  readonly executionId: string;
+  readonly sequence: number;
+  readonly phase: string;
+  readonly ready: boolean;
+  readonly disabled: boolean;
+  readonly cancelling: boolean;
+  readonly canPin: boolean;
+  readonly pinLabel: string;
+  readonly frontierText: string;
+  readonly acceptedStep: number;
+  readonly pinnedParameter: string;
+}
+
 export interface ContextualDockOptions {
   readonly model?: SpatialReadModel;
   readonly address: Address;
@@ -31,6 +45,8 @@ export interface ContextualDockOptions {
   readonly depth: DockDepth;
   readonly profile: ExperienceProfile;
   readonly freeExplore: boolean;
+  readonly attract?: boolean;
+  readonly trainingState?: PublicTrainingActionState;
   readonly lessonProgress: string;
   readonly routePurpose: string;
   readonly primaryAction: string;
@@ -50,8 +66,17 @@ export interface ContextualDockOptions {
 }
 
 function renderExplain(opts: ContextualDockOptions): string {
-  const { model: m, address: a, element, parameter, pin, executionProgress, trainingProgress, learningStage, learningModel, learningRouteStop } = opts;
+  const { model: m, address: a, element, parameter, pin, executionProgress, trainingProgress, learningStage, learningModel, learningRouteStop, attract, trainingState } = opts;
   if (!m) return '<p>No model loaded.</p>';
+
+  if (attract) {
+    return `<div class="dock-explain-content" data-testid="dock-explain">
+      <div class="idle-explanation">
+        <strong>RECORDED RUN · REPLAY</strong>
+        <p>Recorded real run. Not live. Start to make a fresh prediction, then follow the numbers through attention.</p>
+      </div>
+    </div>`;
+  }
 
   if (trainingProgress) {
     const t = trainingProgress;
@@ -59,13 +84,19 @@ function renderExplain(opts: ContextualDockOptions): string {
     const truthCue = isBackward
       ? `<p class="reverse-truth-cue" data-testid="reverse-truth-cue">Backward explanation path over the real computation. Visual movement is not runtime timing.</p>`
       : '';
+    const bridge = `<div class="learning-bridge" data-testid="learning-bridge" aria-label="Prediction to learning causal bridge"><div class="bridge-chain"><span class="bridge-step">1 · Predictions for known targets</span><span class="bridge-arrow" aria-hidden="true">→</span><span class="bridge-step">2 · Per-position losses combine into training objective</span><span class="bridge-arrow" aria-hidden="true">→</span><span class="bridge-step">3 · Backpropagation carries backward signal</span><span class="bridge-arrow" aria-hidden="true">→</span><span class="bridge-step">4 · Parameter uses produce gradient contributions</span><span class="bridge-arrow" aria-hidden="true">→</span><span class="bridge-step">5 · Contributions accumulate into final gradient</span><span class="bridge-arrow" aria-hidden="true">→</span><span class="bridge-step">6 · Adam uses final gradient for parameter proposal</span><span class="bridge-arrow" aria-hidden="true">→</span><span class="bridge-step">7 · Provisional candidate: Accept or Discard</span></div><p class="bridge-scope">We follow one selected parameter (${esc(parameterLabel(pin))}) to observe one real contribution arrive and accumulate into its partial gradient. The combined training objective uses losses across all target positions, and candidate proposals remain provisional until accepted.</p></div>`;
+    const guidance = trainingState && !trainingState.ready
+      ? `<p class="learning-guidance" data-testid="learning-guidance">Run to next gradient contribution runs the required phases, then pauses after the next matching backward node for the pinned parameter. Repeated operands in one node finish together. Continue runs to Candidate ready; Accept / Discard remains your decision.</p>`
+      : '';
     return `<div class="dock-explain-content" data-testid="dock-explain">
+      ${bridge}
       <p class="learning-scope">Live training · ${esc(t.phase)} · accepted step ${t.acceptedStep} → proposed step ${t.acceptedStep + 1} provisional</p>
       <div class="dock-pin-info"><span data-testid="pin-owner">${esc(pin.name)} → ${esc(operations.find(o=>o.kind===parameterOwners[pin.name])?.title??pin.name)} · same global owner · accepted ${esc(t.startingSnapshotId.slice(0,12))}</span></div>
       <p class="learning-gradient-summary">${t.final ? 'Final' : 'Partial'} gradient: <span data-testid="live-gradient" data-value="${t.gradient}">${t.gradient === undefined ? 'pending' : fmt(t.gradient)}</span></p>
       <p class="learning-mechanism">Parameter uses contribute and accumulate: each backward occurrence calculates a child adjoint × local derivative contribution and adds it to the parameter gradient accumulator.</p>
       ${truthCue}
       ${t.proposal ? `<p class="learning-provisional">Candidate proposal: θ ${fmt(t.proposal.before)} → ${fmt(t.proposal.after)} · provisional until explicitly accepted.</p>` : ''}
+      ${guidance}
       <p>Pinned ${esc(parameterLabel(pin))}. Losses across all positions enter the objective; candidate proposals remain provisional until accepted.</p>
     </div>`;
   }
@@ -418,12 +449,25 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
         ${routePurpose ? `<span class="route-purpose" data-testid="route-purpose">${esc(routePurpose)}</span>` : ''}
         <p role="status" class="dock-status-message">${esc(opts.shortMessage)} ${opts.shortDetour ? 'Exploring a detour. Resume explicitly to return. ' : ''}</p>
       </div>
-      <div class="dock-route-actions">
-        ${primaryAction}
-        ${attentionAction}
-        ${!isFacilitator ? `<button id="visitor-explore-toggle">${freeExplore ? 'Close free exploration' : 'Explore freely'}</button>` : ''}
-        ${shortDetour ? `<button id="short-resume">Resume short route</button>` : ''}
-        ${!isFacilitator ? `<button id="operator-controls">${operatorControls ? 'Hide operator controls' : 'Show operator controls'}</button>` : ''}
+      <div class="dock-route-actions"${opts.trainingState ? ` id="execution-controls" data-execution-id="${esc(opts.trainingState.executionId)}" data-sequence="${opts.trainingState.sequence}" data-training-phase="${esc(opts.trainingState.phase)}"` : ''}>
+        ${opts.trainingState ? (
+          opts.trainingState.ready ? `
+            <button id="execution-accept" class="primary-action" ${opts.trainingState.disabled ? 'disabled' : ''}>Accept update</button>
+            <button id="execution-cancel" class="secondary-action" ${opts.trainingState.cancelling ? 'disabled' : ''}>Discard candidate</button>
+            <span data-testid="execution-frontier">${esc(opts.trainingState.frontierText)}</span>
+          ` : `
+            <button id="execution-continue" class="primary-action" ${opts.trainingState.disabled ? 'disabled' : ''}>Continue</button>
+            ${opts.trainingState.canPin ? `<button id="execution-pin" class="secondary-action" ${opts.trainingState.disabled ? 'disabled' : ''}>${esc(opts.trainingState.pinLabel)}</button>` : ''}
+            <button id="execution-cancel" class="secondary-action" ${opts.trainingState.cancelling ? 'disabled' : ''}>Cancel training</button>
+            <span data-testid="execution-frontier">${esc(opts.trainingState.frontierText)}</span>
+          `
+        ) : `
+          ${primaryAction}
+          ${attentionAction}
+          ${!isFacilitator && !opts.attract ? `<button id="visitor-explore-toggle">${freeExplore ? 'Close free exploration' : 'Explore freely'}</button>` : ''}
+          ${shortDetour ? `<button id="short-resume">Resume short route</button>` : ''}
+          ${isFacilitator ? `<button id="operator-controls">${operatorControls ? 'Hide operator controls' : 'Show operator controls'}</button>` : ''}
+        `}
       </div>
     </div>
     <nav class="dock-tabs" aria-label="Explanation depth">

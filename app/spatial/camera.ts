@@ -1,5 +1,6 @@
 export interface CameraBox { x:number; y:number; width:number; height:number }
 export const HOME:CameraBox={x:0,y:0,width:4500,height:1700};
+export const PUBLIC_HOME:CameraBox={x:0,y:0,width:4500,height:1300};
 export class SpatialCamera {
   box:CameraBox={...HOME};
   private svg?:SVGSVGElement;

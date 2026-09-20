@@ -15,11 +15,27 @@ test("resolveExperienceProfile maps entry parameters and disclosure state", () =
     "facilitator",
   );
   assert.equal(
+    resolveExperienceProfile({ isKiosk: true, isFacilitator: true }),
+    "facilitator",
+  );
+  assert.equal(
+    resolveExperienceProfile({ isKiosk: true, isFacilitator: false }),
+    "visitor",
+  );
+  assert.equal(
+    resolveExperienceProfile({ isKiosk: true, isFacilitator: false, isFacilitatorOpen: true }),
+    "visitor",
+  );
+  assert.equal(
     resolveExperienceProfile({ isKiosk: false, isFacilitatorOpen: false }),
     "workbench",
   );
   assert.equal(
     resolveExperienceProfile({ isKiosk: false, isFacilitatorOpen: true }),
+    "workbench",
+  );
+  assert.equal(
+    resolveExperienceProfile({ isKiosk: false, isFacilitator: true }),
     "workbench",
   );
 });

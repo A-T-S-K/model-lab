@@ -70,8 +70,12 @@ export function experienceCapabilities(
 
 export function resolveExperienceProfile(options: {
   isKiosk: boolean;
+  isFacilitator?: boolean;
   isFacilitatorOpen?: boolean;
 }): ExperienceProfile {
   if (!options.isKiosk) return "workbench";
+  if (options.isFacilitator !== undefined) {
+    return options.isFacilitator ? "facilitator" : "visitor";
+  }
   return options.isFacilitatorOpen ? "facilitator" : "visitor";
 }

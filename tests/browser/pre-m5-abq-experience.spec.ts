@@ -238,7 +238,7 @@ test('1. Visitor profile DOM omissions hide unneeded workbench controls', async 
   await expect(page.locator('#short-continue')).toBeVisible();
   await expect(page.locator('#short-continue')).toContainText('See how it got there');
   await expect(page.locator('#visitor-explore-toggle')).toBeVisible();
-  await expect(page.locator('#operator-controls')).toBeVisible();
+  await expect(page.locator('#operator-controls')).toHaveCount(0);
 
   // Free exploration reveals semantic selectors but preserves teaching/stepping omissions
   await page.locator('#visitor-explore-toggle').click();
@@ -837,7 +837,7 @@ test('3b. Stepped training, candidate accept, live step advancement, and public 
 test('4. Facilitator panel, authoritative retention text, execution omissions, and opt-out persistence', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await audit(page);
-  await page.goto('/?presentation=spatial&kiosk=1');
+  await page.goto('/?presentation=spatial&kiosk=1&facilitator=1');
   await page.locator('#exhibit-start').click();
   await expect(page.getByTestId('status')).toContainText('Live prediction complete');
 
@@ -1022,7 +1022,6 @@ test('6. 44px minimum touch targets and keyboard accessibility across qualified 
   // Payoff visitor buttons
   await assertMin44('#short-continue', 'Payoff Continue button');
   await assertMin44('#visitor-explore-toggle', 'Visitor Explore Toggle');
-  await assertMin44('#operator-controls', 'Operator Controls button');
   await assertMin44('#clear-session', 'Public Reset button');
   await assertMin44('[data-dock-depth="math"]', 'Dock tab Math');
   await assertMin44('[data-dock-depth="explain"]', 'Dock tab Explain');
@@ -1068,6 +1067,9 @@ test('6. 44px minimum touch targets and keyboard accessibility across qualified 
   await page.locator('#execution-cancel').click();
 
   // 2. Facilitator Mode touch targets (1920x1080)
+  await page.goto('/?presentation=spatial&kiosk=1&facilitator=1');
+  await page.locator('#exhibit-start').click();
+  await assertMin44('#operator-controls', 'Operator Controls button');
   await page.locator('#operator-controls').click();
   await expect(page.getByTestId('facilitator-panel')).toBeVisible();
   await assertMin44('#short-sample', 'Facilitator Sample button');
@@ -1117,7 +1119,7 @@ test('6. 44px minimum touch targets and keyboard accessibility across qualified 
   await expect(page.locator('#execution-controls')).toHaveCount(0);
 
   // 4. 1280x720 Viewport Touch Targets: Visitor Mode
-  await page.locator('#operator-controls').click();
+  await page.goto('/?presentation=spatial&kiosk=1');
   await expect(page.locator('.spatial-shell')).toHaveAttribute('data-experience-profile', 'visitor');
 
   // Reset to entry to follow exact visitor sequence: Start → reach PREDICT (stop 5) → Teach
@@ -1303,6 +1305,8 @@ test('7. 1280x720 layout and reduced motion visual captures', async ({ page }) =
   await expect(page.locator('#execution-controls')).toHaveCount(0);
 
   // Facilitator mode at 1280x720 live learning stopped on wte
+  await page.goto('/?presentation=spatial&kiosk=1&facilitator=1');
+  await page.locator('#exhibit-start').click();
   await page.locator('#operator-controls').click();
   await expect(page.getByTestId('facilitator-panel')).toBeVisible();
   await page.locator('#step-learning').click();
@@ -1424,6 +1428,8 @@ test('8. P0-E2 Unified contextual dock, depth switching, world dominant floor, a
   }
 
   // Facilitator mode verification: dock is also present at bottom, lens omitted
+  await page.goto('/?presentation=spatial&kiosk=1&facilitator=1');
+  await page.locator('#exhibit-start').click();
   await page.locator('#operator-controls').click();
   await expect(page.getByTestId('facilitator-panel')).toBeVisible();
   await expect(page.getByTestId('contextual-dock')).toBeVisible();

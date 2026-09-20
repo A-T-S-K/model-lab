@@ -9,6 +9,7 @@ import { spatialEvidenceReadModel, spatialEvidenceUnavailable, spatialReadModel,
 import type { WorldSelection } from './spatial/topology.js';
 import { learningReadModel, resolveParameter, type LearningStage } from "./spatial/learning.js";
 import { SpatialPresenter } from "./spatial/presenter.js";
+import { PUBLIC_HOME } from "./spatial/camera.js";
 import { exhibitTiming, exhibitState } from "./presentation/exhibit-state.js";
 import { experienceCapabilities, resolveExperienceProfile, type ExperienceCapabilities, type ExperienceProfile } from "./presentation/experience-profile.js";
 import plexSansLicense from "@ibm/plex-sans/fonts/complete/woff2/license.txt?url";
@@ -169,6 +170,11 @@ let offerParameterUpdate = false;
 let liveTrainingStep = 0;
 let liveRunId = "";
 let exhibitEntry = new URLSearchParams(location.search).get("kiosk") === "1";
+const facilitatorLaunch = exhibitEntry && new URLSearchParams(location.search).get("facilitator") === "1";
+if (exhibitEntry) {
+  spatialPresenter.profile = facilitatorLaunch ? "facilitator" : "visitor";
+  spatialPresenter.camera.box = { ...PUBLIC_HOME };
+}
 let idleResetEnabled = exhibitEntry;
 let kioskEnabled = exhibitEntry;
 let exhibitConfiguration = exhibitTiming(new URLSearchParams(location.search));
@@ -176,6 +182,7 @@ let lastActivity = Date.now();
 function currentProfile(): ExperienceProfile {
   return resolveExperienceProfile({
     isKiosk: exhibitEntry,
+    isFacilitator: facilitatorLaunch,
     isFacilitatorOpen: spatialPresenter.operatorControls,
   });
 }
