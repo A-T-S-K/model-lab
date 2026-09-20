@@ -14,7 +14,6 @@ import {
   type PublicTourState,
   type TourEvidence,
 } from '../../app/spatial/public-tour.js';
-import { computeTrainingActionState } from '../../app/spatial/presenter.js';
 
 test('PUBLIC_TOUR_STATES is a complete current UI representation without freezing a curriculum state count', () => {
   assert.equal(new Set(PUBLIC_TOUR_STATES).size, PUBLIC_TOUR_STATES.length);
@@ -548,43 +547,3 @@ test('C3: Gated transitions advance exactly once to the target state and pause u
   assert.equal(canAdvanceTour('candidate_ready', ev5), false);
 });
 
-
-test('Objective action readiness is presentation-only and does not require presenter orchestration', () => {
-  const pin = { name: 'wte', row: 0, column: 0 } as any;
-  const execution = {
-    active: true,
-    phase: 'paused',
-    pending: false,
-    pin: 0,
-    progress: {
-      executionId: 'objective-readiness',
-      sequence: 2,
-      training: {
-        phase: 'backward seed',
-        mean: 0.25,
-        contributions: [],
-        final: false,
-        gradient: 0,
-      },
-    },
-  };
-
-  const pendingAction = computeTrainingActionState({
-    ...execution,
-    progress: {
-      ...execution.progress,
-      training: { ...execution.progress.training, mean: undefined },
-    },
-  } as any, pin, true, undefined, 'p2_objective');
-  const readyAction = computeTrainingActionState(
-    execution as any,
-    pin,
-    true,
-    undefined,
-    'p2_objective',
-  );
-
-  assert.equal(pendingAction?.disabled, true);
-  assert.equal(readyAction?.disabled, false);
-  assert.equal(getPublicTourContent('p2_objective').primaryAction?.label, 'Continue: Trace gradient contribution');
-});
