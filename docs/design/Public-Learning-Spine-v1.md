@@ -6,6 +6,8 @@
 
 This document is the durable public-learning and presentation contract for Model Lab's first Guided curriculum. It freezes what the public experience must teach, what truth distinctions it must preserve, what may be grouped, and how Guided relates to deeper inspection and research.
 
+Model Lab is a local-first, model-independent learning, experimentation, and research workbench. MicroGPT is its first deeply inspectable teaching/reference organism, and AI Village / BSides Albuquerque is its first serious public teaching deployment; neither defines the platform boundary.
+
 It does not define application source, controller ownership, PublicTourState, CSS, animation timings, final hardware tuning, or a required click count. OC1, LS1, LS2, and LS3 must implement this contract without treating the current state machine as the curriculum ontology.
 
 LS0 found no source-truth contradiction requiring alteration of the accepted 17-beat instructional decomposition.
@@ -57,7 +59,7 @@ M5 and M6 remain NOT_RUN. This document grants no later-stage acceptance.
 | Boundary | Frozen meaning | Examples |
 | --- | --- | --- |
 | Universal learning/product principles | Model-independent requirements for truthful learning over real computation | authentic evidence; progressive disclosure; stable spatial identity; learner-controlled segmentation; explanation timing distinct from execution timing; required mechanism before optional arithmetic; no fake computation; no magic gaps |
-| Canonical MicroGPT curriculum | The first deeply inspectable teaching organism and its exact architecture/training witness | character input; one layer; embedding width 8; two attention heads; context 8; both RMSNorm locations; Q/K/V; causal attention; ReLU MLP 8 -> 32 -> 8; exact residual topology; logits; output softmax; cross-entropy objective; reverse-mode accumulation; Adam |
+| Canonical MicroGPT curriculum | The first deeply inspectable teaching organism and its exact architecture/training witness | character input; one layer; embedding width 8; two attention heads; context 8; canonical RMSNorm locations; Q/K/V; causal attention; ReLU MLP 8 -> 32 -> 8; exact residual topology; logits; output softmax; cross-entropy objective; reverse-mode accumulation; Adam |
 | ABQ deployment/presentation profile | Event-specific presentation and hardware requirements | Visitor kiosk; Facilitator profile; MacBook Neo stations; 1080p TV; attract/reset behavior; measured typography, viewport, timing, and display tuning |
 
 MicroGPT is not the platform boundary. ABQ is not the platform boundary. A deployment/profile constraint must not become a universal Model Lab invariant merely because the first public lesson needs it.
