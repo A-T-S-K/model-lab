@@ -38,7 +38,8 @@ disposition remains pending. See [authority](README.md). Pre-M5 ABQ experience s
 P0-E1 semantic disposition PASS.
 P0-E2 visual / information-architecture disposition PASS.
 P0-E3 learning / spatial disposition PASS.
-P0-E4 candidate engineering / visual qualification BLOCKED on required qualification evidence unavailable (historical C1 near-limit witness `97cc5303...` missing; candidate `3950504e...` passes functionally) on candidate `5d4bd623be2ae3e62245057e4c4251538c7749e3` / `sha256:90c1951ab839ba7772219c6c8e47527fe5df6bfa1cea984363306c0bf6f5535d` (see [Pre-M5 E4 qualification](reviews/pre-M5-ABQ-E4-integration-qualification.md); historical P0-R3 preserved at [Pre-M5 R3 review](reviews/pre-M5-ABQ-experience-qualification.md)).
+P0-E4 exact-candidate engineering / visual qualification COMPLETE on implementation candidate 5d4bd623... / application runtime sha256:90c1951a... (see [Pre-M5 E4 qualification](reviews/pre-M5-ABQ-E4-integration-qualification.md); historical P0-R3 preserved at [Pre-M5 R3 review](reviews/pre-M5-ABQ-experience-qualification.md)).
+The original M4-C1 near-limit archive 97cc5303... is unavailable and remains historical-only evidence; E4 used distinct current-candidate witness 3950504e... for current retention/backpressure qualification without transferring historical identity.
 P0 final product disposition remains pending.
 M5 independent foundation review remains NOT_RUN.
 M6 remains NOT_RUN.

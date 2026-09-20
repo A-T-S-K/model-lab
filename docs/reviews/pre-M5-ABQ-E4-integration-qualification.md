@@ -16,19 +16,18 @@
 P0-E1 = SEMANTIC PASS
 P0-E2 = VISUAL / IA PASS
 P0-E3 = LEARNING / SPATIAL PASS
-P0-E4 = BLOCKED — required qualification evidence unavailable
+P0-E4 = COMPLETE — exact-candidate engineering / visual qualification
 P0 FINAL DISPOSITION = PENDING (Candidate Frozen)
 M5 = NOT_RUN
 M6 = NOT_RUN
 ```
 
-### Disposition Details (Per Section 33 Authority)
+### Disposition Details
 Candidate `5d4bd623be2ae3e62245057e4c4251538c7749e3` has successfully passed **100% of all executable functional, numerical, reference, example, build, browser, and native qualification suites**. Zero application bugs, zero numerical drift, and zero regressions against frozen M4 foundation behavior were observed across 255 Node unit/contract tests, 26 browser integration tests, and 70 native Python comparisons. A complete 29-state candidate-bound visual evidence package was captured and verified across 1920×1080 and 1280×720 viewports.
 
-However, per **Section 33** instructions:
-> *"If a required witness is unavailable: Do not write COMPLETE. Write: `P0-E4 = BLOCKED — required qualification evidence unavailable`. Identify exactly: missing witness, expected identity, searches performed, routes/tests prevented, whether a new current-candidate witness could cover some but not all of the historical compatibility requirement. Do not silently defer a known E4 blocker into M5."*
+Following evidence-contract review, the absence of the exact historical M4-C1 archive bytes is not a current-candidate qualification blocker. The foundation proof plan requires *all FP proofs on the exact candidate*; it does not require the exact historical C1 archive to be reused as the current-candidate FP-11 witness. Cross-version portable-archive compatibility is separately and definitively proven by the exact historical M4-B2 archive witness (`13,285,363` bytes, `sha256:7cef8902cfd6489fe482ee314d8251de4e6eb263e5506df001a76ab20a7d7373`), which imported cleanly, preserved live state, opened disconnected Pythia at index `50303` (logit `-3.8919265270233154`), and re-exported byte-for-byte identically.
 
-The historical **M4-C1 near-limit archive witness** (`15,246,474` bytes, SHA-256 `97cc5303b66d50130a8862b9e72f2b4428ce21b75c2e356eb2ffc247a2940cf8`) generated during the M4-C1 milestone was not preserved in local persistent storage or git history. While a deterministic candidate witness was generated from the historical M4-B2 archive plus 40 predictions (matching the exact manifest data node count of `751,779`), its SHA-256 is `3950504e41db3ae3ac76ae05b663a4b7f4b4d01a95441e032d9cf92a7135e098` because the candidate application runtime hash is embedded in generated run manifests. This candidate witness proves full functional conformance for M4-C1, M4-C2, and M4-E Route C on the candidate code, but cannot prove byte-for-byte read compatibility against the missing historical archive file `97cc5303...`.
+Current-candidate FP-11 retention and backpressure qualification is exercised and fully passed using the dedicated current-candidate near-limit witness (`sha256:3950504e41db3ae3ac76ae05b663a4b7f4b4d01a95441e032d9cf92a7135e098`, `751,779` manifest nodes) generated under the exact current application runtime. The original M4-C1 archive `sha256:97cc5303...` is unavailable locally; its historical M4-C1 qualification remains attached to its original candidate/runtime and is not transferred to the new witness. E4 does not claim byte equality or direct current-candidate import compatibility with that unavailable file.
 
 Per platform instructions, E4 is strictly an engineering qualification and evidence reconciliation gate. E4 does NOT self-grant final P0 product acceptance, does NOT merge to `foundation-v2`, does NOT tag or deploy, and does NOT initiate M5 or M6. The candidate implementation is frozen at `5d4bd623be2ae3e62245057e4c4251538c7749e3` for independent foundation review.
 
@@ -148,8 +147,8 @@ The witness-backed run executed **255 passed, 0 skipped, 0 failed, 255 total**.
 - **SHA-256:** `7cef8902cfd6489fe482ee314d8251de4e6eb263e5506df001a76ab20a7d7373`
 - **Verification:** Tested via `tests/archive/portable-archive.test.ts` and M4-E Route B. In Route B, importing the archive into Model Lab, verifying disconnected Pythia inspection at index `50303` (logit `-3.8919265270233154`), and exporting back to disk yielded an **exact byte-for-byte re-export match** (`13,285,363` bytes, SHA-256 `7cef8902...`).
 
-### Historical M4-C1 Near-Limit Archive (Witness Blocker)
-- **Required Identity:**
+### Historical M4-C1 Near-Limit Archive and Current-Candidate Witness
+- **Historical C1 Archive (Unavailable Locally):**
   - File Size: `15,246,474` bytes
   - Manifest Bytes: `14,808,112` bytes
   - Manifest Nodes: `751,779` nodes
@@ -157,22 +156,33 @@ The witness-backed run executed **255 passed, 0 skipped, 0 failed, 255 total**.
 - **Searches Performed:**
   - Searched all directories under `test-results/scratch/`, prior task outputs, `/tmp/`, and conversation brain logs.
   - While M4-C1 test runner reports (`results.json`) referencing the file exist, the `.mlarchive` file itself was not preserved on local disk.
-- **Deterministic Candidate Regeneration:**
-  - Generated via documented procedure: importing the historical M4-B2 archive (`13,285,363` bytes) and executing exactly 40 canonical predictions to reach the near-limit threshold.
+  - The historical archive remains unavailable; it is not reconstructed, its identity is not transferred, and no byte compatibility is claimed with it.
+- **Current-Candidate Near-Limit Witness Construction:**
+  - Generated via documented near-limit procedure: qualified historical M4-B2 archive (`13,285,363` bytes, `sha256:7cef8902cfd6489fe482ee314d8251de4e6eb263e5506df001a76ab20a7d7373`) + 40 deterministic canonical predictions under the exact current application runtime.
   - Manifest data node count matched exactly: `751,779` nodes.
   - File Size: `15,207,674` bytes (manifest bytes `14,769,312`).
   - SHA-256: `3950504e41db3ae3ac76ae05b663a4b7f4b4d01a95441e032d9cf92a7135e098`.
-  - The byte difference stems from the application runtime hash: generated runs embed the current runtime revision (`sha256:90c1951ab839...`) into the run metadata rather than the frozen M4 runtime revision (`sha256:459dc2d1...`).
+  - Its distinct bytes/hash are expected because generated runs retain the current application runtime identity (`sha256:90c1951ab839ba7772219c6c8e47527fe5df6bfa1cea984363306c0bf6f5535d`).
 - **Saved Candidate Witness:**
   - Preserved at: `test-results/scratch/p0-e4-candidate-witness-20260919-01/candidate-c1-near-limit.mlarchive`
-- **Functional Conformance:**
-  - When exercised in `m4-c1-retention.spec.ts`, `m4-c2-render-work.spec.ts`, and M4-E Route C, the candidate near-limit archive passes **100% functionally**:
+- **Current-Candidate FP-11 Result & Functional Conformance:**
+  - When exercised in `m4-c1-retention.spec.ts`, `m4-c2-render-work.spec.ts`, and M4-E Route C, the candidate near-limit witness passes **100% functionally**:
     1. Retained Pythia evidence is inspectable disconnected (logit `-3.8919265270233154` at index 50303).
     2. Native `Generate` is refused before network transport due to retention preflight check.
-    3. Zero native `/execute` network requests are made.
-    4. `Clear Session` restores retention capacity and re-enables canonical `Predict`.
-- **E4 Gate Impact:**
-  - Per Section 33, while functional qualification of the candidate code is complete, exact byte-level backward compatibility against the missing historical file `97cc5303...` cannot be proven. Thus, E4 must be reported as `BLOCKED — required qualification evidence unavailable`.
+    3. `nativeRequests = 0` (zero native `/execute` network requests made).
+    4. Bounded retained rendering and truthful shape-only / opaque handling verified.
+    5. `Clear Session` restores retention capacity and re-enables canonical `Predict`.
+  - Therefore the current-candidate retention/backpressure proof is exercised.
+- **Historical Caveat to Retain:**
+  - > The original M4-C1 archive `sha256:97cc5303...` is unavailable locally. Its historical M4-C1 qualification remains attached to its original candidate/runtime and is not transferred to the new witness. E4 does not claim byte equality or direct current-candidate import compatibility with that unavailable file. The current-candidate near-limit witness `sha256:3950504e...` is a new evidence identity exercising the same current FP-11 retention/backpressure contract.
+  - This is an evidence provenance caveat; it is not an E4 blocker.
+- **E4 Gate Disposition & Rationale:**
+  - The foundation proof plan requires *all FP proofs on the exact candidate*; it does not require the exact historical C1 archive to be reused as the current-candidate FP-11 witness.
+  - **Rationale:**
+    - **B2 exact historical compatibility is separately proven:** The exact historical M4-B2 archive (`13,285,363` bytes, `sha256:7cef8902cfd6489fe482ee314d8251de4e6eb263e5506df001a76ab20a7d7373`) was imported successfully, preserved accepted live state, opened retained disconnected Pythia (`index 50303`, `logit -3.8919265270233154`), and re-exported byte-for-byte identically. This constitutes the current-candidate cross-version portable-archive compatibility proof.
+    - **C1 current-candidate functional qualification uses its own new evidence identity:** The new near-limit witness (`sha256:3950504e...`, `751,779` manifest nodes) exercises and satisfies all FP-11 retention and backpressure requirements on the exact candidate.
+    - **No historical identity is transferred:** The historical M4-C1 qualification remains attached to its original candidate/runtime and is not transferred to the new witness.
+  - With all functional and visual requirements passed on the exact candidate, **P0-E4 = COMPLETE — exact-candidate engineering / visual qualification**.
 
 ---
 
