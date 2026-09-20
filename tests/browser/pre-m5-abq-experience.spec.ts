@@ -290,12 +290,16 @@ test('2. 5-stop causal forward spine traversal, primary actions, zero-execution 
   await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-position', '3');
   await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-layer', '0');
   await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-run-id', payoffRunId!);
-  // Distinct normalizations check
-  await expect(page.getByTestId('scene-construction')).toContainText('embeddingNorm');
+  // Distinct normalizations check in Math, plain meaning in dock overview
   await expect(page.getByTestId('scene-construction')).toContainText('preAttentionNorm');
-  await expect(page.getByTestId('scene-construction')).toContainText('Two distinct normalizations are preserved');
-  const representText = await page.getByTestId('dock-explain').textContent();
-  expect(representText?.match(/Two distinct normalizations are preserved/g)?.length).toBe(1);
+  await expect(page.getByTestId('scene-construction')).toContainText('working representation');
+  await page.locator('#dock-inspect').click();
+  await page.locator('button[data-dock-depth="math"]').click();
+  await expect(page.getByTestId('dock-math')).toContainText('embeddingNorm');
+  await expect(page.getByTestId('dock-math')).toContainText('preAttentionNorm');
+  await expect(page.getByTestId('dock-math')).toContainText('Two distinct normalizations are preserved');
+  await page.locator('.dock-tab-close').click();
+  await expect(page.getByTestId('dock-explain')).toBeVisible();
   await captureEvidence(page, '03-represent-1920.png', 'REPRESENT', '[data-world-kind="tokenEmbedding"]');
   expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
 
@@ -328,15 +332,19 @@ test('2. 5-stop causal forward spine traversal, primary actions, zero-execution 
   await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-position', '3');
   await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-layer', '0');
   await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-run-id', payoffRunId!);
-  // Canonical 5-op MLP pipeline check
-  await expect(page.getByTestId('scene-construction')).toContainText('preMlpNorm');
-  await expect(page.getByTestId('scene-construction')).toContainText('mlpUp');
-  await expect(page.getByTestId('scene-construction')).toContainText('ReLU');
-  await expect(page.getByTestId('scene-construction')).toContainText('mlpDown');
-  await expect(page.getByTestId('scene-construction')).toContainText('mlpResidual');
-  await expect(page.getByTestId('scene-construction')).toContainText('Canonical MLP pipeline');
-  const transformText = await page.getByTestId('dock-explain').textContent();
-  expect(transformText?.match(/Canonical MLP pipeline/g)?.length).toBe(1);
+  // Stage meaning in dock overview, Canonical 5-op MLP pipeline preserved in Math
+  await expect(page.getByTestId('scene-construction')).toContainText('TRANSFORM');
+  await expect(page.getByTestId('scene-construction')).toContainText('feed-forward');
+  await page.locator('#dock-inspect').click();
+  await page.locator('button[data-dock-depth="math"]').click();
+  await expect(page.getByTestId('dock-math')).toContainText('preMlpNorm');
+  await expect(page.getByTestId('dock-math')).toContainText('mlpUp');
+  await expect(page.getByTestId('dock-math')).toContainText('ReLU');
+  await expect(page.getByTestId('dock-math')).toContainText('mlpDown');
+  await expect(page.getByTestId('dock-math')).toContainText('mlpResidual');
+  await expect(page.getByTestId('dock-math')).toContainText('Canonical MLP pipeline');
+  await page.locator('.dock-tab-close').click();
+  await expect(page.getByTestId('dock-explain')).toBeVisible();
   await captureEvidence(page, '06-transform-1920.png', 'TRANSFORM', '[data-world-kind="mlpBlock"]');
   expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
 
@@ -352,11 +360,15 @@ test('2. 5-stop causal forward spine traversal, primary actions, zero-execution 
   await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-position', '3');
   await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-layer', '');
   await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-run-id', payoffRunId!);
-  // Raw score vs probability distinction check
-  await expect(page.getByTestId('scene-construction')).toContainText('Raw unnormalized scores');
-  await expect(page.getByTestId('scene-construction')).toContainText('Raw token scores are unnormalized logits, not probabilities');
-  const scoreText = await page.getByTestId('dock-explain').textContent();
-  expect(scoreText?.match(/Raw token scores are unnormalized logits, not probabilities/g)?.length).toBe(1);
+  // Raw score vs probability distinction check in Math, plain meaning in dock overview
+  await expect(page.getByTestId('scene-construction')).toContainText('SCORE');
+  await expect(page.getByTestId('scene-construction')).toContainText('raw score');
+  await page.locator('#dock-inspect').click();
+  await page.locator('button[data-dock-depth="math"]').click();
+  await expect(page.getByTestId('dock-math')).toContainText('Raw unnormalized scores');
+  await expect(page.getByTestId('dock-math')).toContainText('Raw token scores are unnormalized logits, not probabilities');
+  await page.locator('.dock-tab-close').click();
+  await expect(page.getByTestId('dock-explain')).toBeVisible();
   await captureEvidence(page, '07-score-1920.png', 'SCORE', '[data-world-kind="unembed"]');
   expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
 
@@ -420,7 +432,8 @@ test('2b. Optional attention drill-down from MIX CONTEXT, zero-execution travers
   await expect(page.getByTestId('scene-construction')).toContainText('Attention scores');
   await captureEvidence(page, '05-attention-drilldown-1920.png', 'attention drill-down', '[data-world-kind="attentionBlock"]');
 
-  // Q/K Math in contextual dock
+  // Q/K Math in contextual dock via inspect affordance
+  await page.locator('#dock-inspect').click();
   await page.locator('button[data-dock-depth="math"]').click();
   await expect(page.getByTestId('dock-math')).toBeVisible();
   await expect(page.locator('[data-testid="qk-products"]')).toBeVisible();
@@ -439,8 +452,11 @@ test('2b. Optional attention drill-down from MIX CONTEXT, zero-execution travers
   await expect(page.getByTestId('lesson-progress')).toContainText('Attention detail · Step 2 of 4 · Turn scores into normalized weights');
   await expect(page.locator('#short-continue')).toContainText('Continue: Combine carried information');
   await expect(page.getByTestId('scene-construction')).toContainText('Attention softmax');
-  const attnProbText = await page.getByTestId('dock-explain').textContent();
-  expect(attnProbText?.match(/Shifted exponentials and denominator are derived from observed scores/g)?.length).toBe(1);
+  await page.locator('#dock-inspect').click();
+  await page.locator('button[data-dock-depth="math"]').click();
+  await expect(page.getByTestId('dock-math')).toContainText('Shifted exponentials and denominator are derived from observed scores');
+  await page.locator('.dock-tab-close').click();
+  await expect(page.getByTestId('dock-explain')).toBeVisible();
   expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(cmdBaseline);
 
   // Advance substep 3: Value mixture
@@ -571,7 +587,8 @@ test('2c. Reverse learning traversal, objective anchor, backward landmarks, para
   await expect(page.locator('.param-overlay-title')).toContainText('tokenEmbedding');
   expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
 
-  // Parameter math in dock
+  // Parameter math in dock via inspect affordance
+  await page.locator('#dock-inspect').click();
   await page.locator('button[data-dock-depth="math"]').click();
   await expect(page.getByTestId('dock-math')).toBeVisible();
   await expect(page.getByTestId('dock-math')).toContainText('child adjoint');
@@ -596,7 +613,8 @@ test('2c. Reverse learning traversal, objective anchor, backward landmarks, para
   await expect(page.getByTestId('dock-values').getByTestId('adam-proposal-pending')).toBeVisible();
   await page.locator('.dock-tab-close').click();
 
-  // Adam math in dock
+  // Adam math in dock via inspect affordance
+  await page.locator('#dock-inspect').click();
   await page.locator('button[data-dock-depth="math"]').click();
   await expect(page.getByTestId('dock-math')).toBeVisible();
   await expect(page.getByTestId('dock-math')).toContainText('Adam Optimizer Equations');
@@ -671,6 +689,7 @@ test('3. Stepped training, candidate discard, and authority preservation', async
   await captureEvidence(page, '12-live-backward-contribution-explain-1920.png', 'live backward contribution Explain', '.parameter-learning-overlay', { wteBank: '[data-world-parameter="wte"]', owner: '[data-world-kind="tokenEmbedding"]' });
 
   // Math tab retains exact learning evidence
+  await page.locator('#dock-inspect').click();
   await page.locator('button[data-dock-depth="math"]').click();
   await expect(page.getByTestId('dock-math')).toBeVisible();
   await expect(page.getByTestId('dock-math').getByTestId('live-contribution')).toBeVisible();
@@ -1023,10 +1042,15 @@ test('6. 44px minimum touch targets and keyboard accessibility across qualified 
   await assertMin44('#short-continue', 'Payoff Continue button');
   await assertMin44('#visitor-explore-toggle', 'Visitor Explore Toggle');
   await assertMin44('#clear-session', 'Public Reset button');
+  await assertMin44('#dock-inspect', 'Dock inspect button');
+
+  // Deeper inspection touch targets when expanded
+  await page.locator('#dock-inspect').click();
   await assertMin44('[data-dock-depth="math"]', 'Dock tab Math');
-  await assertMin44('[data-dock-depth="explain"]', 'Dock tab Explain');
+  await assertMin44('.dock-tab-close', 'Dock tab Return');
   await assertMin44('[data-dock-depth="values"]', 'Dock tab Values');
   await assertMin44('[data-dock-depth="source"]', 'Dock tab Source');
+  await page.locator('.dock-tab-close').click();
 
   // Keyboard navigation through short route
   await page.locator('#short-continue').focus();
@@ -1136,7 +1160,7 @@ test('6. 44px minimum touch targets and keyboard accessibility across qualified 
   }
   await assertMin44('#short-teach', '720p Visitor Teach button at Stop 5');
   await assertMin44('#visitor-explore-toggle', '720p Visitor Explore Toggle');
-  await assertMin44('button[data-dock-depth="math"]', '720p Math tab button');
+  await assertMin44('#dock-inspect', '720p Dock inspect button');
 
   // Launch stepped training as visitor at 1280x720
   await page.locator('#short-teach').click();
@@ -1149,6 +1173,7 @@ test('6. 44px minimum touch targets and keyboard accessibility across qualified 
   await expect(page.getByTestId('execution-frontier')).toContainText('stopped after matching backward node');
 
   // Verify Math tab exposes live-contribution at 1280x720
+  await page.locator('#dock-inspect').click();
   await page.locator('button[data-dock-depth="math"]').click();
   await expect(page.getByTestId('dock-math')).toBeVisible();
   await expect(page.getByTestId('dock-math').getByTestId('live-contribution')).toBeVisible();
@@ -1221,6 +1246,7 @@ test('7. 1280x720 layout and reduced motion visual captures', async ({ page }) =
   await expect(page.getByTestId('parameter-learning-overlay')).toBeVisible();
 
   // Parameter contribution math at 1280x720
+  await page.locator('#dock-inspect').click();
   await page.locator('button[data-dock-depth="math"]').click();
   await expect(page.getByTestId('dock-math')).toBeVisible();
   await page.locator('.dock-tab-close').click();
@@ -1420,12 +1446,18 @@ test('8. P0-E2 Unified contextual dock, depth switching, world dominant floor, a
   await expect(page.locator('#short-continue')).toBeVisible();
 
   // Test touch targets for dock tabs >= 44px
+  const inspectBox = await page.locator('#dock-inspect').boundingBox();
+  expect(inspectBox).not.toBeNull();
+  expect(inspectBox!.height).toBeGreaterThanOrEqual(44);
+  expect(inspectBox!.width).toBeGreaterThanOrEqual(44);
+  await page.locator('#dock-inspect').click();
   for (const tab of ['explain', 'values', 'math', 'source']) {
     const tabBox = await page.locator(`button[data-dock-depth="${tab}"]`).boundingBox();
     expect(tabBox).not.toBeNull();
     expect(tabBox!.height).toBeGreaterThanOrEqual(44);
     expect(tabBox!.width).toBeGreaterThanOrEqual(44);
   }
+  await page.locator('.dock-tab-close').click();
 
   // Facilitator mode verification: dock is also present at bottom, lens omitted
   await page.goto('/?presentation=spatial&kiosk=1&facilitator=1');

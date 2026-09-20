@@ -376,31 +376,6 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   flex: 1 1 auto;
 }
 
-.world-workspace.is-public-profile .selection-card {
-  position: absolute;
-  left: 10px;
-  bottom: 8px;
-  max-width: 360px;
-  padding: 6px 10px;
-  gap: 4px;
-}
-@media (max-height: 800px) {
-  .world-workspace.is-public-profile .selection-card {
-    padding: 3px 6px;
-    gap: 3px;
-    bottom: 4px;
-  }
-  .world-workspace.is-public-profile .selection-card > small,
-  .world-workspace.is-public-profile .selection-card > span,
-  .world-workspace.is-public-profile .selection-card .head-action-scope {
-    display: none;
-  }
-  .world-workspace.is-public-profile .selection-card button {
-    padding: 4px 8px;
-    font-size: 11px;
-  }
-}
-
 .contextual-dock {
   flex: 0 0 auto;
   display: flex;
@@ -432,6 +407,27 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   flex: 1 1 auto;
 }
 
+.contextual-dock .dock-brand {
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: #62c7e8;
+  font-weight: 700;
+  margin-right: 4px;
+}
+
+.contextual-dock .dock-selected-object {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: #1c2730;
+  border: 1px solid #3b454d;
+  border-radius: 4px;
+  color: #f0d395;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
 .contextual-dock .dock-route-actions {
   display: flex;
   align-items: center;
@@ -440,19 +436,49 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   flex: 0 0 auto;
 }
 
+.contextual-dock #dock-inspect {
+  border: 1px solid #3b454d;
+  background: #18222a;
+  color: #a7b2bc;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.contextual-dock #dock-inspect:hover {
+  background: #202b35;
+  border-color: #62c7e8;
+  color: #f2f5f7;
+}
+
 .contextual-dock .dock-status-message {
   margin: 0;
   font-size: 12px;
   color: #c5d1db;
 }
 
-.contextual-dock .dock-tabs {
+.contextual-dock .dock-tabs,
+.contextual-dock .dock-depth-nav {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   padding: 4px 14px;
   background: #121920;
   border-bottom: 1px solid #28333c;
+}
+
+.contextual-dock .depth-nav-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  color: #8b969e;
+  margin-right: 6px;
 }
 
 .contextual-dock .dock-tab {
@@ -530,6 +556,134 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
 .contextual-dock.is-expanded .dock-body {
   flex: 1 1 auto;
   max-height: calc(40vh - 92px);
+}
+
+/* Dock Overview: Stage-appropriate horizontal layout */
+.dock-overview {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 24px;
+  padding: 4px 0;
+  min-height: 120px;
+}
+
+.dock-stage-meaning {
+  flex: 1 1 58%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dock-stage-meaning .construction-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  color: #f0d395;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.dock-stage-meaning .construction-header strong {
+  font-size: 14px;
+  color: #f0d395;
+}
+
+.dock-stage-meaning .construction-header span {
+  font-size: 11px;
+  color: #8b969e;
+  font-weight: 400;
+  letter-spacing: 0.5px;
+}
+
+.dock-stage-meaning .construction-purpose {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #c2cad0;
+}
+
+.dock-meaning-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #e6edf2;
+}
+
+.dock-stage-meaning .learning-mechanism {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #c2cad0;
+}
+
+.dock-stage-result {
+  flex: 0 1 42%;
+  max-width: 500px;
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dock-stage-result .teaching-step {
+  background: #172129;
+  border: 1px solid #2a3742;
+  border-radius: 4px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dock-stage-result .stage-result-label {
+  font-size: 10px;
+  letter-spacing: 0.8px;
+  color: #8b969e;
+  font-weight: 600;
+}
+
+.dock-stage-result p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #e6edf2;
+}
+
+.dock-stage-result .dock-pin-info {
+  font-size: 11px;
+  color: #8b969e;
+}
+
+.dock-stage-result .learning-gradient-summary {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #f0d395;
+}
+
+.dock-stage-result .learning-gradient-summary [data-testid="live-gradient"] {
+  font-family: monospace;
+  color: #62c7e8;
+}
+
+.dock-stage-result .learning-provisional {
+  margin: 0;
+  font-size: 12px;
+  color: #a7b2bc;
+}
+
+@media (max-width: 900px) {
+  .dock-overview {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .dock-stage-result {
+    max-width: 100%;
+    min-width: 0;
+  }
 }
 
 /* Dock Essential Result */

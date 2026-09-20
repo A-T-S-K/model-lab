@@ -63,17 +63,18 @@ export interface ContextualDockOptions {
   readonly comparisonLabels?: [string, string];
   readonly hasComparison: boolean;
   readonly learningRouteStop?: number;
+  readonly selectedLabel?: string;
 }
 
 function renderExplain(opts: ContextualDockOptions): string {
-  const { model: m, address: a, element, parameter, pin, executionProgress, trainingProgress, learningStage, learningModel, learningRouteStop, attract, trainingState } = opts;
+  const { model: m, address: a, element, pin, executionProgress, trainingProgress, learningStage, learningModel, learningRouteStop, attract, trainingState } = opts;
   if (!m) return '<p>No model loaded.</p>';
 
   if (attract) {
     return `<div class="dock-explain-content" data-testid="dock-explain">
-      <div class="idle-explanation">
+      <div class="idle-explanation teaching-step">
         <strong>RECORDED RUN · REPLAY</strong>
-        <p>Recorded real run. Not live. Start to make a fresh prediction, then follow the numbers through attention.</p>
+        <p>Explore real character-by-character predictions and live learning inside one connected computation. Press <b>Start</b> to make a fresh prediction and follow information through the network.</p>
       </div>
     </div>`;
   }
@@ -84,20 +85,27 @@ function renderExplain(opts: ContextualDockOptions): string {
     const truthCue = isBackward
       ? `<p class="reverse-truth-cue" data-testid="reverse-truth-cue">Backward explanation path over the real computation. Visual movement is not runtime timing.</p>`
       : '';
-    const bridge = `<div class="learning-bridge" data-testid="learning-bridge" aria-label="Prediction to learning causal bridge"><div class="bridge-chain"><span class="bridge-step">1 · Predictions for known targets</span><span class="bridge-arrow" aria-hidden="true">→</span><span class="bridge-step">2 · Per-position losses combine into training objective</span><span class="bridge-arrow" aria-hidden="true">→</span><span class="bridge-step">3 · Backpropagation carries backward signal</span><span class="bridge-arrow" aria-hidden="true">→</span><span class="bridge-step">4 · Parameter uses produce gradient contributions</span><span class="bridge-arrow" aria-hidden="true">→</span><span class="bridge-step">5 · Contributions accumulate into final gradient</span><span class="bridge-arrow" aria-hidden="true">→</span><span class="bridge-step">6 · Adam uses final gradient for parameter proposal</span><span class="bridge-arrow" aria-hidden="true">→</span><span class="bridge-step">7 · Provisional candidate: Accept or Discard</span></div><p class="bridge-scope">We follow one selected parameter (${esc(parameterLabel(pin))}) to observe one real contribution arrive and accumulate into its partial gradient. The combined training objective uses losses across all target positions, and candidate proposals remain provisional until accepted.</p></div>`;
     const guidance = trainingState && !trainingState.ready
-      ? `<p class="learning-guidance" data-testid="learning-guidance">Run to next gradient contribution runs the required phases, then pauses after the next matching backward node for the pinned parameter. Repeated operands in one node finish together. Continue runs to Candidate ready; Accept / Discard remains your decision.</p>`
+      ? `<p class="learning-guidance" data-testid="learning-guidance">Run to next gradient contribution pauses after the next matching backward node for ${esc(parameterLabel(pin))}. Continue runs to Candidate ready.</p>`
       : '';
+
     return `<div class="dock-explain-content" data-testid="dock-explain">
-      ${bridge}
-      <p class="learning-scope">Live training · ${esc(t.phase)} · accepted step ${t.acceptedStep} → proposed step ${t.acceptedStep + 1} provisional</p>
-      <div class="dock-pin-info"><span data-testid="pin-owner">${esc(pin.name)} → ${esc(operations.find(o=>o.kind===parameterOwners[pin.name])?.title??pin.name)} · same global owner · accepted ${esc(t.startingSnapshotId.slice(0,12))}</span></div>
-      <p class="learning-gradient-summary">${t.final ? 'Final' : 'Partial'} gradient: <span data-testid="live-gradient" data-value="${t.gradient}">${t.gradient === undefined ? 'pending' : fmt(t.gradient)}</span></p>
-      <p class="learning-mechanism">Parameter uses contribute and accumulate: each backward occurrence calculates a child adjoint × local derivative contribution and adds it to the parameter gradient accumulator.</p>
-      ${truthCue}
-      ${t.proposal ? `<p class="learning-provisional">Candidate proposal: θ ${fmt(t.proposal.before)} → ${fmt(t.proposal.after)} · provisional until explicitly accepted.</p>` : ''}
-      ${guidance}
-      <p>Pinned ${esc(parameterLabel(pin))}. Losses across all positions enter the objective; candidate proposals remain provisional until accepted.</p>
+      <div class="dock-overview" data-testid="scene-construction" data-run="${esc(m.source.sourceRunId)}">
+        <div class="dock-stage-meaning">
+          <header class="construction-header"><strong>Live training · ${esc(t.phase)}</strong><span>step ${t.acceptedStep} → proposed ${t.acceptedStep + 1}</span></header>
+          <p class="learning-mechanism">The model compares predictions against known targets to measure error. Sensitivity propagates backward through the network, calculating how much each parameter should adjust. Parameter uses contribute and accumulate into a gradient.</p>
+          ${truthCue}
+          ${guidance}
+        </div>
+        <div class="dock-stage-result">
+          <div class="teaching-step">
+            <small class="stage-result-label">OBSERVED ACCUMULATION</small>
+            <div class="dock-pin-info"><span data-testid="pin-owner">${esc(pin.name)} → ${esc(operations.find(o=>o.kind===parameterOwners[pin.name])?.title??pin.name)} · same global owner · accepted ${esc(t.startingSnapshotId.slice(0,12))}</span></div>
+            <p class="learning-gradient-summary">${t.final ? 'Final' : 'Partial'} gradient: <span data-testid="live-gradient" data-value="${t.gradient}">${t.gradient === undefined ? 'pending' : fmt(t.gradient)}</span></p>
+            ${t.proposal ? `<p class="learning-provisional">Candidate proposal: θ ${fmt(t.proposal.before)} → ${fmt(t.proposal.after)} · provisional until accepted.</p>` : ''}
+          </div>
+        </div>
+      </div>
     </div>`;
   }
 
@@ -129,11 +137,13 @@ function renderExplain(opts: ContextualDockOptions): string {
   const c = operationConstruction(m, a, element, executionProgress);
 
   return `<div class="dock-explain-content" data-testid="dock-explain">
-    <div class="dock-essential-result" data-testid="scene-construction" data-run="${esc(m.source.sourceRunId)}">
-      <header class="construction-header"><strong>${esc(addressLabel(a))}</strong><span>${executionProgress ? 'ACTIVE EXECUTION' : esc(m.source.relationship)} · input ${esc(m.source.capturedDocument)}</span></header>
-      ${c.purpose ? `<p class="construction-purpose">${esc(c.purpose)}</p>` : ''}
-      ${c.essentialSummary}
-      ${c.notes ? `<p class="construction-notes">${esc(c.notes)}</p>` : ''}
+    <div class="dock-overview" data-testid="scene-construction" data-run="${esc(m.source.sourceRunId)}">
+      <div class="dock-stage-meaning">
+        <header class="construction-header"><strong>${esc(opts.selectedLabel ?? addressLabel(a))}</strong><span>${executionProgress ? 'ACTIVE EXECUTION' : esc(m.source.relationship)} · input ${esc(m.source.capturedDocument)}</span></header>
+        ${c.purpose ? `<p class="construction-purpose">${esc(c.purpose)}</p>` : ''}
+        <p class="dock-meaning-text">${esc(c.plainMeaning ?? c.purpose)}</p>
+      </div>
+      ${c.plainResult ? `<div class="dock-stage-result"><div class="teaching-step"><small class="stage-result-label">OBSERVED RESULT</small><p>${c.plainResult}</p></div></div>` : ''}
     </div>
   </div>`;
 }
@@ -442,16 +452,40 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
   const isExpanded = effectiveDepth !== 'explain';
   const isFacilitator = profile === 'facilitator';
 
+  if (opts.attract) {
+    return `<section class="contextual-dock short-guide" data-testid="contextual-dock" data-active-depth="explain" aria-label="Contextual explanation dock">
+    <div class="dock-header" data-testid="dock-header">
+      <div class="dock-route-info">
+        <strong class="dock-brand">MODEL LAB</strong>
+        <span class="dock-status-message">Explore how a tiny language model predicts what comes next</span>
+      </div>
+      <div class="dock-route-actions">
+        ${primaryAction}
+      </div>
+    </div>
+    <div class="dock-body" data-testid="dock-body">
+      ${bodyContent}
+    </div>
+  </section>`;
+  }
+
+  const inspectAction = isExpanded
+    ? `<button id="dock-inspect" class="secondary-action dock-tab" data-dock-depth="explain">← Return to overview</button>`
+    : `<button id="dock-inspect" class="secondary-action dock-tab" data-dock-depth="values">Inspect evidence ▾</button>`;
+
   return `<section class="contextual-dock short-guide ${isExpanded ? 'is-expanded' : ''}" data-testid="contextual-dock" data-active-depth="${effectiveDepth}" aria-label="Contextual explanation dock">
     <div class="dock-header" data-testid="dock-header">
       <div class="dock-route-info">
         ${lessonProgress ? `<span class="lesson-progress" data-testid="lesson-progress">${esc(lessonProgress)}</span>` : ''}
+        <span class="dock-selected-object" data-testid="selected-world-object" data-semantic-anchor="${opts.address.kind}" data-position="${opts.address.token}" data-layer="${opts.address.layer ?? ''}" data-run-id="${esc(opts.model?.source.sourceRunId ?? '')}">${esc(opts.selectedLabel ?? addressLabel(opts.address))}</span>
         ${routePurpose ? `<span class="route-purpose" data-testid="route-purpose">${esc(routePurpose)}</span>` : ''}
         <p role="status" class="dock-status-message">${esc(opts.shortMessage)} ${opts.shortDetour ? 'Exploring a detour. Resume explicitly to return. ' : ''}</p>
       </div>
       <div class="dock-route-actions"${opts.trainingState ? ` id="execution-controls" data-execution-id="${esc(opts.trainingState.executionId)}" data-sequence="${opts.trainingState.sequence}" data-training-phase="${esc(opts.trainingState.phase)}"` : ''}>
+        ${inspectAction}
         ${opts.trainingState ? (
           opts.trainingState.ready ? `
+            ${hasComparison ? `<button class="secondary-action dock-tab" data-dock-depth="compare">Compare candidate</button>` : ''}
             <button id="execution-accept" class="primary-action" ${opts.trainingState.disabled ? 'disabled' : ''}>Accept update</button>
             <button id="execution-cancel" class="secondary-action" ${opts.trainingState.cancelling ? 'disabled' : ''}>Discard candidate</button>
             <span data-testid="execution-frontier">${esc(opts.trainingState.frontierText)}</span>
@@ -470,14 +504,16 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
         `}
       </div>
     </div>
-    <nav class="dock-tabs" aria-label="Explanation depth">
-      <button class="dock-tab ${effectiveDepth === 'explain' ? 'active' : ''}" data-dock-depth="explain" ${effectiveDepth === 'explain' ? 'aria-pressed="true"' : ''}>Explain</button>
+    ${isExpanded ? `
+    <nav class="dock-depth-nav" aria-label="Evidence depth">
+      <span class="depth-nav-label">DEEPER INSPECTION</span>
       <button class="dock-tab ${effectiveDepth === 'values' ? 'active' : ''}" data-dock-depth="values" ${effectiveDepth === 'values' ? 'aria-pressed="true"' : ''}>Values</button>
-      <button class="dock-tab ${effectiveDepth === 'math' ? 'active' : ''}" data-dock-depth="math" ${effectiveDepth === 'math' ? 'aria-pressed="true"' : ''}>Math</button>
+      <button class="dock-tab ${effectiveDepth === 'math' ? 'active' : ''}" data-dock-depth="math" ${effectiveDepth === 'math' ? 'aria-pressed="true"' : ''}>Exact Math</button>
       <button class="dock-tab ${effectiveDepth === 'source' ? 'active' : ''}" data-dock-depth="source" ${effectiveDepth === 'source' ? 'aria-pressed="true"' : ''}>Source</button>
       ${hasComparison ? `<button class="dock-tab ${effectiveDepth === 'compare' ? 'active' : ''}" data-dock-depth="compare" ${effectiveDepth === 'compare' ? 'aria-pressed="true"' : ''}>Compare</button>` : ''}
-      ${isExpanded ? `<button class="dock-tab-close" data-dock-depth="explain" title="Close detail" aria-label="Close detail">✕ Close</button>` : ''}
+      <button class="dock-tab-close" data-dock-depth="explain" title="Return to overview" aria-label="Return to overview">← Return to overview</button>
     </nav>
+    ` : ''}
     <div class="dock-body" data-testid="dock-body">
       ${bodyContent}
     </div>
