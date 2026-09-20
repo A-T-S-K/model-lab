@@ -64,7 +64,7 @@ MicroGPT is not the platform boundary. ABQ is not the platform boundary. A deplo
 
 ### Canonical MicroGPT facts for this curriculum
 
-The canonical teaching organism is the current committed fixture: character vocabulary a/b/c plus BOS, one transformer layer, embedding width 8, two attention heads, context 8, no biases, ReLU, two required pre-block normalization locations in the forward path, and no final normalization before the vocabulary projection.
+The canonical teaching organism is the current committed fixture: character vocabulary a/b/c plus BOS, one transformer layer, embedding width 8, two attention heads, context 8, no biases, ReLU, RMSNorm at embeddingNorm, preAttentionNorm, and preMlpNorm, and no final normalization before the vocabulary projection.
 
 The forward residual topology is:
 
@@ -264,6 +264,8 @@ For every beat, the default Guided surface must preserve source truth, numerical
 
 **Minimum Guided evidence:** authentic token/position representations and authentic working representation for one occurrence, plus visible before-attention rescaling and residual branch. Default numerical origin is OBSERVED; topology/lookup is STRUCTURAL.
 
+**Availability behavior:** If any required numerical representation is unavailable, keep the truthful structural path and label the exact availability; do not substitute zeros or inferred vectors. Pending execution may show working state but cannot claim the missing result.
+
 **Misconception guardrail:** Embedding numbers are learned features used by this model, not human-readable meanings, and normalization does not create a new token.
 
 **Progressive depth:** Details shows full vectors/shapes. Math shows RMSNorm formula with authentic values. Microscope shows selected scalar ancestry. Source/Provenance exposes wte/wpe lookup identity and both normalization operations.
@@ -301,6 +303,8 @@ For every beat, the default Guided surface must preserve source truth, numerical
 **Required evidence before claim:** AVAILABLE q/k/v vectors for the selected occurrence if numerical examples are shown. Parameter lookup and head-slice relationships are STRUCTURAL. Arithmetic reconstruction of a linear projection is DERIVED unless it was captured as scalar execution.
 
 **Minimum Guided evidence:** authentic q/k/v outputs for one selected occurrence or a truthful values-available indicator, with all three graph branches visibly exposed. Default numeric origin is OBSERVED.
+
+**Availability behavior:** If any Q/K/V output is unavailable, show the three-branch structural mechanism and mark the missing branch honestly; do not claim a complete numerical Q/K/V example or synthesize the missing vector.
 
 **Misconception guardrail:** Q/K/V are not literal questions, labels, semantic categories, or stored human meanings. A mnemonic may be used only when explicitly framed as intuition.
 
@@ -380,6 +384,8 @@ For every beat, the default Guided surface must preserve source truth, numerical
 
 **Minimum Guided evidence:** authentic score-to-weight transformation and normalized distribution over allowed positions. Default result origin is OBSERVED.
 
+**Availability behavior:** If the score or weight vector is unavailable, retain the structural score-to-softmax relationship and label the missing evidence. Do not manufacture weights from incomplete support; any valid reconstruction from complete captured inputs remains DERIVED.
+
 **Misconception guardrail:** an attention weight is a mixing coefficient. It is not automatically importance, explanation, causal attribution, or proof of what the model "cared about."
 
 **Progressive depth:** Details shows complete score/weight vectors. Math shows authentic softmax inputs, maximum shift, exponentials, denominator. Microscope shows selected scalar ancestry. Source/Provenance exposes operation/run/head/query identity.
@@ -418,6 +424,8 @@ For every beat, the default Guided surface must preserve source truth, numerical
 **Required evidence before claim:** AVAILABLE observed weights, Value vectors, and headOutput. Contributor scope is STRUCTURAL. A reconstructed affine mixture is DERIVED and may be verified against the observed head output.
 
 **Minimum Guided evidence:** authentic weights, visible Value contributors, and authentic head output. Default result origin is OBSERVED; multiplication/mixture explanation may be DERIVED.
+
+**Availability behavior:** If weights, Value contributors, or head output are unavailable, mark the missing evidence and keep only the structural mixture relation. A DERIVED mixture requires the complete authentic contributor set for the selected support.
 
 **Misconception guardrail:** weights do not directly mix Keys or logits here. They mix Values. A large weight does not, by itself, establish global causal importance.
 
@@ -461,6 +469,8 @@ For every beat, the default Guided surface must preserve source truth, numerical
 
 **Minimum Guided evidence:** visually distinct join versus residual add, authentic projected/result vectors, and visible bypass identity. Default numeric origin is OBSERVED.
 
+**Availability behavior:** If an internal grouped result is unavailable, keep concatenation, projection, bypass, and add structurally distinct and label the unavailable numerical stage. Do not infer an unseen intermediate from the endpoint or vice versa.
+
 **Misconception guardrail:** concatenation is not addition. The residual path preserves a prior representation and is not a second attention head.
 
 **Progressive depth:** Details shows full head/projection/residual vectors. Math shows projection and selected residual sum. Microscope shows selected scalar ancestry across both branches. Source/Provenance exposes attentionOutput, attentionProjection, attentionResidual and parameter identity.
@@ -502,6 +512,8 @@ For every beat, the default Guided surface must preserve source truth, numerical
 **Required evidence before claim:** AVAILABLE observed stage vectors for the selected occurrence if numerical results are shown. Dependency/residual topology is STRUCTURAL. Exact normalization/linear/ReLU arithmetic may be DERIVED or scalar-observed in deeper inspection.
 
 **Minimum Guided evidence:** authentic before/after vectors with all required stage transitions visible. Default numerical origin is OBSERVED.
+
+**Availability behavior:** If any MLP stage is unavailable numerically, keep the full stage topology visible and mark that stage unavailable. Do not interpolate or fabricate hidden activation/projection values to preserve the animation.
 
 **Misconception guardrail:** this organism uses ReLU, not GELU; it has no final normalization after the block; the MLP is not another attention operation.
 
@@ -546,6 +558,8 @@ Do not split during LS0/implementation merely to simplify code.
 
 **Minimum Guided evidence:** authentic raw score vector for the selected position. Default result origin is OBSERVED.
 
+**Availability behavior:** If logits are unavailable, show only the structural vocabulary-projection relationship and its availability. Do not infer raw scores from displayed probabilities.
+
 **Misconception guardrail:** a logit is not a probability. Negative logits are valid. The largest logit is only largest before softmax, not a percentage.
 
 **Progressive depth:** Details shows all vocabulary logits. Math shows selected projection arithmetic. Microscope shows scalar ancestry. Source/Provenance exposes lm_head and selected coordinate.
@@ -584,6 +598,8 @@ Do not split during LS0/implementation merely to simplify code.
 **Required evidence before claim:** AVAILABLE observed logits and probabilities from the bound run. Stable-softmax structure is STRUCTURAL. Exponentials/denominator may be DERIVED.
 
 **Minimum Guided evidence:** authentic normalized distribution and visible reconnection to the opening result. Default result origin is OBSERVED.
+
+**Availability behavior:** If probabilities are unavailable, do not claim the opening prediction has been reproduced for that run. Keep the logits-to-softmax mechanism structural until authentic or validly derived detail is available; pending remains pending.
 
 **Misconception guardrail:** output softmax normalizes vocabulary scores; attention softmax normalizes causal comparison scores. Probability is not a universal confidence guarantee.
 
@@ -630,6 +646,8 @@ Do not split during LS0/implementation merely to simplify code.
     Learning still ahead.
     Prediction used parameters; it did not update them.
 
+**Availability behavior:** Forward integration may summarize only mechanisms/evidence already established for the bound identity. Missing evidence remains visibly unavailable; do not trigger or imply fresh execution solely to make the integration view look complete.
+
 **Misconception guardrail:** completing the prediction explanation is not completing the lesson, and no training update has occurred merely because probabilities were produced.
 
 **Progressive depth:** Details reopens any mechanism while preserving identity. Math/Microscope/Source deepen the selected mechanism, not the completion banner.
@@ -667,6 +685,8 @@ Do not split during LS0/implementation merely to simplify code.
 **Required evidence before claim:** Prefer AVAILABLE OBSERVED loss and meanLoss from the training run. If loss must be reconstructed from AVAILABLE observed target probabilities, it is DERIVED and must stay labeled DERIVED. Target binding is STRUCTURAL.
 
 **Minimum Guided evidence:** authentic target relationship and authentic/derived-labeled mean objective covering the real positions. Default Guided origin is OBSERVED when captured; DERIVED fallback is allowed only with explicit origin.
+
+**Availability behavior:** If OBSERVED loss is absent but the complete required target probabilities are AVAILABLE, a loss/mean may be shown as DERIVED. If neither source is sufficient, the objective result is unavailable; pending or missing values never become zero.
 
 **Misconception guardrail:** the objective is not just "was the top prediction correct?" and is not restricted to the one opening preview position.
 
@@ -715,6 +735,8 @@ and understands this as dependency/sensitivity explanation rather than runtime r
 **Required evidence before claim:** An OBSERVED backward/scalar graph may be used directly. A RECOMPUTED inspection may be used only when its verification contract succeeds against the recorded training run/gradient anchors. STRUCTURAL dependency topology may orient the route but must not be presented as a captured numerical derivative.
 
 **Minimum Guided evidence:** the authentic/verified dependency route and a truthful current backward relation. Numeric adjoints are optional at this beat.
+
+**Availability behavior:** If neither an OBSERVED backward graph nor a VERIFIED RECOMPUTED graph is available, Guided may show only the STRUCTURAL dependency route and must label numerical sensitivities unavailable. Do not infer adjoints from topology alone.
 
 **Misconception guardrail:** backward visual direction is not runtime execution reversing in time. Explanation playback, runtime execution, and measured timing are distinct.
 
@@ -807,6 +829,8 @@ and explain that the final gradient is the completed loss sensitivity for this p
 
 **Minimum Guided evidence:** final authentic gradient plus explicit distinction from the previously inspected contribution. Default result origin is OBSERVED.
 
+**Availability behavior:** The final-gradient claim is unavailable until the completed gradient for the selected parameter is authentic. A partial visible fan-in or one contribution cannot substitute for the final gradient, and progression to Adam must not imply otherwise.
+
 **Misconception guardrail:** gradient != optimizer update. The gradient describes sensitivity for this objective; it is not the new parameter value or delta.
 
 **Progressive depth:** Details shows contributor counts/subtotals where authentic. Math sums the complete available fan-in. Microscope exposes exact edges. Source/Provenance binds training run, parameter, gradient artifact, graph origin/verification, and completeness.
@@ -850,6 +874,8 @@ and explain that the final gradient is the completed loss sensitivity for this p
 
 **Minimum Guided evidence:** authentic selected gradient and recorded provisional before/delta/after proposal with "accepted model unchanged." Formula internals are optional.
 
+**Availability behavior:** The proposal is unavailable until a complete validated update is bound to the correct starting snapshot and optimizer state. A gradient alone is insufficient to reconstruct Adam truthfully; missing moments/schedule state stay unavailable.
+
 **Misconception guardrail:** Adam is not backward; gradient is not delta; proposal is not acceptance; the representable stored delta may differ from a purely symbolic mathematical delta because floating-point storage is real.
 
 **Progressive depth:** Details shows m, v, before/after, effective rate, step. Math shows bias correction, epsilon, schedule, exact authentic substitutions. Microscope may bind gradient ancestry and proposal fields without inventing optimizer scalar DAGs. Source/Provenance exposes snapshot/experiment/update identity.
@@ -889,6 +915,8 @@ and explain that the final gradient is the completed loss sensitivity for this p
 **Required evidence before claim:** candidate forward must be authentic and bound to the candidate state. Comparison must use compatible input/targets. In the current learning read model, candidate loss may be DERIVED from OBSERVED candidate probabilities; if so it remains DERIVED. Before loss may be OBSERVED or DERIVED depending on captured artifacts. The decision receipt/state establishes acceptance or discard.
 
 **Minimum Guided evidence:** a named comparison such as "Mean loss on this training example changed from X to Y", with evidence origins preserved, plus explicit candidate status and peer choices.
+
+**Availability behavior:** Comparison is unavailable until authentic candidate-forward evidence is bound to the provisional candidate and compatible baseline evidence. Accept/Discard must not be presented as an actionable Candidate Ready decision before that state exists; unavailable comparison values remain unavailable.
 
 **Misconception guardrail:** Do not say "the model improved", "training succeeded", or "this is the better model" from one example. Accept and Discard are peer choices, not quiz answers.
 
