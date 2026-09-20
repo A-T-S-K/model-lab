@@ -1,10 +1,17 @@
 import { sourceMapping } from './mappings.js';
-import stageSource from './stages.ts?raw';
-import valueSource from '../../model/value.ts?raw';
-import modelSource from '../../model/microgpt.ts?raw';
-import backwardSource from '../../model/autograd.ts?raw';
-import trainingSource from '../../model/training.ts?raw';
+import * as stageModule from './stages.ts?raw';
+import * as valueModule from '../../model/value.ts?raw';
+import * as modelModule from '../../model/microgpt.ts?raw';
+import * as backwardModule from '../../model/autograd.ts?raw';
+import * as trainingModule from '../../model/training.ts?raw';
 import { escapeHtml } from '../views/evidence.js';
+
+const rawStr = (m: any): string => (typeof m?.default === 'string' ? m.default : '');
+const stageSource = rawStr(stageModule);
+const valueSource = rawStr(valueModule);
+const modelSource = rawStr(modelModule);
+const backwardSource = rawStr(backwardModule);
+const trainingSource = rawStr(trainingModule);
 
 export const sourceFiles = { 'app/source/stages.ts': stageSource, 'model/value.ts': valueSource, 'model/microgpt.ts': modelSource, 'model/autograd.ts': backwardSource, 'model/training.ts': trainingSource };
 const revisions = new Map<string, string>();

@@ -5,7 +5,7 @@ import type { ForwardProgress } from '../worker/protocol.js';
 import type { TrainingProgress } from '../worker/training-execution.js';
 import type { LearningModel, LearningStage, ParameterPin } from './learning.js';
 import type { PublicTourContent, PublicTourOutcome } from './public-tour.js';
-import { outputTokenName, outputSummary, componentComparison, type OutputPair } from './comparison.js';
+import { outputTokenName, outputSummary, outputMetrics, componentComparison, type OutputPair } from './comparison.js';
 import { geometry, projection } from './view.js';
 import { probabilityColor } from './geometry.js';
 import { simplexGlyph } from './scene.js';
@@ -70,7 +70,7 @@ export interface ContextualDockOptions {
 }
 
 function renderExplain(opts: ContextualDockOptions): string {
-  const { model: m, address: a, element, pin, executionProgress, trainingProgress, learningStage, learningModel, learningRouteStop, attract, trainingState, profile, routePurpose, tourContent } = opts;
+  const { model: m, address: a, element, pin, executionProgress, trainingProgress, learningStage, learningModel, learningRouteStop, attract, trainingState, profile, routePurpose, tourContent, outputPair } = opts;
   if (!m) return '<p>No model loaded.</p>';
   const isPublic = profile !== 'workbench';
 
@@ -81,6 +81,9 @@ function renderExplain(opts: ContextualDockOptions): string {
       : '';
 
     let stageResult = '';
+    const pinLabel = `${pin.name}[${pin.row},${pin.column}]`;
+    const pinOwnerTitle = operations.find(o => o.kind === parameterOwners[pin.name])?.title ?? pin.name;
+
     if (tc.state === 'cold') {
       // Cold represents unstarted tour
     } else if (tc.part === 1) {
@@ -88,31 +91,77 @@ function renderExplain(opts: ContextualDockOptions): string {
       if (c.plainResult) {
         stageResult = `<div class="dock-stage-result"><div class="teaching-step"><small class="stage-result-label">${esc(tc.resultConcept?.label?.toUpperCase() ?? 'OBSERVED RESULT')}</small><p>${c.plainResult}</p></div></div>`;
       }
-    } else if (tc.state === 'p2_parameter_gradient' || tc.state === 'p2_adam_proposal' || tc.state === 'candidate_ready') {
-      if (trainingProgress) {
-        const t = trainingProgress;
+    } else if (tc.state === 'p2_objective') {
+      const meanVal = trainingProgress?.mean ?? (learningModel?.available ? learningModel.objective.mean : undefined);
+      if (meanVal !== undefined) {
         stageResult = `<div class="dock-stage-result">
           <div class="teaching-step">
-            <small class="stage-result-label">${esc(tc.resultConcept?.label?.toUpperCase() ?? 'OBSERVED ACCUMULATION')}</small>
-            <div class="dock-pin-info"><span data-testid="pin-owner">${esc(pin.name)} → ${esc(operations.find(o=>o.kind===parameterOwners[pin.name])?.title??pin.name)} · same global owner · accepted ${esc(t.startingSnapshotId.slice(0,12))}</span></div>
-            <p class="learning-gradient-summary">${t.final ? 'Final' : 'Partial'} gradient: <span data-testid="live-gradient" data-value="${t.gradient}">${t.gradient === undefined ? 'pending' : fmt(t.gradient)}</span></p>
-            ${t.proposal ? `<p class="learning-provisional">Candidate proposal: θ ${fmt(t.proposal.before)} → ${fmt(t.proposal.after)} · provisional until accepted.</p>` : ''}
+            <small class="stage-result-label">MEAN TRAINING LOSS</small>
+            <p class="learning-objective-summary">Mean training loss: <span data-testid="live-loss" data-value="${meanVal}">${fmt(meanVal)}</span> across all target positions.</p>
           </div>
         </div>`;
-      } else if (learningModel?.available) {
-        const lm = learningModel;
-        stageResult = `<div class="dock-stage-result">
-          <div class="teaching-step">
-            <small class="stage-result-label">${esc(tc.resultConcept?.label?.toUpperCase() ?? 'OBSERVED EVIDENCE')}</small>
-            <p class="learning-gradient-summary">Final gradient: <span data-testid="live-gradient" data-value="${lm.backward.gradient}">${fmt(lm.backward.gradient)}</span></p>
-            ${lm.adam?.update ? `<p class="learning-provisional">Candidate proposal: θ ${fmt(lm.adam.update.before)} → ${fmt(lm.adam.update.after)} · provisional until accepted.</p>` : ''}
-          </div>
-        </div>`;
-      } else if (tc.resultConcept) {
-        stageResult = `<div class="dock-stage-result"><div class="teaching-step"><small class="stage-result-label">${esc(tc.resultConcept.label.toUpperCase())}</small><p>${esc(tc.resultConcept.description ?? tc.plainMeaning)}</p></div></div>`;
       }
-    } else if (tc.resultConcept) {
-      stageResult = `<div class="dock-stage-result"><div class="teaching-step"><small class="stage-result-label">${esc(tc.resultConcept.label.toUpperCase())}</small><p>${esc(tc.resultConcept.description ?? tc.plainMeaning)}</p></div></div>`;
+    } else if (tc.state === 'p2_gradient_contribution') {
+      const event = trainingProgress?.contributions.at(-1) ?? (learningModel?.available && learningModel.backward.contributions.length > 0 ? learningModel.backward.contributions[0] : undefined);
+      if (event) {
+        const beforeVal = 'before' in event ? (event as any).before as number : undefined;
+        const afterVal = 'after' in event ? (event as any).after as number : undefined;
+        stageResult = `<div class="dock-stage-result">
+          <div class="teaching-step">
+            <small class="stage-result-label">ONE GRADIENT CONTRIBUTION · PARTIAL ACCUMULATOR</small>
+            <div class="dock-pin-info"><span data-testid="pin-owner">${esc(pinLabel)} → ${esc(pinOwnerTitle)}</span></div>
+            <p class="contribution-math">Child adjoint <strong>${fmt(event.childAdjoint)}</strong> × local derivative <strong>${fmt(event.localDerivative)}</strong> = contribution <span data-testid="live-contribution" data-value="${event.contribution}">${fmt(event.contribution)}</span></p>
+            ${beforeVal !== undefined && afterVal !== undefined ? `<p class="accumulator-math">Previous accumulator <strong>${fmt(beforeVal)}</strong> + this contribution <strong>${fmt(event.contribution)}</strong> = new partial gradient <span data-testid="live-accumulator" data-value="${afterVal}">${fmt(afterVal)}</span></p>` : ''}
+            <p class="learning-partial-note">This is ONE contribution to ${esc(pinLabel)}. The accumulator is still partial; backward pass is not finished.</p>
+          </div>
+        </div>`;
+      }
+    } else if (tc.state === 'p2_final_gradient') {
+      const gradient = trainingProgress ? trainingProgress.gradient : (learningModel?.available ? learningModel.backward.gradient : undefined);
+      const isFinal = trainingProgress ? trainingProgress.final : (learningModel?.available ? true : false);
+      if (gradient !== undefined && isFinal) {
+        stageResult = `<div class="dock-stage-result">
+          <div class="teaching-step">
+            <small class="stage-result-label">FINAL PARAMETER GRADIENT</small>
+            <div class="dock-pin-info"><span data-testid="pin-owner">${esc(pinLabel)} → ${esc(pinOwnerTitle)}</span></div>
+            <p class="learning-gradient-summary">All contributions finished. Final gradient: <span data-testid="live-gradient" data-value="${gradient}">${fmt(gradient)}</span></p>
+            <p class="learning-gradient-note">The gradient measures loss sensitivity for this training objective. The gradient is NOT the optimizer update.</p>
+          </div>
+        </div>`;
+      }
+    } else if (tc.state === 'p2_adam_proposal') {
+      const u = trainingProgress?.proposal ?? (learningModel?.available ? learningModel.adam?.update : undefined);
+      if (u) {
+        stageResult = `<div class="dock-stage-result">
+          <div class="teaching-step">
+            <small class="stage-result-label">PROVISIONAL ADAM PROPOSAL</small>
+            <div class="dock-pin-info"><span data-testid="pin-owner">${esc(pinLabel)}</span></div>
+            <p class="learning-provisional">Candidate proposal: θ ${fmt(u.before)} → provisional θ′ <span data-testid="live-proposal" data-value="${u.after}">${fmt(u.after)}</span></p>
+            <p class="learning-adam-note">Adam uses the final gradient and persistent optimizer state (m=${fmt(u.mAfter)}, v=${fmt(u.vAfter)}). This proposal is provisional; the accepted model has not changed.</p>
+          </div>
+        </div>`;
+      }
+    } else if (tc.state === 'candidate_ready') {
+      const pair = outputPair ?? (trainingProgress?.readyOutputs ? { before: trainingProgress.readyOutputs.before, after: trainingProgress.readyOutputs.after } : undefined);
+      if (pair && pair.before?.manifest?.input && pair.after?.manifest?.input) {
+        const ma = outputMetrics(pair.before);
+        const mb = outputMetrics(pair.after);
+        const vocab = (pair.before.manifest.model.architecture.vocabulary ?? []) as readonly string[];
+        const targetPos = typeof a.token === 'number' && a.token >= 0 && a.token < ma.targets.length ? a.token : 3;
+        const targetTokenId = ma.targets[targetPos];
+        const targetTokenLabel = outputTokenName(targetTokenId, vocab);
+        const probBefore = ma.rows[targetPos]?.[targetTokenId];
+        const probAfter = mb.rows[targetPos]?.[targetTokenId];
+
+        stageResult = `<div class="dock-stage-result">
+          <div class="teaching-step">
+            <small class="stage-result-label">PROVISIONAL CANDIDATE OUTCOME</small>
+            <p class="candidate-outcome-summary">Loss on this training example: <span data-testid="before-mean" data-value="${ma.mean}">${fmt(ma.mean)}</span> → <span data-testid="after-mean" data-value="${mb.mean}">${fmt(mb.mean)}</span></p>
+            <p class="candidate-prediction-change">Prediction for character '${esc(targetTokenLabel)}' at position ${targetPos}: accepted ${fmt(probBefore)} → provisional candidate ${fmt(probAfter)}</p>
+            <p class="candidate-generalization-note">A changed result or lower loss on this training example is not proof of general model improvement.</p>
+          </div>
+        </div>`;
+      }
     }
 
     return `<div class="dock-explain-content" data-testid="dock-explain">
@@ -238,7 +287,7 @@ function renderValues(opts: ContextualDockOptions): string {
   const { model: m, address: a, element, parameter, row, column, pin, trainingProgress, learningStage, learningModel, learningRouteStop } = opts;
   if (!m) return '<p>No model loaded.</p>';
 
-  if (learningRouteStop === 6) {
+  if (learningRouteStop === 6 || opts.tourContent?.state === 'p2_adam_proposal' || opts.tourContent?.state === 'candidate_ready') {
     const u = trainingProgress?.proposal ?? (learningModel?.available ? learningModel.adam.update : undefined);
     const pinLabel = `${pin.name}[${pin.row},${pin.column}]`;
     if (u) {
@@ -343,7 +392,7 @@ function renderMath(opts: ContextualDockOptions): string {
   const { model: m, address: a, element, scalar, executionProgress, trainingProgress, learningStage, learningModel, pin, learningRouteStop } = opts;
   if (!m) return '<p>No model loaded.</p>';
 
-  if (learningRouteStop === 6) {
+  if (learningRouteStop === 6 || opts.tourContent?.state === 'p2_adam_proposal' || opts.tourContent?.state === 'candidate_ready') {
     const u = trainingProgress?.proposal ?? (learningModel?.available ? learningModel.adam.update : undefined);
     return `<div class="dock-math-content" data-testid="dock-math">
       <h3>Adam Optimizer Equations</h3>
@@ -511,6 +560,7 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
 
   const isExpanded = effectiveDepth !== 'explain';
   const isFacilitator = profile === 'facilitator';
+  const isPublic = profile === 'visitor' || Boolean(opts.tourContent);
 
   if (opts.attract) {
     return `<section class="contextual-dock short-guide" data-testid="contextual-dock" data-active-depth="explain" aria-label="Contextual explanation dock">
@@ -534,7 +584,7 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
 
   const inspectAction = isExpanded
     ? `<button id="dock-inspect" class="secondary-action dock-tab dock-tab-close" data-dock-depth="explain">← Return to overview</button>`
-    : `<button id="dock-inspect" class="secondary-action dock-tab" data-dock-depth="values">Inspect evidence ▾</button>`;
+    : `<button id="dock-inspect" class="secondary-action dock-tab" data-dock-depth="values">${isPublic ? 'Details (optional)' : 'Inspect evidence ▾'}</button>`;
 
   return `<section class="contextual-dock short-guide ${isExpanded ? 'is-expanded' : ''}" data-testid="contextual-dock" data-active-depth="${effectiveDepth}" aria-label="Contextual explanation dock">
     <div class="dock-header" data-testid="dock-header">
@@ -551,9 +601,11 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
             opts.tourContent.state === 'candidate_ready' ? `
               ${hasComparison ? `<button class="secondary-action dock-tab" data-dock-depth="compare">Compare candidate</button>` : ''}
               <button id="execution-cancel" class="decision-action discard-action" ${opts.trainingState?.cancelling ? 'disabled' : ''}>Discard candidate</button>
+            ` : opts.tourContent.state === 'tour_complete' ? `
+              ${!isFacilitator && !opts.attract ? `<button id="visitor-explore-toggle" class="secondary-action">${freeExplore ? 'Close free exploration' : 'Explore freely'}</button>` : ''}
+              ${isFacilitator ? `<button id="operator-controls" class="secondary-action">${operatorControls ? 'Hide operator controls' : 'Show operator controls'}</button>` : ''}
             ` : `
               ${attentionAction}
-              ${!isFacilitator && !opts.attract ? `<button id="visitor-explore-toggle" class="secondary-action">${freeExplore ? 'Close free exploration' : 'Explore freely'}</button>` : ''}
               ${shortDetour ? `<button id="short-resume" class="secondary-action">Resume route</button>` : ''}
               ${isFacilitator ? `<button id="operator-controls" class="secondary-action">${operatorControls ? 'Hide operator controls' : 'Show operator controls'}</button>` : ''}
             `

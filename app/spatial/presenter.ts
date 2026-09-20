@@ -20,8 +20,8 @@ import { escapeHtml as esc } from "../views/evidence.js";
 import { experienceCapabilities, type ExperienceProfile } from "../presentation/experience-profile.js";
 import { renderContextualDock, type DockDepth, type PublicTrainingActionState } from "./contextual-dock.js";
 export { type PublicTrainingActionState } from "./contextual-dock.js";
-import type { PublicTourState, PublicTourOutcome } from './public-tour.js';
-import { getPublicTourContent, advanceTour, previousTourState, startPart2, facilitatorTourStateForLandmark } from './public-tour.js';
+import type { PublicTourState, PublicTourOutcome, TourEvidence } from './public-tour.js';
+import { getPublicTourContent, advanceTour, previousTourState, startPart2, facilitatorTourStateForLandmark, canAdvanceTour } from './public-tour.js';
 
 export function computeTrainingActionState(
   execution: ForwardDriver | undefined,
@@ -106,6 +106,7 @@ export class SpatialPresenter {
   learningRouteStop?:number;
   publicTourState: PublicTourState = 'cold';
   publicTourOutcome?: PublicTourOutcome;
+  tourTargetState?: PublicTourState;
   private shortSelection?:MicrogptSelection;
   private shortMessage="";
   private shortDetour=false;
@@ -135,10 +136,28 @@ export class SpatialPresenter {
     return Boolean(this.state?.exhibit);
   }
 
+  getTourEvidence(): TourEvidence {
+    const t = this.state?.execution?.progress?.training;
+    const lm = this.state?.learning;
+    const hasObjective = (t?.mean !== undefined) || (lm?.available === true && lm.objective?.mean !== undefined);
+    const hasMatchingContribution = Boolean((t?.contributions && t.contributions.length > 0) || (lm?.available === true && lm.backward?.contributions?.length > 0));
+    const hasFinalGradient = (t?.final === true && t.gradient !== undefined) || (lm?.available === true && lm.backward?.gradient !== undefined);
+    const hasPinnedProposal = (t?.proposal !== undefined) || (lm?.available === true && lm.adam?.update !== undefined);
+    const hasCandidateComparison = (t?.phase === 'ready' && (Boolean(t.readyOutputs) || Boolean(t.candidateId))) || (lm?.available === true && (this.state?.comparison !== undefined || this.state?.outputPair !== undefined));
+    return {
+      hasObjective,
+      hasMatchingContribution,
+      hasFinalGradient,
+      hasPinnedProposal,
+      hasCandidateComparison,
+    };
+  }
+
   resetVisitor(){
     const wasPublic = this.isPublicProfile();
     this.publicTourState = 'cold';
     this.publicTourOutcome = undefined;
+    this.tourTargetState = undefined;
     this.invalidate(); this.playback.cursor=0; this.playback.phase=2; this.playback.follow=true; this.playback.route="forward"; this.camera.detach();
     this.worldPaneObserver?.disconnect(); this.worldPaneObserver = undefined;
     this.camera.box = wasPublic ? this.getResponsivePublicFrame() : { ...HOME };
@@ -163,6 +182,7 @@ export class SpatialPresenter {
       this.pendingBox = undefined;
       this.publicTourState = 'p1_prediction_preview';
       this.publicTourOutcome = undefined;
+      this.tourTargetState = undefined;
       this.applyTourSelection();
       return;
     }
@@ -180,7 +200,9 @@ export class SpatialPresenter {
     this.shortDetour = false;
     this.shortMessage = '';
 
-    if (intent.derivedReverseStop === 5) {
+    if (this.publicTourState === 'candidate_ready') {
+      this.go({ kind: 'probabilities', token: intent.token ?? 3 }, true);
+    } else if (intent.derivedReverseStop === 5) {
       const ownerKind = parameterOwners[this.pin.name] ?? 'tokenEmbedding';
       this.go({ kind: ownerKind, token: intent.token }, true);
     } else if (intent.derivedReverseStop === 6) {
@@ -198,17 +220,62 @@ export class SpatialPresenter {
   advanceTour() {
     if (this.publicTourState === 'p1_probabilities') {
       this.publicTourState = 'p1_complete';
-    } else {
-      this.publicTourState = advanceTour(this.publicTourState);
+      this.tourTargetState = undefined;
+      this.applyTourSelection();
+      return;
     }
-    this.applyTourSelection();
+    if (this.publicTourState === 'p1_complete' || this.publicTourState === 'candidate_ready' || this.publicTourState === 'tour_complete' || this.publicTourState === 'cold') {
+      return;
+    }
+
+    const next = advanceTour(this.publicTourState);
+    if (next === this.publicTourState) return;
+
+    const evidence = this.getTourEvidence();
+    if (canAdvanceTour(this.publicTourState, evidence)) {
+      this.publicTourState = next;
+      this.tourTargetState = undefined;
+      this.applyTourSelection();
+      return;
+    }
+
+    // Gate not yet satisfied: remember intent and request work from runtime if execution is active
+    this.tourTargetState = next;
+    const exec = this.state?.execution;
+    if (exec && exec.active) {
+      switch (this.publicTourState) {
+        case 'p2_objective':
+          exec.runToContribution();
+          break;
+        case 'p2_gradient_contribution':
+          exec.continue();
+          break;
+        case 'p2_final_gradient':
+          exec.runToProposal();
+          break;
+        case 'p2_adam_proposal':
+          exec.continue();
+          break;
+      }
+    }
+  }
+  checkEvidenceGates() {
+    if (!this.isPublicProfile() || !this.tourTargetState) return;
+    const evidence = this.getTourEvidence();
+    if (canAdvanceTour(this.publicTourState, evidence)) {
+      this.publicTourState = this.tourTargetState;
+      this.tourTargetState = undefined;
+      this.applyTourSelection();
+    }
   }
   previousTour() {
     this.publicTourState = previousTourState(this.publicTourState);
+    this.tourTargetState = undefined;
     this.applyTourSelection();
   }
   startPart2() {
     this.publicTourState = startPart2();
+    this.tourTargetState = undefined;
     this.applyTourSelection();
   }
   private shortRoute(index:number){
@@ -432,6 +499,7 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
   render(m:AnySpatialReadModel|undefined,state:PresentationState) {
     if(m&&isRegisteredWorld(m))return m.presentation.render({status:state.status,error:state.error,replay:Boolean(state.evidenceWorld?.replay)});
     this.model=m;this.state=state;
+    this.checkEvidenceGates();
     const p=this.playback;
     if(p.source && (state.busy||!m||!m.valid|| (p.route==='forward'?m.source.sourceRunId!==p.source:!state.learning?.available||state.learning.experiment.id!==p.source)))this.invalidate();
     const s=this.selection,a=this.address();

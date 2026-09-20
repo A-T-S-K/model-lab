@@ -8,11 +8,8 @@ export type PublicTourState =
   | 'p1_probabilities'
   | 'p1_complete'
   | 'p2_objective'
-  | 'p2_score_backward'
-  | 'p2_transform_backward'
-  | 'p2_mix_context_backward'
-  | 'p2_represent_backward'
-  | 'p2_parameter_gradient'
+  | 'p2_gradient_contribution'
+  | 'p2_final_gradient'
   | 'p2_adam_proposal'
   | 'candidate_ready'
   | 'tour_complete';
@@ -27,11 +24,8 @@ export const PUBLIC_TOUR_STATES: readonly PublicTourState[] = [
   'p1_probabilities',
   'p1_complete',
   'p2_objective',
-  'p2_score_backward',
-  'p2_transform_backward',
-  'p2_mix_context_backward',
-  'p2_represent_backward',
-  'p2_parameter_gradient',
+  'p2_gradient_contribution',
+  'p2_final_gradient',
   'p2_adam_proposal',
   'candidate_ready',
   'tour_complete',
@@ -116,7 +110,7 @@ export function getPublicTourContent(
         progress: 'Part 1 of 2 · 2 of 6 · Represent',
         headline: 'REPRESENT',
         routePurpose: "Turn the token and its position into the model's working representation",
-        plainMeaning: 'The model maps each character token and position into numerical vectors that represent identity and order in space.',
+        plainMeaning: 'The character token vector and position vector combine into the numerical representation used by the model.',
         resultConcept: { label: 'Working representation' },
         selectionIntent: { kind: 'preAttentionNorm', token: 3, layer: 0, derivedShortStop: 1 },
         primaryAction: { id: 'short-continue', label: 'Continue: MIX CONTEXT', role: 'primary' },
@@ -129,12 +123,12 @@ export function getPublicTourContent(
         part: 1,
         progress: 'Part 1 of 2 · 3 of 6 · Mix Context',
         headline: 'MIX CONTEXT',
-        routePurpose: 'Use causally available earlier information to update this position',
-        plainMeaning: 'Attention heads allow each position to compare itself against earlier tokens, gathering and mixing relevant context.',
+        routePurpose: 'Combine allowed earlier positions through normalized attention weights and value mixtures',
+        plainMeaning: 'Attention heads compare this position against allowed earlier positions, turning scores into normalized attention weights that mix value vectors together.',
         resultConcept: { label: 'Attended representation' },
         selectionIntent: { kind: 'attentionResidual', token: 3, layer: 0, head: 0, derivedShortStop: 2 },
         primaryAction: { id: 'short-continue', label: 'Continue: TRANSFORM', role: 'primary' },
-        optionalActions: [{ id: 'attention-drill-down', label: 'How does attention work?', role: 'secondary' }],
+        optionalActions: [{ id: 'attention-drill-down', label: 'Attention details (optional)', role: 'secondary' }],
       };
 
     case 'p1_transform':
@@ -143,8 +137,8 @@ export function getPublicTourContent(
         part: 1,
         progress: 'Part 1 of 2 · 4 of 6 · Transform',
         headline: 'TRANSFORM',
-        routePurpose: 'Synthesize higher-order features through non-linear feed-forward layers',
-        plainMeaning: 'The feed-forward network (MLP) expands, activates, and projects vectors to synthesize new combinations of features.',
+        routePurpose: 'Transform the representation through normalization, up projection, ReLU, down projection, and residual add',
+        plainMeaning: 'The feed-forward network normalizes the representation, projects it up, applies a ReLU non-linearity, projects it down, and adds the result back to the residual stream.',
         resultConcept: { label: 'Transformed representation' },
         selectionIntent: { kind: 'mlpResidual', token: 3, layer: 0, derivedShortStop: 3 },
         primaryAction: { id: 'short-continue', label: 'Continue: SCORE', role: 'primary' },
@@ -158,7 +152,7 @@ export function getPublicTourContent(
         progress: 'Part 1 of 2 · 5 of 6 · Score',
         headline: 'SCORE',
         routePurpose: 'Project processed representations into raw vocabulary scores (logits)',
-        plainMeaning: 'The final projection maps representations into vocabulary scores measuring how likely each candidate character is.',
+        plainMeaning: 'The final linear projection maps processed representations into raw unnormalized vocabulary scores (logits) for each character in the vocabulary.',
         resultConcept: { label: 'Vocabulary scores (logits)' },
         selectionIntent: { kind: 'logits', token: 3, derivedShortStop: 4 },
         primaryAction: { id: 'short-continue', label: 'Continue: PROBABILITIES', role: 'primary' },
@@ -172,7 +166,7 @@ export function getPublicTourContent(
         progress: 'Part 1 of 2 · 6 of 6 · Probabilities',
         headline: 'PROBABILITIES',
         routePurpose: 'Normalize raw scores into a probability distribution across candidates',
-        plainMeaning: 'Softmax converts raw scores into non-negative probabilities summing to 100%, determining what comes next.',
+        plainMeaning: 'Softmax converts raw logits into a normalized probability distribution summing to 100%. The model’s current prediction can be identified from this resulting distribution.',
         resultConcept: { label: 'Candidate probabilities' },
         selectionIntent: { kind: 'probabilities', token: 3, derivedShortStop: 5 },
         primaryAction: { id: 'short-continue', label: 'Complete Part 1', role: 'primary' },
@@ -189,131 +183,86 @@ export function getPublicTourContent(
         plainMeaning: 'You have walked through how the model predicts next tokens from inputs. In Part 2, see how the model learns by comparing predictions with actual targets and updating parameters.',
         resultConcept: { label: 'Forward walkthrough complete' },
         selectionIntent: { kind: 'probabilities', token: 3, derivedShortStop: 5 },
-        primaryAction: { id: 'short-teach', label: 'Begin Part 2: Step through learning', role: 'primary' },
-        optionalActions: [{ id: 'start-reverse-learning', label: 'Walk through backward pass', role: 'secondary' }],
+        primaryAction: { id: 'short-teach', label: 'Start Part 2: See how learning works', role: 'primary' },
+        optionalActions: [],
       };
 
     case 'p2_objective':
       return {
         state,
         part: 2,
-        progress: 'Part 2 of 2 · 1 of 7 · Training Objective',
-        headline: 'TRAINING OBJECTIVE',
-        routePurpose: 'Predictions are compared with known targets across all positions to calculate loss',
-        plainMeaning: 'The model compares predictions with targets across all positions to measure error. The mean loss forms the single objective that supplies the backward pass.',
+        progress: 'Part 2 of 2 · 1 of 5 · Measure error',
+        headline: 'MEASURE ERROR',
+        routePurpose: 'Predictions are compared with known targets across all positions to calculate error',
+        plainMeaning: 'The model compares predictions with known targets across all positions to measure error. The mean loss forms the single training objective that supplies the backward pass.',
         truthGuardrail: REVERSE_TRUTH_GUARDRAIL,
         resultConcept: { label: 'Mean training loss' },
         selectionIntent: { kind: 'probabilities', token: 3, derivedReverseStop: 0 },
-        primaryAction: { id: 'reverse-continue', label: 'Continue: SCORE BACKWARD', role: 'primary' },
-        optionalActions: [{ id: 'reverse-exit', label: 'Return to Part 1', role: 'secondary' }],
+        primaryAction: { id: 'reverse-continue', label: 'Continue: Trace gradient contribution', role: 'primary' },
+        optionalActions: [],
       };
 
-    case 'p2_score_backward':
+    case 'p2_gradient_contribution':
       return {
         state,
         part: 2,
-        progress: 'Part 2 of 2 · 2 of 7 · Score Backward',
-        headline: 'SCORE BACKWARD',
-        routePurpose: 'Propagate output sensitivity backward into vocabulary scoring',
-        plainMeaning: 'Sensitivity propagates backward through logits to determine how changes to scoring affect the overall loss.',
+        progress: 'Part 2 of 2 · 2 of 5 · Trace gradient contribution',
+        headline: 'TRACE ONE GRADIENT CONTRIBUTION',
+        routePurpose: 'Loss sensitivity propagates backward through dependencies to compute one parameter contribution',
+        plainMeaning: 'Sensitivities propagate backward through actual computational dependencies. For the selected parameter, each backward occurrence multiplies the incoming child adjoint by the local derivative to produce one contribution added to the accumulator. The accumulator may still be partial.',
         truthGuardrail: REVERSE_TRUTH_GUARDRAIL,
-        resultConcept: { label: 'Logits adjoint' },
-        selectionIntent: { kind: 'logits', token: 3, derivedReverseStop: 1 },
-        primaryAction: { id: 'reverse-continue', label: 'Continue: TRANSFORM BACKWARD', role: 'primary' },
-        optionalActions: [{ id: 'reverse-previous', label: 'Previous: TRAINING OBJECTIVE', role: 'secondary' }],
-      };
-
-    case 'p2_transform_backward':
-      return {
-        state,
-        part: 2,
-        progress: 'Part 2 of 2 · 3 of 7 · Transform Backward',
-        headline: 'TRANSFORM BACKWARD',
-        routePurpose: 'Propagate gradient through MLP feed-forward operations and residual bypass',
-        plainMeaning: 'Gradient flows backward through the MLP non-linear activation and splits across both the feed-forward path and residual stream.',
-        truthGuardrail: REVERSE_TRUTH_GUARDRAIL,
-        resultConcept: { label: 'MLP residual adjoint' },
-        selectionIntent: { kind: 'mlpResidual', token: 3, layer: 0, derivedReverseStop: 2 },
-        primaryAction: { id: 'reverse-continue', label: 'Continue: MIX CONTEXT BACKWARD', role: 'primary' },
-        optionalActions: [{ id: 'reverse-previous', label: 'Previous: SCORE BACKWARD', role: 'secondary' }],
-      };
-
-    case 'p2_mix_context_backward':
-      return {
-        state,
-        part: 2,
-        progress: 'Part 2 of 2 · 4 of 7 · Mix Context Backward',
-        headline: 'MIX CONTEXT BACKWARD',
-        routePurpose: 'Propagate gradient through attention projection, weights, and query/key/value vectors',
-        plainMeaning: 'Sensitivity flows back through attention mixing, assigning responsibility to individual heads and queries that gathered context.',
-        truthGuardrail: REVERSE_TRUTH_GUARDRAIL,
-        resultConcept: { label: 'Attention gradient' },
-        selectionIntent: { kind: 'attentionResidual', token: 3, layer: 0, derivedReverseStop: 3 },
-        primaryAction: { id: 'reverse-continue', label: 'Continue: REPRESENT BACKWARD', role: 'primary' },
-        optionalActions: [{ id: 'reverse-previous', label: 'Previous: TRANSFORM BACKWARD', role: 'secondary' }],
-      };
-
-    case 'p2_represent_backward':
-      return {
-        state,
-        part: 2,
-        progress: 'Part 2 of 2 · 5 of 7 · Represent Backward',
-        headline: 'REPRESENT BACKWARD',
-        routePurpose: 'Accumulate final backward gradients into token and position embeddings',
-        plainMeaning: 'Gradients reach the initial embedding representations, showing how token inputs contributed to downstream loss sensitivity.',
-        truthGuardrail: REVERSE_TRUTH_GUARDRAIL,
-        resultConcept: { label: 'Embedding gradient' },
-        selectionIntent: { kind: 'preAttentionNorm', token: 3, layer: 0, derivedReverseStop: 4 },
-        primaryAction: { id: 'reverse-continue', label: 'Continue: PARAMETER GRADIENT', role: 'primary' },
-        optionalActions: [{ id: 'reverse-previous', label: 'Previous: MIX CONTEXT BACKWARD', role: 'secondary' }],
-      };
-
-    case 'p2_parameter_gradient':
-      return {
-        state,
-        part: 2,
-        progress: 'Part 2 of 2 · 6 of 7 · Parameter Gradient',
-        headline: 'PARAMETER GRADIENT',
-        routePurpose: 'Accumulate scalar autograd contributions into the pinned parameter bank and its forward owner',
-        plainMeaning: 'For the inspected parameter, each backward occurrence contributes child adjoint × local derivative into an accumulator to produce the parameter gradient.',
-        truthGuardrail: REVERSE_TRUTH_GUARDRAIL,
-        resultConcept: { label: 'Accumulated parameter gradient' },
+        resultConcept: { label: 'One gradient contribution' },
         selectionIntent: { kind: 'tokenEmbedding', parameter: 'wte', token: 3, derivedReverseStop: 5 },
-        primaryAction: { id: 'reverse-continue', label: 'Continue: ADAM PROPOSAL', role: 'primary' },
-        optionalActions: [{ id: 'reverse-previous', label: 'Previous: REPRESENT BACKWARD', role: 'secondary' }],
+        primaryAction: { id: 'reverse-continue', label: 'Continue: Finish parameter gradient', role: 'primary' },
+        optionalActions: [],
+      };
+
+    case 'p2_final_gradient':
+      return {
+        state,
+        part: 2,
+        progress: 'Part 2 of 2 · 3 of 5 · Finish gradient',
+        headline: 'FINAL PARAMETER GRADIENT',
+        routePurpose: 'All backward contributions finish to yield the complete gradient for this parameter',
+        plainMeaning: 'All incoming scalar backward contributions for this parameter have finished accumulating into the final gradient. The gradient measures loss sensitivity for this training objective; it is not the optimizer update.',
+        truthGuardrail: REVERSE_TRUTH_GUARDRAIL,
+        resultConcept: { label: 'Final parameter gradient' },
+        selectionIntent: { kind: 'tokenEmbedding', parameter: 'wte', token: 3, derivedReverseStop: 5 },
+        primaryAction: { id: 'reverse-continue', label: 'Continue: Propose candidate with Adam', role: 'primary' },
+        optionalActions: [],
       };
 
     case 'p2_adam_proposal':
       return {
         state,
         part: 2,
-        progress: 'Part 2 of 2 · 7 of 7 · Adam Proposal',
-        headline: 'ADAM PROPOSAL',
-        routePurpose: 'Adam computes provisional candidate weights from accumulated gradients and persistent moments',
-        plainMeaning: 'Adam combines the final gradient with persistent optimizer moments (m, v) to propose an updated parameter value. The accepted model has not changed.',
+        progress: 'Part 2 of 2 · 4 of 5 · Adam proposal',
+        headline: 'ADAM PROPOSES CANDIDATE',
+        routePurpose: 'Adam combines the final gradient with persistent optimizer state to compute a provisional update',
+        plainMeaning: 'Adam combines the final parameter gradient with persistent moments (m, v) to propose an updated parameter value. The proposal is provisional; the accepted model has not changed.',
         truthGuardrail: REVERSE_TRUTH_GUARDRAIL,
         resultConcept: { label: 'Provisional parameter update' },
         selectionIntent: { kind: 'wte', parameter: 'wte', token: 3, derivedReverseStop: 6 },
-        primaryAction: { id: 'reverse-continue', label: 'Continue: REVIEW CANDIDATE', role: 'primary' },
-        optionalActions: [{ id: 'reverse-previous', label: 'Previous: PARAMETER GRADIENT', role: 'secondary' }],
+        primaryAction: { id: 'reverse-continue', label: 'Continue: Compare candidate outcome', role: 'primary' },
+        optionalActions: [],
       };
 
     case 'candidate_ready':
       return {
         state,
         part: 2,
-        progress: 'Candidate Ready',
+        progress: 'Part 2 of 2 · 5 of 5 · Compare and decide',
         headline: 'CANDIDATE UPDATE READY',
-        routePurpose: 'Provisional update prepared. Choose to accept into accepted weights or discard.',
-        plainMeaning: 'A candidate model update has been computed. It remains completely provisional and isolated until you explicitly accept or discard it.',
+        routePurpose: 'Provisional candidate prepared. Compare results on this training example before deciding.',
+        plainMeaning: 'A provisional candidate model update has been prepared. Compare the outcome against the accepted baseline on this training example. A changed result or lower loss on this training example is not proof of general model improvement. Choose to accept the update or discard it.',
         truthGuardrail: REVERSE_TRUTH_GUARDRAIL,
-        resultConcept: { label: 'Provisional candidate ready' },
-        selectionIntent: { kind: 'wte', parameter: 'wte', token: 3, derivedReverseStop: 6 },
+        resultConcept: { label: 'Provisional candidate outcome' },
+        selectionIntent: { kind: 'probabilities', token: 3, derivedShortStop: 0 },
         decisionActions: [
           { id: 'execution-accept', label: 'Accept update', role: 'peer-decision' },
           { id: 'execution-cancel', label: 'Discard candidate', role: 'peer-decision' },
         ],
-        optionalActions: [{ id: 'candidate-compare', label: 'Compare candidate', role: 'secondary' }],
+        optionalActions: [],
       };
 
     case 'tour_complete':
@@ -356,16 +305,10 @@ export function advanceTour(current: PublicTourState): PublicTourState {
     case 'p1_complete':
       return 'p1_complete';
     case 'p2_objective':
-      return 'p2_score_backward';
-    case 'p2_score_backward':
-      return 'p2_transform_backward';
-    case 'p2_transform_backward':
-      return 'p2_mix_context_backward';
-    case 'p2_mix_context_backward':
-      return 'p2_represent_backward';
-    case 'p2_represent_backward':
-      return 'p2_parameter_gradient';
-    case 'p2_parameter_gradient':
+      return 'p2_gradient_contribution';
+    case 'p2_gradient_contribution':
+      return 'p2_final_gradient';
+    case 'p2_final_gradient':
       return 'p2_adam_proposal';
     case 'p2_adam_proposal':
       return 'candidate_ready';
@@ -378,20 +321,16 @@ export function advanceTour(current: PublicTourState): PublicTourState {
 
 export function previousTourState(current: PublicTourState): PublicTourState {
   switch (current) {
-    case 'p2_score_backward':
-      return 'p2_objective';
-    case 'p2_transform_backward':
-      return 'p2_score_backward';
-    case 'p2_mix_context_backward':
-      return 'p2_transform_backward';
-    case 'p2_represent_backward':
-      return 'p2_mix_context_backward';
-    case 'p2_parameter_gradient':
-      return 'p2_represent_backward';
-    case 'p2_adam_proposal':
-      return 'p2_parameter_gradient';
     case 'candidate_ready':
       return 'p2_adam_proposal';
+    case 'p2_adam_proposal':
+      return 'p2_final_gradient';
+    case 'p2_final_gradient':
+      return 'p2_gradient_contribution';
+    case 'p2_gradient_contribution':
+      return 'p2_objective';
+    case 'p2_objective':
+      return 'p2_objective';
     default:
       return current;
   }
@@ -403,16 +342,11 @@ export function startPart2(): PublicTourState {
 
 export function facilitatorTourStateForLandmark(landmarkIndex: number, reverse?: boolean): PublicTourState {
   if (reverse) {
-    const stops: PublicTourState[] = [
-      'p2_objective',
-      'p2_score_backward',
-      'p2_transform_backward',
-      'p2_mix_context_backward',
-      'p2_represent_backward',
-      'p2_parameter_gradient',
-      'p2_adam_proposal',
-    ];
-    return stops[landmarkIndex] ?? 'p2_objective';
+    if (landmarkIndex === 0) return 'p2_objective';
+    if (landmarkIndex >= 1 && landmarkIndex <= 4) return 'p2_gradient_contribution';
+    if (landmarkIndex === 5) return 'p2_final_gradient';
+    if (landmarkIndex === 6) return 'p2_adam_proposal';
+    return 'p2_objective';
   }
   const stops: PublicTourState[] = [
     'p1_prediction_preview',
@@ -423,4 +357,32 @@ export function facilitatorTourStateForLandmark(landmarkIndex: number, reverse?:
     'p1_probabilities',
   ];
   return stops[landmarkIndex] ?? 'p1_prediction_preview';
+}
+
+export interface TourEvidence {
+  readonly hasObjective: boolean;
+  readonly hasMatchingContribution: boolean;
+  readonly hasFinalGradient: boolean;
+  readonly hasPinnedProposal: boolean;
+  readonly hasCandidateComparison: boolean;
+}
+
+export function canAdvanceTour(current: PublicTourState, evidence: TourEvidence): boolean {
+  switch (current) {
+    case 'p2_objective':
+      return evidence.hasObjective && evidence.hasMatchingContribution;
+    case 'p2_gradient_contribution':
+      return evidence.hasFinalGradient;
+    case 'p2_final_gradient':
+      return evidence.hasPinnedProposal;
+    case 'p2_adam_proposal':
+      return evidence.hasCandidateComparison;
+    case 'cold':
+    case 'p1_complete':
+    case 'candidate_ready':
+    case 'tour_complete':
+      return false;
+    default:
+      return true;
+  }
 }
