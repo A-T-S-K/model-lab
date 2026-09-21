@@ -192,6 +192,26 @@ export function isPublicPart2DetailRenderOnly(
   return profile !== 'workbench' && content?.part === 2 && navigationMode === 'detail';
 }
 
+function boundBackwardInspection(
+  inspection: InspectionResult | undefined,
+  sourceRunId: string,
+  parameter: ParameterRef,
+): InspectionResult | undefined {
+  if (!inspection || inspection.availability !== 'available' || inspection.sourceRunId !== sourceRunId) return undefined;
+  if (inspection.provenance === 'recomputed' && inspection.verification?.verified !== true) return undefined;
+  const graph = inspection.graph;
+  if (!graph) return undefined;
+  const root = graph.nodes.find(node => {
+    const candidate = node.parameter;
+    return graph.roots.includes(node.id)
+      && candidate?.index === parameter.index
+      && candidate.name === parameter.name
+      && candidate.row === parameter.row
+      && candidate.column === parameter.column;
+  });
+  return root ? inspection : undefined;
+}
+
 export function resolvePublicTrainingDepthContext(
   content: PublicTourContent,
   progress: ForwardProgress | undefined,
@@ -232,10 +252,11 @@ export function resolvePublicTrainingDepthContext(
     trainingRun = livePreview.run;
   }
 
-  const verifiedInspection = inspection?.availability === 'available'
-    && inspection.sourceRunId === training.gradientSourceRunId
-    ? inspection
-    : undefined;
+  const verifiedInspection = boundBackwardInspection(
+    inspection,
+    training.gradientSourceRunId,
+    parameter,
+  );
   const numericAdjointsAvailable = Boolean(verifiedInspection?.graph?.edges.some(edge =>
     edge.childAdjoint !== undefined || edge.contribution !== undefined
   ));

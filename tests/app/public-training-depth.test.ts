@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createServer, type ViteDevServer } from 'vite';
 import type { ArchivedSnapshot } from '../../archive/session.js';
-import type { ParameterRef } from '../../inspect/types.js';
+import type { InspectionResult, ParameterRef } from '../../inspect/types.js';
 import { sourceBinding } from '../../app/presentation/source-binding.js';
 import {
   transitionPublicLesson,
@@ -191,6 +191,7 @@ function context(
   selection: PublicTrainingDepthSelection = {},
   progress = harness.progress,
   preview = harness.preview,
+  inspection?: InspectionResult,
 ) {
   const resolved = resolvePublicTrainingDepthContext(
     getPublicTourContent(state),
@@ -198,6 +199,7 @@ function context(
     harness.starting,
     preview,
     selection,
+    inspection,
   );
   assert(resolved, state + ' must own Part 2 depth');
   return resolved;
@@ -298,6 +300,131 @@ test('PD1-2 backward trace keeps structural dependency distinct from unavailable
   assert.equal(resolved.numericAdjointsAvailable, false);
   assert.equal(resolved.verifiedInspection, undefined);
   assert.deepEqual(resolved.parameter, harness.parameter);
+});
+
+function backwardInspection(
+  harness: LiveTrainingHarness,
+  parameter: ParameterRef,
+  provenance: InspectionResult['provenance'],
+  verified?: boolean,
+): InspectionResult {
+  return {
+    sourceRunId: harness.progress.training!.gradientSourceRunId,
+    provenance,
+    availability: 'available',
+    graph: {
+      roots: [1],
+      nodes: [
+        { id: 1, operation: 'parameter', value: 0, gradient: 0.125, parameter },
+        { id: 2, operation: 'child', value: 0.5 },
+      ],
+      edges: [{
+        id: 1,
+        child: 2,
+        parent: 1,
+        inputIndex: 0,
+        localDerivative: 0.5,
+        childAdjoint: 0.25,
+        contribution: 0.125,
+      }],
+      structural: [],
+    },
+    ...(provenance === 'recomputed' && verified !== undefined ? {
+      verification: {
+        sourceArtifactId: 'test-artifact',
+        observedValues: [0.125],
+        recomputedValues: [0.125],
+        maxAbsoluteError: 0,
+        maxRelativeError: 0,
+        tolerancePolicy: 'test exact identity fixture',
+        verified,
+      },
+    } : {}),
+  };
+}
+
+test('PD1-2-R1 admits observed backward evidence only for the exact runtime parameter root', async () => {
+  const harness = await LiveTrainingHarness.create('pd1-2-r1-observed', { name: 'wte', row: 0, column: 0 });
+  await harness.backward();
+  const inspection = backwardInspection(harness, harness.parameter, 'observed');
+  const resolved = context('p2_backward_trace', harness, {}, harness.progress, harness.preview, inspection);
+  assert.equal(resolved.available, true);
+  assert.deepEqual(resolved.parameter, harness.parameter);
+  assert.strictEqual(resolved.verifiedInspection, inspection);
+  assert.equal(resolved.numericAdjointsAvailable, true);
+});
+
+test('PD1-2-R1 admits recomputed backward evidence only when verification succeeded', async () => {
+  const harness = await LiveTrainingHarness.create('pd1-2-r1-recomputed', { name: 'wte', row: 0, column: 0 });
+  await harness.backward();
+
+  const verified = backwardInspection(harness, harness.parameter, 'recomputed', true);
+  const admitted = context('p2_backward_trace', harness, {}, harness.progress, harness.preview, verified);
+  assert.strictEqual(admitted.verifiedInspection, verified);
+  assert.equal(admitted.numericAdjointsAvailable, true);
+
+  const unverified = backwardInspection(harness, harness.parameter, 'recomputed');
+  const rejectedMissing = context('p2_backward_trace', harness, {}, harness.progress, harness.preview, unverified);
+  assert.equal(rejectedMissing.available, true);
+  assert.equal(rejectedMissing.kind, 'backward-trace');
+  assert.deepEqual(rejectedMissing.parameter, harness.parameter);
+  assert.equal(rejectedMissing.verifiedInspection, undefined);
+  assert.equal(rejectedMissing.numericAdjointsAvailable, false);
+
+  const failed = backwardInspection(harness, harness.parameter, 'recomputed', false);
+  const rejectedFailed = context('p2_backward_trace', harness, {}, harness.progress, harness.preview, failed);
+  assert.equal(rejectedFailed.available, true);
+  assert.equal(rejectedFailed.verifiedInspection, undefined);
+  assert.equal(rejectedFailed.numericAdjointsAvailable, false);
+});
+
+test('PD1-2-R1 rejects same-run inspection rooted at another parameter without invalidating structural trace', async () => {
+  const harness = await LiveTrainingHarness.create('pd1-2-r1-wrong-parameter', { name: 'wte', row: 0, column: 0 });
+  await harness.backward();
+  const other = resolveParameter(harness.starting, { name: 'wpe', row: 0, column: 0 })!;
+  assert(other);
+  const inspection = backwardInspection(harness, other, 'observed');
+  const resolved = context('p2_backward_trace', harness, {}, harness.progress, harness.preview, inspection);
+  assert.equal(resolved.available, true);
+  assert.equal(resolved.kind, 'backward-trace');
+  assert.deepEqual(resolved.parameter, harness.parameter);
+  assert.equal(resolved.verifiedInspection, undefined);
+  assert.equal(resolved.numericAdjointsAvailable, false);
+});
+
+test('PD1-2-R1 rejects wrong-run or unavailable inspections without invalidating structural trace', async () => {
+  const harness = await LiveTrainingHarness.create('pd1-2-r1-run-availability', { name: 'wte', row: 0, column: 0 });
+  await harness.backward();
+  const exact = backwardInspection(harness, harness.parameter, 'observed');
+
+  for (const inspection of [
+    { ...exact, sourceRunId: 'other:training' },
+    { ...exact, availability: 'not_captured' as const },
+  ]) {
+    const resolved = context('p2_backward_trace', harness, {}, harness.progress, harness.preview, inspection);
+    assert.equal(resolved.available, true);
+    assert.equal(resolved.kind, 'backward-trace');
+    assert.deepEqual(resolved.parameter, harness.parameter);
+    assert.equal(resolved.verifiedInspection, undefined);
+    assert.equal(resolved.numericAdjointsAvailable, false);
+  }
+});
+
+test('PD1-2-R1 rejects matching flat index when semantic parameter coordinates disagree', async () => {
+  const harness = await LiveTrainingHarness.create('pd1-2-r1-coordinate-mismatch', { name: 'wte', row: 0, column: 0 });
+  await harness.backward();
+  for (const mismatched of [
+    { ...harness.parameter, name: 'wpe' },
+    { ...harness.parameter, row: harness.parameter.row + 1 },
+    { ...harness.parameter, column: harness.parameter.column + 1 },
+  ]) {
+    const inspection = backwardInspection(harness, mismatched, 'observed');
+    const resolved = context('p2_backward_trace', harness, {}, harness.progress, harness.preview, inspection);
+    assert.equal(resolved.available, true);
+    assert.deepEqual(resolved.parameter, harness.parameter);
+    assert.equal(resolved.verifiedInspection, undefined);
+    assert.equal(resolved.numericAdjointsAvailable, false);
+  }
 });
 
 test('PD1-2 one contribution exposes the exact retained event and never upgrades the retained list to complete fan-in', async () => {
