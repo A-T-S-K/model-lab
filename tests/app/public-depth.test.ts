@@ -1,9 +1,14 @@
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spatialReadModel, type SpatialReadModel } from '../../app/spatial/bindings.js';
 import { forwardReadModel } from '../../app/spatial/forward.js';
-import { resolvePublicDepthContext, type PublicDepthSelection } from '../../app/spatial/public-depth.js';
-import { renderContextualDock, type DockDepth } from '../../app/spatial/contextual-dock.js';
+import {
+  resolvePublicDepthContext,
+  type PublicDepthSelection,
+  type ResolvedPublicDepthMember,
+} from '../../app/spatial/public-depth.js';
+import type { ContextualDockOptions, DockDepth } from '../../app/spatial/contextual-dock.js';
+import { createServer, type ViteDevServer } from 'vite';
 import { getPublicTourContent, type PublicTourState } from '../../app/spatial/public-tour.js';
 import { sourceBinding } from '../../app/presentation/source-binding.js';
 import { ModelSession } from '../../app/worker/controller.js';
@@ -79,7 +84,8 @@ test('PD1 Q K V stay bound to one canonical run position layer and head with thr
   assert.equal(ctx.canonical.layer, 0);
   assert.equal(ctx.canonical.head, 0);
   for (const id of ['q', 'k', 'v']) {
-    const member = ctx.members.find(candidate => candidate.memberId === id);
+    const member: ResolvedPublicDepthMember | undefined =
+      ctx.members.find(candidate => candidate.memberId === id);
     assert(member);
     assert.deepEqual(member.shape, [model.width]);
     assert.equal(member.head, 0);
@@ -221,16 +227,36 @@ test('PD1 temporary detail selection never changes canonical lesson identity', a
 });
 
 
-function publicDock(
+let vite: ViteDevServer | undefined;
+
+async function renderContextualDockForTest(opts: ContextualDockOptions): Promise<string> {
+  vite ??= await createServer({
+    root: process.cwd(),
+    appType: 'custom',
+    logLevel: 'silent',
+    server: { middlewareMode: true },
+  });
+  const module = await vite.ssrLoadModule('/app/spatial/contextual-dock.ts') as {
+    renderContextualDock(options: ContextualDockOptions): string;
+  };
+  return module.renderContextualDock(opts);
+}
+
+after(async () => {
+  await vite?.close();
+  vite = undefined;
+});
+
+async function publicDock(
   model: SpatialReadModel,
   state: Extract<PublicTourState, `p1_${string}`>,
   depth: DockDepth,
   selection: PublicDepthSelection = {},
-): string {
+): Promise<string> {
   const tourContent = getPublicTourContent(state);
   const resolved = resolvePublicDepthContext(tourContent, model, selection);
   assert(resolved);
-  return renderContextualDock({
+  return renderContextualDockForTest({
     model,
     address: resolved.canonical.anchor,
     element: resolved.element,
@@ -256,35 +282,35 @@ function publicDock(
 
 test('PD1 contextual dock routes Part 1 grouped Values and Source before generic endpoint rendering', async () => {
   const model = await part1Model();
-  const representation = publicDock(model, 'p1_represent', 'values');
+  const representation = await publicDock(model, 'p1_represent', 'values');
   for (const id of ['tokenEmbedding', 'positionEmbedding', 'embeddingSum', 'embeddingNorm', 'preAttentionNorm']) {
     assert.match(representation, new RegExp('data-depth-member-section="' + id + '"'));
   }
   assert.match(representation, /saved residual source/);
 
-  const qkv = publicDock(model, 'p1_qkv', 'values');
+  const qkv = await publicDock(model, 'p1_qkv', 'values');
   for (const parameter of ['layer0.attn_wq', 'layer0.attn_wk', 'layer0.attn_wv']) assert.match(qkv, new RegExp(parameter));
 
-  const source = publicDock(model, 'p1_represent', 'source');
+  const source = await publicDock(model, 'p1_represent', 'source');
   assert.match(source, /data-testid="public-depth-source-members"/);
   assert.match(source, /wte/);
   assert.match(source, /wpe/);
   assert.match(source, /embeddingNorm/);
   assert.match(source, /preAttentionNorm/);
 
-  const logitsSource = publicDock(model, 'p1_score', 'source', { element: 2 });
+  const logitsSource = await publicDock(model, 'p1_score', 'source', { element: 2 });
   assert.match(logitsSource, /lm_head/);
   assert.match(logitsSource, /Detail selection: Vocabulary logits component \[2\]/);
 });
 
 test('PD1 contextual dock renders complete Value support and truthful MLP width-changing math', async () => {
   const model = await part1Model();
-  const mixtureValues = publicDock(model, 'p1_value_mixture', 'values');
+  const mixtureValues = await publicDock(model, 'p1_value_mixture', 'values');
   assert.match(mixtureValues, /data-testid="value-mixture-support"/);
   assert.match(mixtureValues, /data-depth-key="3"/);
   for (const key of [0, 1, 2, 3]) assert.match(mixtureValues, new RegExp('Eligible Value contributor / key ' + key));
 
-  const mixtureMath = publicDock(model, 'p1_value_mixture', 'math', {
+  const mixtureMath = await publicDock(model, 'p1_value_mixture', 'math', {
     member: 'values',
     key: 2,
     element: 1,
@@ -293,25 +319,25 @@ test('PD1 contextual dock renders complete Value support and truthful MLP width-
   assert.match(mixtureMath, /Selected scalar \/ Microscope/);
   assert.match(mixtureMath, /Eligible Value contributor \/ key 2 component \[1\]/);
 
-  const integrationMath = publicDock(model, 'p1_attention_integration', 'math', {
+  const integrationMath = await publicDock(model, 'p1_attention_integration', 'math', {
     member: 'headOutputs',
     head: 1,
     element: 2,
   });
   assert.match(integrationMath, /Head 1, channel 2/);
   assert.match(integrationMath, /concat\[6\]/);
-  const integrationSource = publicDock(model, 'p1_attention_integration', 'source', {
+  const integrationSource = await publicDock(model, 'p1_attention_integration', 'source', {
     member: 'headOutputs',
     head: 1,
     element: 2,
   });
   assert.match(integrationSource, /inspected head 1/);
 
-  const mlpValues = publicDock(model, 'p1_transform', 'values', { hiddenFeature: 17, outputFeature: 6 });
+  const mlpValues = await publicDock(model, 'p1_transform', 'values', { hiddenFeature: 17, outputFeature: 6 });
   assert.match(mlpValues, /8 -&gt; 32 -&gt; 32 -&gt; 8|8 -> 32 -> 32 -> 8/);
   assert.match(mlpValues, /shape \[32\]/);
 
-  const mlpMath = publicDock(model, 'p1_transform', 'math', {
+  const mlpMath = await publicDock(model, 'p1_transform', 'math', {
     member: 'mlpDown',
     hiddenFeature: 17,
     outputFeature: 6,

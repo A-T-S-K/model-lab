@@ -48,6 +48,7 @@ export type PublicTourOutcome = 'accepted' | 'discarded';
 export interface PublicTourSelectionIntent {
   readonly kind: string;
   readonly token: number;
+  readonly layer?: number;
   readonly head?: number;
   readonly key?: number;
   readonly parameter?: string;
