@@ -5,6 +5,12 @@ import type { ForwardProgress } from '../worker/protocol.js';
 import type { TrainingProgress } from '../worker/training-execution.js';
 import type { LearningModel, LearningStage, ParameterPin } from './learning.js';
 import type { PublicTourContent } from './public-tour.js';
+import {
+  resolvePublicDepthContext,
+  type PublicDepthSelection,
+  type ResolvedPublicDepthContext,
+  type ResolvedPublicDepthMember,
+} from './public-depth.js';
 import { formatAdamGlanceNote, formatCandidateOutcomeMeanLoss, formatCandidateTargetTokenProbability } from './public-tour.js';
 import { outputTokenName, outputSummary, outputMetrics, componentComparison, type OutputPair } from './comparison.js';
 import { geometry, projection } from './view.js';
@@ -67,6 +73,7 @@ export interface ContextualDockOptions {
   readonly learningRouteStop?: number;
   readonly selectedLabel?: string;
   readonly tourContent?: PublicTourContent;
+  readonly publicDepthSelection?: PublicDepthSelection;
 }
 
 function renderExplain(opts: ContextualDockOptions): string {
@@ -289,9 +296,290 @@ function stepTeachingSection(m: SpatialReadModel, a: Address, element: number): 
   </section>`;
 }
 
+function resolvedPart1Depth(opts: ContextualDockOptions): ResolvedPublicDepthContext | undefined {
+  if (!opts.model || opts.tourContent?.part !== 1 || !opts.tourContent.depthSpec) return undefined;
+  return resolvePublicDepthContext(opts.tourContent, opts.model, opts.publicDepthSelection);
+}
+
+function publicDepthValues(model: SpatialReadModel, member: ResolvedPublicDepthMember): readonly number[] | undefined {
+  const values = model.forward.values(member.address);
+  if (!values) return undefined;
+  return member.slice ? values.slice(member.slice.start, member.slice.end) : values;
+}
+
+function publicDepthElement(model: SpatialReadModel, ctx: ResolvedPublicDepthContext, member: ResolvedPublicDepthMember): number {
+  const values = publicDepthValues(model, member);
+  if (!values?.length) return 0;
+  const desired = ctx.kind === 'mlp'
+    ? (member.kind === 'mlpUp' || member.kind === 'mlpRelu' ? ctx.hiddenFeature : ctx.outputFeature)
+    : ctx.element;
+  return Math.min(values.length - 1, Math.max(0, desired));
+}
+
+function publicDepthArtifactElement(member: ResolvedPublicDepthMember, localElement: number): number {
+  return (member.slice?.start ?? 0) + localElement;
+}
+
+function publicDepthMemberLabel(member: ResolvedPublicDepthMember): string {
+  if (member.key !== undefined) return member.role + ' / key ' + member.key;
+  if (member.head !== undefined && member.occurrenceId.includes(':h')) return member.role + ' / head ' + member.head;
+  return member.role;
+}
+
+function publicDepthMemberNav(ctx: ResolvedPublicDepthContext, only?: readonly string[]): string {
+  const seen = new Set<string>();
+  const members = ctx.members.filter(member => {
+    if (only && !only.includes(member.memberId)) return false;
+    if (seen.has(member.memberId)) return false;
+    seen.add(member.memberId);
+    return true;
+  });
+  if (members.length < 2) return '';
+  return '<nav class="controls" aria-label="Mechanism member">' + members.map(member =>
+    '<button data-depth-member="' + esc(member.memberId) + '" ' +
+    (ctx.selectedMember === member.memberId ? 'aria-pressed="true"' : '') + '>' +
+    esc(member.role) + '</button>'
+  ).join('') + '</nav>';
+}
+
+function publicDepthVector(model: SpatialReadModel, ctx: ResolvedPublicDepthContext, member: ResolvedPublicDepthMember): string {
+  const values = publicDepthValues(model, member);
+  const selected = publicDepthElement(model, ctx, member);
+  const shape = member.shape?.join(' x ') ?? 'unavailable';
+  const featureAttribute = ctx.kind === 'mlp'
+    ? (member.kind === 'mlpUp' || member.kind === 'mlpRelu' ? 'data-depth-hidden-feature' : 'data-depth-output-feature')
+    : 'data-depth-element';
+  const cells = values?.map((value, index) => {
+    const token = (member.kind === 'logits' || member.kind === 'probabilities') ? model.forward.vocabulary[index] : undefined;
+    const rowKey = ['attention-comparison', 'attention-weights', 'value-mixture'].includes(ctx.kind)
+      && (member.kind === 'attentionLogits' || member.kind === 'attentionProbabilities')
+      ? index
+      : member.key;
+    const keyAttribute = rowKey === undefined ? '' : ' data-depth-key="' + rowKey + '"';
+    const headAttribute = member.occurrenceId.includes(':h') && member.head !== undefined
+      ? ' data-depth-head="' + member.head + '"'
+      : '';
+    return '<button data-depth-member="' + esc(member.memberId) + '"' + keyAttribute + headAttribute + ' ' + featureAttribute + '="' + index +
+      '" data-value="' + value + '" title="' + value + '" ' + (index === selected ? 'aria-pressed="true"' : '') + '><small>' +
+      esc((token === undefined ? '' : token + ' / ') + '[' + index + ']') + '</small>' + fmt(value) + '</button>';
+  }).join('') ?? '<p>UNAVAILABLE - no substituted values.</p>';
+  return '<section class="depth-member" data-depth-member-section="' + esc(member.occurrenceId) + '"><h3>' +
+    esc(publicDepthMemberLabel(member)) + '</h3><p><code>' + esc(member.kind) + '</code> - shape [' + esc(shape) + '] - ' +
+    esc(member.availability) + (member.parameter ? ' - parameter <code>' + esc(member.parameter) + '</code>' : '') +
+    (member.residualSource ? ' - saved residual source' : '') + '</p><div class="element-grid">' + cells + '</div></section>';
+}
+
+function publicDepthFuture(ctx: ResolvedPublicDepthContext): string {
+  if (!ctx.futureKeys.length) return '';
+  return '<p data-testid="causal-future-unavailable">Future positions ' +
+    ctx.futureKeys.map(key => 'p' + key).join(', ') +
+    ' are NOT APPLICABLE to this causal row. They are unavailable, not numeric zero.</p>';
+}
+
+function publicDepthSelected(ctx: ResolvedPublicDepthContext, memberId = ctx.selectedMember): ResolvedPublicDepthMember | undefined {
+  return ctx.members.find(member =>
+    member.memberId === memberId
+    && (member.key === undefined || member.key === ctx.selectedKey)
+    && (member.head === undefined || ctx.selectedHead === undefined || member.head === ctx.selectedHead)
+  ) ?? ctx.members.find(member => member.memberId === memberId);
+}
+
+function publicDepthScalar(model: SpatialReadModel, member: ResolvedPublicDepthMember, localElement: number): string {
+  const element = publicDepthArtifactElement(member, localElement);
+  const explanation = model.forward.explain(member.address, element);
+  if (!explanation.indexValid || !explanation.artifact) return '<p>Selected scalar unavailable for this captured member.</p>';
+  return '<button data-artifact="' + esc(explanation.artifact.id) + '" data-element="' + element +
+    '">Inspect selected scalar in Microscope</button>';
+}
+
+function publicDepthArithmetic(
+  model: SpatialReadModel,
+  ctx: ResolvedPublicDepthContext,
+  member: ResolvedPublicDepthMember,
+  localElement: number,
+): string {
+  const element = publicDepthArtifactElement(member, localElement);
+  const explanation = model.forward.explain(member.address, element);
+  return '<section class="depth-math-witness" data-depth-math-member="' + esc(member.occurrenceId) + '"><h3>' +
+    esc(publicDepthMemberLabel(member)) + '</h3>' + arithmetic(explanation, element) + '</section>';
+}
+
+function publicDepthScalarElement(ctx: ResolvedPublicDepthContext, member: ResolvedPublicDepthMember): number {
+  if (ctx.kind === 'mlp') {
+    return member.kind === 'mlpUp' || member.kind === 'mlpRelu' ? ctx.hiddenFeature : ctx.outputFeature;
+  }
+  if ((member.kind === 'attentionLogits' || member.kind === 'attentionProbabilities') && ctx.selectedKey !== undefined) {
+    return ctx.selectedKey;
+  }
+  return ctx.element;
+}
+
+function renderPublicPart1Values(opts: ContextualDockOptions, ctx: ResolvedPublicDepthContext): string {
+  const model = opts.model!;
+  const group = (...ids: string[]) => ctx.members.filter(member => ids.includes(member.memberId));
+  let visible: readonly ResolvedPublicDepthMember[] = ctx.members;
+  let note = '';
+  if (ctx.kind === 'prediction') {
+    visible = group('probabilities');
+    note = '<p>The complete authentic output probability distribution is shown. Softmax arithmetic remains optional Math depth.</p>';
+  } else if (ctx.kind === 'attention-comparison') {
+    visible = group('query', 'keys', 'scores');
+    note = publicDepthFuture(ctx);
+  } else if (ctx.kind === 'attention-weights') {
+    visible = group('scores', 'weights');
+    note = publicDepthFuture(ctx);
+  } else if (ctx.kind === 'value-mixture') {
+    visible = group('weights', 'values', 'headOutput');
+    note = ctx.completeSupport
+      ? '<p data-testid="value-mixture-support">Complete support: ' + ctx.eligibleKeys.length + ' eligible weights and ' +
+        ctx.eligibleKeys.length + ' corresponding Value contributors feed this head output.</p>'
+      : '<p data-testid="value-mixture-incomplete">INCOMPLETE / UNAVAILABLE - complete authentic weight and Value support is required before this can be presented as the complete mixture.</p>';
+  } else if (ctx.kind === 'attention-integration') {
+    visible = group('headOutputs', 'attentionOutput', 'attentionProjection', 'savedResidual', 'attentionResidual');
+    note = '<p>Both head outputs are concatenated before WO projection; the saved embeddingNorm residual is then added. Concatenation is not addition.</p>';
+  } else if (ctx.kind === 'mlp') {
+    visible = group('attentionResidual', 'preMlpNorm', 'mlpUp', 'mlpRelu', 'mlpDown', 'mlpResidual');
+    const stageShape = (id: string) => visible.find(member => member.memberId === id)?.shape?.[0];
+    const pipeline = ['preMlpNorm', 'mlpUp', 'mlpRelu', 'mlpDown'].map(stageShape);
+    note = pipeline.every(size => size !== undefined)
+      ? '<p data-testid="mlp-depth-shapes">Complete authentic stage shapes: ' + pipeline.join(' -> ') + ' before the residual result.</p>'
+      : '<p data-testid="mlp-depth-shapes">One or more MLP stage shapes are unavailable in this evidence.</p>';
+  } else if (ctx.kind === 'logits') {
+    visible = group('input', 'logits');
+    note = '<p>Vocabulary logits are raw signed scores, not probabilities.</p>';
+  } else if (ctx.kind === 'probabilities') {
+    visible = group('logits', 'probabilities');
+    note = '<p>Logits and the final distribution stay together so output softmax is not confused with attention softmax.</p>';
+  }
+  return '<div class="dock-values-content" data-testid="dock-values" data-public-depth-kind="' + esc(ctx.kind) + '"><p><strong>' +
+    esc(opts.tourContent?.headline ?? ctx.kind) + '</strong> - canonical run <code>' + esc(ctx.canonical.run) + '</code> - p' +
+    ctx.canonical.position + (ctx.canonical.head === undefined ? '' : ' / h' + ctx.canonical.head) + '</p>' +
+    (ctx.kind === 'prediction' ? '' : publicDepthMemberNav(ctx)) + note + '<div class="construction-handoff">' +
+    visible.map(member => publicDepthVector(model, ctx, member)).join('') + '</div></div>';
+}
+
+function renderPublicPart1Math(opts: ContextualDockOptions, ctx: ResolvedPublicDepthContext): string {
+  const model = opts.model!;
+  const f = model.forward;
+  const chosen = publicDepthSelected(ctx);
+  const key = ctx.selectedKey ?? 0;
+  const byId = (id: string) => ctx.members.find(member => member.memberId === id);
+  let body = ctx.kind === 'prediction'
+    ? ''
+    : ctx.kind === 'qkv'
+      ? publicDepthMemberNav(ctx, ['q', 'k', 'v'])
+      : publicDepthMemberNav(ctx);
+
+  if (ctx.kind === 'prediction' || ctx.kind === 'probabilities') {
+    const member = ctx.members.find(candidate => candidate.kind === 'probabilities');
+    if (member) body += publicDepthArithmetic(model, ctx, member, publicDepthElement(model, ctx, member));
+  } else if (ctx.kind === 'representation') {
+    body += ctx.members.map(member => publicDepthArithmetic(model, ctx, member, publicDepthElement(model, ctx, member))).join('');
+  } else if (ctx.kind === 'qkv') {
+    const member = chosen && ['q', 'k', 'v'].includes(chosen.kind) ? chosen : byId('q');
+    if (member) {
+      body += '<p>Choose Q, K, or V for one authentic projection witness. The canonical beat remains the grouped Q / K / V mechanism.</p>';
+      body += publicDepthArithmetic(model, ctx, member, publicDepthElement(model, ctx, member));
+    }
+  } else if (ctx.kind === 'attention-comparison') {
+    const score = ctx.members.find(member => member.kind === 'attentionLogits');
+    if (score) {
+      const construction = operationConstruction(model, score.address, key, opts.executionProgress);
+      body += '<p>Selected key ' + key + '; canonical query and head stay fixed.</p>' + construction.detailMath;
+    }
+  } else if (ctx.kind === 'attention-weights') {
+    const member = ctx.members.find(candidate => candidate.kind === 'attentionProbabilities');
+    if (member) body += publicDepthFuture(ctx) + publicDepthArithmetic(model, ctx, member, key);
+  } else if (ctx.kind === 'value-mixture') {
+    const member = ctx.members.find(candidate => candidate.kind === 'headOutput');
+    if (member) {
+      const local = publicDepthElement(model, ctx, member);
+      const explanation = f.explain(member.address, publicDepthArtifactElement(member, local));
+      body += ctx.completeSupport
+        ? '<p>Every eligible weight and Value vector participates in this selected output component.</p>' +
+          mixture(explanation, local)
+        : '<p>Mixture arithmetic unavailable - complete authentic contributor support is required. No subset is displayed as the complete mixture.</p>';
+    }
+  } else if (ctx.kind === 'attention-integration') {
+    const residual = byId('attentionResidual');
+    if (residual) {
+      const selectedIntegrationMember = publicDepthSelected(ctx);
+      const integrationElement = selectedIntegrationMember?.memberId === 'headOutputs' && selectedIntegrationMember.head !== undefined
+        ? selectedIntegrationMember.head * model.width + ctx.element
+        : ctx.element;
+      const construction = operationConstruction(model, residual.address, integrationElement, opts.executionProgress);
+      body += construction.detailMath;
+    }
+    body += '<p>The concatenated input contains every head slice before WO; only the residual stage performs addition.</p>';
+  } else if (ctx.kind === 'mlp') {
+    const pre = byId('preMlpNorm'), up = byId('mlpUp'), relu = byId('mlpRelu'), down = byId('mlpDown'), residual = byId('mlpResidual');
+    body += '<div class="controls"><span>Output feature ' + ctx.outputFeature + '</span><span>Hidden feature ' + ctx.hiddenFeature + '</span></div>';
+    if (pre) body += publicDepthArithmetic(model, ctx, pre, ctx.outputFeature);
+    if (up) body += publicDepthArithmetic(model, ctx, up, ctx.hiddenFeature);
+    if (relu) body += publicDepthArithmetic(model, ctx, relu, ctx.hiddenFeature);
+    if (down) {
+      const explanation = f.explain(down.address, ctx.outputFeature);
+      body += explanation.terms
+        ? '<p data-testid="mlp-contraction-support">Contraction output feature ' + ctx.outputFeature + ' depends on all ' +
+          explanation.terms.length + ' hidden activations; it is not paired one-to-one with hidden feature ' + ctx.hiddenFeature + '.</p>'
+        : '<p data-testid="mlp-contraction-support">Contraction support is unavailable in this evidence; no contributor count is substituted.</p>';
+      body += publicDepthArithmetic(model, ctx, down, ctx.outputFeature);
+    }
+    if (residual) body += publicDepthArithmetic(model, ctx, residual, ctx.outputFeature);
+  } else if (ctx.kind === 'logits') {
+    const member = ctx.members.find(candidate => candidate.kind === 'logits');
+    if (member) body += publicDepthArithmetic(model, ctx, member, publicDepthElement(model, ctx, member));
+  }
+  const scalarMember = publicDepthSelected(ctx);
+  if (scalarMember) {
+    const scalarElement = publicDepthScalarElement(ctx, scalarMember);
+    body += '<section class="spatial-scalar" id="microscope"><h3>Selected scalar / Microscope</h3><p>' +
+      esc(publicDepthMemberLabel(scalarMember)) + ' component [' + scalarElement + ']</p>' +
+      publicDepthScalar(model, scalarMember, scalarElement) + '</section>';
+  }
+  return '<div class="dock-math-content" data-testid="dock-math" data-public-depth-kind="' + esc(ctx.kind) + '"><p><strong>' +
+    esc(opts.tourContent?.headline ?? ctx.kind) + '</strong> - authentic arithmetic remains bound to run <code>' +
+    esc(ctx.canonical.run) + '</code>.</p>' + body + '</div>';
+}
+
+function renderPublicPart1Source(opts: ContextualDockOptions, ctx: ResolvedPublicDepthContext): string {
+  const model = opts.model!;
+  const selectedMember = publicDepthSelected(ctx);
+  const selectedElement = selectedMember ? publicDepthScalarElement(ctx, selectedMember) : ctx.element;
+  const kinds = [...new Set(ctx.members.map(member => member.kind))];
+  const rows = ctx.members.map(member => {
+    const detail = member.parameter ? model.forward.parameterDetails[member.parameter] : undefined;
+    const matrix = member.parameter ? model.forward.matrix(member.parameter) : undefined;
+    const matrixShape = matrix ? matrix.length + ' x ' + (matrix[0]?.length ?? 0) : undefined;
+    return '<tr><th>' + esc(publicDepthMemberLabel(member)) + '</th><td><code>' + esc(member.semanticId) +
+      '</code></td><td><code>' + esc(member.artifactId ?? 'NOT CAPTURED') + '</code><br>' + esc(member.availability) +
+      (member.provenance ? '<br>' + esc(member.provenance) : '') + '</td><td>' +
+      (member.parameter ? '<code>' + esc(member.parameter) + '</code>' + (matrixShape ? ' [' + esc(matrixShape) + ']' : '') +
+        '<br>' + esc(detail?.dtype ?? 'unknown') + ' - ' + esc(detail?.axes?.join(' x ') ?? 'axes unavailable') : 'not applicable') +
+      '</td></tr>';
+  }).join('');
+  return '<div class="dock-source-content" data-testid="dock-source" data-public-depth-kind="' + esc(ctx.kind) + '">' +
+    '<div class="dock-provenance-grid"><p>Canonical lesson: <strong>' + esc(opts.tourContent?.headline ?? ctx.kind) + '</strong></p>' +
+    '<p>Run: <code data-testid="spatial-run">' + esc(ctx.canonical.run) + '</code></p>' +
+    '<p>Snapshot: <code data-testid="spatial-snapshot">' + esc(ctx.canonical.snapshot ?? 'unavailable') + '</code></p>' +
+    '<p>Runtime: <code data-testid="spatial-runtime">' + esc(model.runtime) + '</code></p>' +
+    '<p>Position: p' + ctx.canonical.position + (ctx.canonical.layer === undefined ? '' : ' / layer ' + ctx.canonical.layer) +
+    (ctx.canonical.head === undefined ? '' : ' / head ' + ctx.canonical.head) +
+    (ctx.selectedHead === undefined || ctx.selectedHead === ctx.canonical.head ? '' : ' / inspected head ' + ctx.selectedHead) +
+    (ctx.selectedKey === undefined ? '' : ' / inspected key ' + ctx.selectedKey) + '</p>' +
+    (selectedMember ? '<p>Detail selection: ' + esc(publicDepthMemberLabel(selectedMember)) + ' component [' + selectedElement + ']</p>' : '') +
+    '<p>Source relationship: ' + esc(model.source.relationship) + ' - ' + esc(model.source.origin) + ' - ' + esc(model.source.availability) + '</p></div>' +
+    '<div class="table-scroll"><table data-testid="public-depth-source-members"><thead><tr><th>Mechanism member</th>' +
+    '<th>Semantic operation identity</th><th>Artifact / availability</th><th>Parameter identity</th></tr></thead><tbody>' +
+    rows + '</tbody></table></div><details><summary>Read grouped operation sources</summary>' +
+    kinds.map(kind => '<section><h3>' + esc(kind) + '</h3>' + sourceView(kind) + '</section>').join('') + '</details></div>';
+}
+
 function renderValues(opts: ContextualDockOptions): string {
   const { model: m, address: a, element, parameter, row, column, pin, trainingProgress, learningStage, learningModel, learningRouteStop } = opts;
   if (!m) return '<p>No model loaded.</p>';
+  const publicDepth = resolvedPart1Depth(opts);
+  if (publicDepth) return renderPublicPart1Values(opts, publicDepth);
 
   if (learningRouteStop === 6 || opts.tourContent?.state === 'p2_adam_proposal' || opts.tourContent?.state === 'candidate_ready') {
     const u = trainingProgress?.proposal ?? (learningModel?.available ? learningModel.adam.update : undefined);
@@ -397,6 +685,8 @@ function renderValues(opts: ContextualDockOptions): string {
 function renderMath(opts: ContextualDockOptions): string {
   const { model: m, address: a, element, scalar, executionProgress, trainingProgress, learningStage, learningModel, pin, learningRouteStop } = opts;
   if (!m) return '<p>No model loaded.</p>';
+  const publicDepth = resolvedPart1Depth(opts);
+  if (publicDepth) return renderPublicPart1Math(opts, publicDepth);
 
   if (learningRouteStop === 6 || opts.tourContent?.state === 'p2_adam_proposal' || opts.tourContent?.state === 'candidate_ready') {
     const u = trainingProgress?.proposal ?? (learningModel?.available ? learningModel.adam.update : undefined);
@@ -486,6 +776,8 @@ function renderMath(opts: ContextualDockOptions): string {
 function renderSource(opts: ContextualDockOptions): string {
   const { model: m, address: a, element, parameter, pin, learningModel } = opts;
   if (!m) return '<p>No model loaded.</p>';
+  const publicDepth = resolvedPart1Depth(opts);
+  if (publicDepth) return renderPublicPart1Source(opts, publicDepth);
 
   const f = m.forward;
   const e = f.explain(a, element);
@@ -567,6 +859,9 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
   const isExpanded = effectiveDepth !== 'explain';
   const isFacilitator = profile === 'facilitator';
   const isPublic = profile === 'visitor' || Boolean(opts.tourContent);
+  const publicDepthContext = resolvedPart1Depth(opts);
+  const dockAddress = publicDepthContext?.canonical.anchor ?? opts.address;
+  const dockLabel = publicDepthContext ? (opts.tourContent?.headline ?? addressLabel(dockAddress)) : (opts.selectedLabel ?? addressLabel(opts.address));
 
   if (opts.attract) {
     return `<section class="contextual-dock short-guide" data-testid="contextual-dock" data-active-depth="explain" aria-label="Contextual explanation dock">
@@ -597,7 +892,7 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
     <div class="dock-header" data-testid="dock-header">
       <div class="dock-route-info dock-slot-context">
         ${lessonProgress ? `<span class="lesson-progress" data-testid="lesson-progress">${esc(lessonProgress)}</span>` : ''}
-        <span class="dock-selected-object" data-testid="selected-world-object" data-semantic-anchor="${opts.address.kind}" data-position="${opts.address.token}" data-layer="${opts.address.layer ?? ''}" data-run-id="${esc(opts.model?.source.sourceRunId ?? '')}">${esc(opts.selectedLabel ?? addressLabel(opts.address))}</span>
+        <span class="dock-selected-object" data-testid="selected-world-object" data-semantic-anchor="${dockAddress.kind}" data-position="${dockAddress.token}" data-layer="${dockAddress.layer ?? ''}" data-run-id="${esc(opts.model?.source.sourceRunId ?? '')}">${esc(dockLabel)}</span>
         ${opts.trainingState && opts.trainingState.frontierText ? `<span data-testid="execution-frontier" class="execution-frontier-tag">${esc(opts.trainingState.frontierText)}</span>` : ''}
         ${shortDetour ? `<span class="dock-detour-badge">Detour</span>` : ''}
       </div>

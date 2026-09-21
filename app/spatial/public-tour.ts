@@ -48,7 +48,6 @@ export type PublicTourOutcome = 'accepted' | 'discarded';
 export interface PublicTourSelectionIntent {
   readonly kind: string;
   readonly token: number;
-  readonly layer?: number;
   readonly head?: number;
   readonly key?: number;
   readonly parameter?: string;
@@ -72,6 +71,41 @@ export interface PublicLessonFocusEdge {
 export interface PublicLessonFocus {
   readonly nodes: readonly PublicLessonFocusNode[];
   readonly edges: readonly PublicLessonFocusEdge[];
+}
+
+export type PublicDepthKind =
+  | 'prediction'
+  | 'representation'
+  | 'qkv'
+  | 'attention-comparison'
+  | 'attention-weights'
+  | 'value-mixture'
+  | 'attention-integration'
+  | 'mlp'
+  | 'logits'
+  | 'probabilities';
+
+export type PublicDepthOccurrence =
+  | { readonly kind: 'canonical' }
+  | { readonly kind: 'causal-keys' }
+  | { readonly kind: 'all-heads' }
+  | { readonly kind: 'final-layer' };
+
+export interface PublicDepthMember {
+  readonly id: string;
+  readonly role: string;
+  readonly kind: string;
+  readonly layer?: number;
+  readonly occurrence?: PublicDepthOccurrence;
+  readonly slice?: 'canonical-head';
+  readonly parameter?: 'owner';
+  readonly residual?: 'saved-source';
+}
+
+export interface PublicDepthSpec {
+  readonly kind: PublicDepthKind;
+  readonly members: readonly PublicDepthMember[];
+  readonly defaultMember: string;
 }
 
 export interface PublicTourAction {
@@ -98,6 +132,7 @@ export interface PublicTourContent {
   readonly resultConcept?: PublicTourResultConcept;
   readonly selectionIntent: PublicTourSelectionIntent;
   readonly focus?: PublicLessonFocus;
+  readonly depthSpec?: PublicDepthSpec;
   readonly primaryAction?: PublicTourAction;
   readonly optionalActions: readonly PublicTourAction[];
   readonly decisionActions?: readonly PublicTourAction[];
@@ -190,6 +225,14 @@ export function getPublicTourContent(
         plainMeaning: 'This authentic run produced raw vocabulary scores and normalized them into the next-token probability distribution now shown.',
         resultConcept: { label: 'Observed next-token distribution' },
         selectionIntent: { kind: 'probabilities', token: PART_1_TOKEN, key: PART_1_KEY },
+        depthSpec: {
+          kind: 'prediction',
+          defaultMember: 'probabilities',
+          members: [
+            { id: 'logits', role: 'Vocabulary logits', kind: 'logits', parameter: 'owner' },
+            { id: 'probabilities', role: 'Output probabilities', kind: 'probabilities' },
+          ],
+        },
         focus: {
           nodes: [{ kind: 'logits' }, { kind: 'probabilities' }],
           edges: [{ from: 'logits', to: 'probabilities' }],
@@ -211,6 +254,17 @@ export function getPublicTourContent(
         plainMeaning: 'The token embedding and position embedding are added and rescaled into a normalized representation. Before attention, that representation is rescaled again to become attention-ready, while the normalized representation is also saved on a bypass that will rejoin after attention.',
         resultConcept: { label: 'Attention-ready representation' },
         selectionIntent: { kind: 'preAttentionNorm', token: PART_1_TOKEN, key: PART_1_KEY, layer: 0 },
+        depthSpec: {
+          kind: 'representation',
+          defaultMember: 'preAttentionNorm',
+          members: [
+            { id: 'tokenEmbedding', role: 'Token embedding', kind: 'tokenEmbedding', parameter: 'owner' },
+            { id: 'positionEmbedding', role: 'Position embedding', kind: 'positionEmbedding', parameter: 'owner' },
+            { id: 'embeddingSum', role: 'Embedding sum', kind: 'embeddingSum' },
+            { id: 'embeddingNorm', role: 'Normalized representation / saved attention residual source', kind: 'embeddingNorm', residual: 'saved-source' },
+            { id: 'preAttentionNorm', role: 'Attention-ready normalized representation', kind: 'preAttentionNorm' },
+          ],
+        },
         focus: {
           nodes: [
             { kind: 'tokenEmbedding' },
@@ -244,6 +298,16 @@ export function getPublicTourContent(
         plainMeaning: 'From the already attention-ready representation, three learned projections create Query, Key, and Value vectors. Query and Key supply the two sides of attention comparisons; Value carries information that a later weighted mixture can combine.',
         resultConcept: { label: 'Query / Key / Value vectors' },
         selectionIntent: { kind: 'q', token: PART_1_TOKEN, key: PART_1_KEY, layer: 0, head: PART_1_HEAD },
+        depthSpec: {
+          kind: 'qkv',
+          defaultMember: 'q',
+          members: [
+            { id: 'input', role: 'Shared normalized input', kind: 'preAttentionNorm' },
+            { id: 'q', role: 'Query', kind: 'q', slice: 'canonical-head', parameter: 'owner' },
+            { id: 'k', role: 'Key', kind: 'k', slice: 'canonical-head', parameter: 'owner' },
+            { id: 'v', role: 'Value', kind: 'v', slice: 'canonical-head', parameter: 'owner' },
+          ],
+        },
         focus: {
           nodes: [
             { kind: 'preAttentionNorm', layer: 0 },
@@ -274,6 +338,15 @@ export function getPublicTourContent(
         plainMeaning: 'For this head and query position, the Query is compared with Keys only from causally available positions. The resulting authentic score row is still unnormalized.',
         resultConcept: { label: 'Causal attention score row' },
         selectionIntent: { kind: 'attentionLogits', token: PART_1_TOKEN, key: PART_1_KEY, layer: 0, head: PART_1_HEAD },
+        depthSpec: {
+          kind: 'attention-comparison',
+          defaultMember: 'scores',
+          members: [
+            { id: 'query', role: 'Selected Query', kind: 'q', slice: 'canonical-head' },
+            { id: 'keys', role: 'Causally available Key', kind: 'k', occurrence: { kind: 'causal-keys' }, slice: 'canonical-head' },
+            { id: 'scores', role: 'Causal attention score row', kind: 'attentionLogits' },
+          ],
+        },
         focus: {
           nodes: [
             { kind: 'q', layer: 0, head: PART_1_HEAD },
@@ -302,6 +375,14 @@ export function getPublicTourContent(
         plainMeaning: 'Softmax transforms the causal attention score row into normalized attention weights over the same available positions.',
         resultConcept: { label: 'Normalized attention weights' },
         selectionIntent: { kind: 'attentionProbabilities', token: PART_1_TOKEN, key: PART_1_KEY, layer: 0, head: PART_1_HEAD },
+        depthSpec: {
+          kind: 'attention-weights',
+          defaultMember: 'weights',
+          members: [
+            { id: 'scores', role: 'Causal attention score row', kind: 'attentionLogits' },
+            { id: 'weights', role: 'Normalized attention weight row', kind: 'attentionProbabilities' },
+          ],
+        },
         focus: {
           nodes: [
             { kind: 'attentionLogits', layer: 0, head: PART_1_HEAD },
@@ -326,6 +407,15 @@ export function getPublicTourContent(
         plainMeaning: 'Each available Value vector is multiplied by its attention weight, and those weighted Values are summed to produce this head output.',
         resultConcept: { label: 'Weighted Value mixture' },
         selectionIntent: { kind: 'headOutput', token: PART_1_TOKEN, key: PART_1_KEY, layer: 0, head: PART_1_HEAD },
+        depthSpec: {
+          kind: 'value-mixture',
+          defaultMember: 'headOutput',
+          members: [
+            { id: 'weights', role: 'Eligible attention weights', kind: 'attentionProbabilities' },
+            { id: 'values', role: 'Eligible Value contributor', kind: 'v', occurrence: { kind: 'causal-keys' }, slice: 'canonical-head' },
+            { id: 'headOutput', role: 'Head output', kind: 'headOutput' },
+          ],
+        },
         focus: {
           nodes: [
             { kind: 'attentionProbabilities', layer: 0, head: PART_1_HEAD },
@@ -354,6 +444,17 @@ export function getPublicTourContent(
         plainMeaning: 'Both head outputs are concatenated into one attention output, projected through WO, then added to the saved residual bypass to produce the attention residual.',
         resultConcept: { label: 'Context-enriched residual stream' },
         selectionIntent: { kind: 'attentionResidual', token: PART_1_TOKEN, key: PART_1_KEY, layer: 0 },
+        depthSpec: {
+          kind: 'attention-integration',
+          defaultMember: 'attentionResidual',
+          members: [
+            { id: 'headOutputs', role: 'Head output', kind: 'headOutput', occurrence: { kind: 'all-heads' } },
+            { id: 'attentionOutput', role: 'Concatenated head output', kind: 'attentionOutput' },
+            { id: 'attentionProjection', role: 'WO projection', kind: 'attentionProjection', parameter: 'owner' },
+            { id: 'savedResidual', role: 'Saved embeddingNorm residual source', kind: 'embeddingNorm', residual: 'saved-source' },
+            { id: 'attentionResidual', role: 'Attention residual result', kind: 'attentionResidual' },
+          ],
+        },
         focus: {
           nodes: [
             { kind: 'headOutput', layer: 0, head: 0 },
@@ -388,6 +489,18 @@ export function getPublicTourContent(
         plainMeaning: 'The attention residual is normalized, expanded from 8 to 32 values, passed through ReLU, contracted from 32 back to 8, then added to the saved attention residual.',
         resultConcept: { label: 'Transformed residual stream' },
         selectionIntent: { kind: 'mlpResidual', token: PART_1_TOKEN, key: PART_1_KEY, layer: 0 },
+        depthSpec: {
+          kind: 'mlp',
+          defaultMember: 'mlpResidual',
+          members: [
+            { id: 'attentionResidual', role: 'MLP input / saved residual source', kind: 'attentionResidual', residual: 'saved-source' },
+            { id: 'preMlpNorm', role: 'Pre-MLP normalized input', kind: 'preMlpNorm' },
+            { id: 'mlpUp', role: 'Expansion projection', kind: 'mlpUp', parameter: 'owner' },
+            { id: 'mlpRelu', role: 'ReLU hidden activation', kind: 'mlpRelu' },
+            { id: 'mlpDown', role: 'Contraction projection', kind: 'mlpDown', parameter: 'owner' },
+            { id: 'mlpResidual', role: 'MLP residual result', kind: 'mlpResidual' },
+          ],
+        },
         focus: {
           nodes: [
             { kind: 'attentionResidual', layer: 0 },
@@ -423,6 +536,14 @@ export function getPublicTourContent(
         plainMeaning: 'The output projection maps the transformed residual into raw signed vocabulary scores called logits. They are not normalized probabilities.',
         resultConcept: { label: 'Raw vocabulary logits' },
         selectionIntent: { kind: 'logits', token: PART_1_TOKEN, key: PART_1_KEY },
+        depthSpec: {
+          kind: 'logits',
+          defaultMember: 'logits',
+          members: [
+            { id: 'input', role: 'Transformed residual', kind: 'mlpResidual', occurrence: { kind: 'final-layer' } },
+            { id: 'logits', role: 'Vocabulary logits', kind: 'logits', parameter: 'owner' },
+          ],
+        },
         focus: {
           nodes: [{ kind: 'mlpResidual', layer: 0 }, { kind: 'logits' }],
           edges: [{ from: 'mlpResidual', to: 'logits' }],
@@ -444,6 +565,14 @@ export function getPublicTourContent(
         plainMeaning: 'Output softmax converts the vocabulary logits into probabilities that sum to 100%, reconnecting directly to the authentic prediction shown at the start.',
         resultConcept: { label: 'Output probability distribution' },
         selectionIntent: { kind: 'probabilities', token: PART_1_TOKEN, key: PART_1_KEY },
+        depthSpec: {
+          kind: 'probabilities',
+          defaultMember: 'probabilities',
+          members: [
+            { id: 'logits', role: 'Vocabulary logits', kind: 'logits', parameter: 'owner' },
+            { id: 'probabilities', role: 'Output probability distribution', kind: 'probabilities' },
+          ],
+        },
         focus: {
           nodes: [{ kind: 'logits' }, { kind: 'probabilities' }],
           edges: [{ from: 'logits', to: 'probabilities' }],
@@ -465,6 +594,14 @@ export function getPublicTourContent(
         plainMeaning: 'The same authentic run moved through REPRESENT → ATTEND → TRANSFORM → OUTPUT to produce the prediction. Part 1 explained that computation without running it again.',
         resultConcept: { label: 'Complete forward causal path' },
         selectionIntent: { kind: 'probabilities', token: PART_1_TOKEN, key: PART_1_KEY },
+        depthSpec: {
+          kind: 'probabilities',
+          defaultMember: 'probabilities',
+          members: [
+            { id: 'logits', role: 'Vocabulary logits', kind: 'logits', parameter: 'owner' },
+            { id: 'probabilities', role: 'Output probability distribution', kind: 'probabilities' },
+          ],
+        },
         focus: FORWARD_INTEGRATION_FOCUS,
         primaryAction: { id: 'short-teach', label: 'Next: Learn from error', role: 'primary' },
         optionalActions: [],

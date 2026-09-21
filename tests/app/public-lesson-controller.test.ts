@@ -481,3 +481,27 @@ test('reset clears pending intent, detours, and terminal outcome back to cold', 
   assert.deepEqual(reset.session, createPublicLessonSession());
   assert.deepEqual(reset.effects, []);
 });
+
+
+test('Part 1 detail detours preserve representative canonical states and request no execution', () => {
+  for (const state of ['p1_represent', 'p1_qkv', 'p1_value_mixture', 'p1_transform'] as const) {
+    const canonical = sessionAt(state);
+    const opened = transitionPublicLesson(
+      canonical,
+      { type: 'OPEN_DETAIL' },
+      context({}, 'idle', false),
+    );
+    assert.equal(opened.session.current, state);
+    assert.deepEqual(opened.session.navigation, { mode: 'detail', returnState: state });
+    assert.deepEqual(opened.effects, [], state + ' detail open must not execute the model');
+
+    const returned = transitionPublicLesson(
+      opened.session,
+      { type: 'RETURN_FROM_DETAIL' },
+      context({}, 'idle', false),
+    );
+    assert.equal(returned.session.current, state);
+    assert.deepEqual(returned.session.navigation, { mode: 'guided' });
+    assert.deepEqual(returned.effects, [], state + ' detail return must not execute the model');
+  }
+});
