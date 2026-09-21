@@ -350,7 +350,9 @@ function publicDepthVector(model: SpatialReadModel, ctx: ResolvedPublicDepthCont
     ? (member.kind === 'mlpUp' || member.kind === 'mlpRelu' ? 'data-depth-hidden-feature' : 'data-depth-output-feature')
     : 'data-depth-element';
   const cells = values?.map((value, index) => {
-    const token = (member.kind === 'logits' || member.kind === 'probabilities') ? model.forward.vocabulary[index] : undefined;
+    const token = (member.kind === 'logits' || member.kind === 'probabilities')
+      ? outputTokenName(index, model.forward.vocabulary)
+      : undefined;
     const rowKey = ['attention-comparison', 'attention-weights', 'value-mixture'].includes(ctx.kind)
       && (member.kind === 'attentionLogits' || member.kind === 'attentionProbabilities')
       ? index

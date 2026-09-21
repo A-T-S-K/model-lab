@@ -183,18 +183,20 @@ test('PD1 MLP exposes authentic 8 to 32 to 32 to 8 shapes and independent hidden
   assert.equal(model.forward.explain(down.address, ctx.outputFeature).terms?.length, 32);
 });
 
-test('PD1 logits and probabilities bind the complete vocabulary at the same run and position', async () => {
+test('PD1 logits and probabilities bind the complete output domain at the same run and position', async () => {
   const model = await part1Model();
+  const outputWidth = model.forward.vocabulary.length + 1;
   for (const state of ['p1_score', 'p1_probabilities'] as const) {
     const ctx = resolvePublicDepthContext(getPublicTourContent(state), model);
     assert(ctx);
     const logits = ctx.members.find(member => member.kind === 'logits');
     assert(logits);
-    assert.equal(model.forward.values(logits.address)?.length, model.forward.vocabulary.length);
+    assert.equal(model.forward.values(logits.address)?.length, outputWidth);
+    assert.equal(ctx.completeSupport, true);
     if (state === 'p1_probabilities') {
       const probabilities = ctx.members.find(member => member.kind === 'probabilities');
       assert(probabilities);
-      assert.equal(model.forward.values(probabilities.address)?.length, model.forward.vocabulary.length);
+      assert.equal(model.forward.values(probabilities.address)?.length, outputWidth);
     }
     assert.equal(ctx.canonical.run, model.source.sourceRunId);
     assert.equal(ctx.canonical.position, 3);
@@ -301,6 +303,15 @@ test('PD1 contextual dock routes Part 1 grouped Values and Source before generic
   const logitsSource = await publicDock(model, 'p1_score', 'source', { element: 2 });
   assert.match(logitsSource, /lm_head/);
   assert.match(logitsSource, /Detail selection: Vocabulary logits component \[2\]/);
+});
+
+test('PD1 contextual output Values label the shared BOS output class as END', async () => {
+  const model = await part1Model();
+  for (const state of ['p1_prediction_preview', 'p1_score', 'p1_probabilities'] as const) {
+    const values = await publicDock(model, state, 'values');
+    assert.match(values, /END \/ \[3\]/, state + ' must label output ID 3 as END');
+    assert.doesNotMatch(values, /START \/ \[3\]/, state + ' must not label output ID 3 as START');
+  }
 });
 
 test('PD1 contextual dock renders complete Value support and truthful MLP width-changing math', async () => {

@@ -242,13 +242,15 @@ export function resolvePublicDepthContext(
       && Boolean(output && memberValuesAvailable(model, output))
       && Boolean(explanation?.mixture);
   } else if (spec.kind === 'logits') {
+    const outputWidth = model.forward.vocabulary.length + 1;
     const logits = members.find(member => member.kind === 'logits');
-    completeSupport = memberLength(model, logits) === model.forward.vocabulary.length;
+    completeSupport = memberLength(model, logits) === outputWidth;
   } else if (spec.kind === 'probabilities' || spec.kind === 'prediction') {
+    const outputWidth = model.forward.vocabulary.length + 1;
     const logits = members.find(member => member.kind === 'logits');
     const probabilities = members.find(member => member.kind === 'probabilities');
-    completeSupport = memberLength(model, logits) === model.forward.vocabulary.length
-      && memberLength(model, probabilities) === model.forward.vocabulary.length;
+    completeSupport = memberLength(model, logits) === outputWidth
+      && memberLength(model, probabilities) === outputWidth;
   }
 
   const anchor = occurrenceAddress(
