@@ -174,7 +174,9 @@ async function captureEvidence(
   }
   const observed = await page.evaluate(() => ({
     devicePixelRatio: window.devicePixelRatio,
-    reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'reduce' : 'no-preference',
+    reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      ? 'reduce' as const
+      : 'no-preference' as const,
     experienceProfile: document.querySelector('.spatial-shell')?.getAttribute('data-experience-profile') ?? undefined,
     activeDepth: document.querySelector('[data-testid="contextual-dock"]')?.getAttribute('data-active-depth') ?? undefined,
   }));
