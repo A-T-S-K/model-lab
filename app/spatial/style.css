@@ -171,7 +171,6 @@ body.spatial-mode { background:#0B0F12; color:#F2F5F7; font-family:Plex,sans-ser
 .component-guide text{fill:#f0d395;font-size:18px}
 .spatial-header{flex-wrap:wrap}
 
-.execution-frontier .field{stroke:#f0d395;stroke-width:2}
 
 .live-arithmetic-row{display:grid;grid-template-columns:100px 1fr 100px;gap:8px;align-items:center;font-family:"IBM Plex Mono",monospace}.live-signed-track{position:relative;height:12px;background:#272b30}.live-signed-track:after{content:"";position:absolute;left:50%;height:100%;border-left:1px solid #999}.live-signed-track i{position:absolute;height:100%}.execution nav{flex-wrap:wrap}.execution p{margin:4px 0}.live-arithmetic-row+ p{font-size:11px}
 
@@ -404,7 +403,7 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   flex: 0 0 auto;
   width: 100%;
   aspect-ratio: 4480 / 1280;
-  max-height: calc(100% - clamp(220px, 28vh, 360px));
+  max-height: calc(100% - clamp(260px, 30vh, 360px));
   min-height: 180px;
   position: relative;
   overflow: hidden;
@@ -1116,23 +1115,17 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
 .reverse-edge,
 .reverse-causal-edge {
   fill: none;
-  stroke: #ba68c8;
+  stroke: #e5a0ff;
   stroke-width: 2.5;
-  stroke-dasharray: 6 4;
-  animation: reverseFlow 1.8s linear infinite;
+  stroke-dasharray: 7 5;
 }
 
 .reverse-region-guide {
   fill: none;
-  stroke: rgba(186, 104, 200, 0.45);
+  stroke: #e5a0ff;
+  stroke-opacity: 0.45;
   stroke-width: 1.5;
   stroke-dasharray: 3 5;
-}
-
-@keyframes reverseFlow {
-  to {
-    stroke-dashoffset: 20;
-  }
 }
 
 .reverse-landmark-reticle {
@@ -1140,12 +1133,6 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   stroke: #e5a0ff;
   stroke-width: 2;
   stroke-dasharray: 8 4;
-  animation: reticlePulse 2s ease-in-out infinite;
-}
-
-@keyframes reticlePulse {
-  0%, 100% { stroke-opacity: 0.6; }
-  50% { stroke-opacity: 1; stroke-width: 2.5; }
 }
 
 /* Compact parameter marker */
@@ -1297,3 +1284,272 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
 }
 
 
+
+
+/* LS3 public presentation semantics: independent focus, execution, dependency, and readable locator. */
+.world-workspace.is-public-profile .spatial-world .explanation-active .field,
+.world-workspace.is-public-profile .spatial-world .parameter-bank.explanation-active > rect:first-of-type {
+  stroke: #FFD166;
+  stroke-width: 4;
+  stroke-dasharray: none;
+  vector-effect: non-scaling-stroke;
+}
+.world-workspace.is-public-profile .spatial-world .explanation-input .field {
+  stroke: #FFD166;
+  stroke-width: 2.5;
+  stroke-dasharray: 9 7;
+  stroke-opacity: 0.82;
+  vector-effect: non-scaling-stroke;
+}
+.world-workspace.is-public-profile .spatial-world .explanation-link {
+  stroke: #FFD166;
+  stroke-width: 3.5;
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+.world-workspace.is-public-profile .spatial-world .external-reticle,
+.world-workspace.is-public-profile .spatial-world .parameter-focus-reticle {
+  fill: none;
+  stroke: #FFD166;
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+.world-workspace.is-public-profile .spatial-world .parameter-focus-reticle {
+  display: none;
+}
+.world-workspace.is-public-profile .spatial-world .parameter-bank.explanation-active .parameter-focus-reticle {
+  display: block;
+}
+.world-workspace.is-public-profile:not(.is-free-explore) .spatial-world .world-object:not(.explanation-active) > .external-reticle,
+.world-workspace.is-public-profile:not(.is-free-explore) .spatial-world .parameter-bank:not(.explanation-active) > .external-reticle,
+.world-workspace.is-public-profile:not(.is-free-explore) .spatial-world .tokens > g > .external-reticle {
+  opacity: 0;
+}
+.spatial-world .execution-frontier-outline {
+  fill: none;
+  stroke: #62C7E8;
+  stroke-width: 3;
+  stroke-dasharray: 14 8;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+.teaching-locator {
+  position: absolute;
+  z-index: 12;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  max-width: calc(100% - 24px);
+  padding: 7px 10px;
+  box-sizing: border-box;
+  background: rgba(11, 15, 18, 0.94);
+  border: 1px solid rgba(255, 209, 102, 0.72);
+  border-left: 3px solid #FFD166;
+  border-radius: 4px;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.36);
+  color: #F2F5F7;
+  pointer-events: none;
+  visibility: hidden;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.teaching-locator strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: clamp(15px, 1vw, 18px);
+  line-height: 1.2;
+  letter-spacing: 0.045em;
+}
+.teaching-locator span {
+  flex: none;
+  color: #FFD166;
+  font: 600 clamp(12px, 0.82vw, 14px)/1.2 PlexMono, monospace;
+}
+
+/* Same-world learning markers use the public semantic vocabulary instead of competing with execution cyan. */
+.world-workspace.is-public-profile .objective-box,
+.world-workspace.is-public-profile .objective-tether {
+  stroke: #FFD166;
+}
+.world-workspace.is-public-profile .spatial-world .objective-mean {
+  fill: #FFD166;
+}
+.world-workspace.is-public-profile .parameter-overlay-box,
+.world-workspace.is-public-profile .parameter-learning-tether {
+  stroke: #E5A0FF;
+}
+.world-workspace.is-public-profile .spatial-world .param-overlay-tag,
+.world-workspace.is-public-profile .spatial-world .param-overlay-gradient {
+  fill: #E5A0FF;
+}
+.world-workspace.is-public-profile .adam-overlay-box,
+.world-workspace.is-public-profile .adam-learning-tether {
+  stroke: #FFD166;
+}
+.world-workspace.is-public-profile .spatial-world .adam-overlay-tag,
+.world-workspace.is-public-profile .spatial-world .adam-overlay-value {
+  fill: #FFD166;
+}
+.world-workspace.is-public-profile .objective-anchor.active-learning-anchor {
+  filter: drop-shadow(0 0 10px rgba(255, 209, 102, 0.28));
+}
+.world-workspace.is-public-profile .parameter-learning-overlay.active-learning-anchor {
+  filter: drop-shadow(0 0 10px rgba(229, 160, 255, 0.28));
+}
+.world-workspace.is-public-profile .adam-learning-overlay.active-learning-anchor {
+  filter: drop-shadow(0 0 10px rgba(255, 209, 102, 0.28));
+}
+
+/* Screen-aware overlay type remains legible while the public camera keeps the whole model framed. */
+.world-workspace.is-public-profile .spatial-world .objective-title {
+  font-size: calc(var(--world-label-size, 26px) + 4px);
+}
+.world-workspace.is-public-profile .spatial-world .objective-scope {
+  font-size: var(--world-label-size, 22px);
+}
+.world-workspace.is-public-profile .spatial-world .objective-mean {
+  font-size: calc(var(--world-label-size, 24px) + 2px);
+}
+.world-workspace.is-public-profile .spatial-world .objective-origin {
+  font-size: calc(var(--world-label-size, 18px) - 2px);
+}
+.world-workspace.is-public-profile .spatial-world .param-overlay-title,
+.world-workspace.is-public-profile .spatial-world .adam-overlay-title {
+  font-size: calc(var(--world-label-size, 24px) + 3px);
+}
+.world-workspace.is-public-profile .spatial-world .param-overlay-tag,
+.world-workspace.is-public-profile .spatial-world .adam-overlay-tag,
+.world-workspace.is-public-profile .spatial-world .adam-overlay-status {
+  font-size: var(--world-label-size, 18px);
+}
+.world-workspace.is-public-profile .spatial-world .param-overlay-calc,
+.world-workspace.is-public-profile .spatial-world .param-overlay-accum,
+.world-workspace.is-public-profile .spatial-world .param-overlay-gradient,
+.world-workspace.is-public-profile .spatial-world .adam-overlay-inputs,
+.world-workspace.is-public-profile .spatial-world .adam-overlay-value {
+  font-size: var(--world-label-size, 22px);
+}
+
+/* Required Guided teaching copy takes priority over interface density. */
+.world-workspace.is-public-profile .contextual-dock .dock-route-purpose {
+  font-size: clamp(22px, 1.55vw, 28px);
+  line-height: 1.3;
+}
+.world-workspace.is-public-profile .contextual-dock .dock-meaning-text,
+.world-workspace.is-public-profile .contextual-dock .dock-stage-result p,
+.world-workspace.is-public-profile .contextual-dock .learning-gradient-summary {
+  font-size: clamp(18px, 1.18vw, 22px);
+  line-height: 1.45;
+}
+.world-workspace.is-public-profile .contextual-dock .construction-header strong {
+  font-size: clamp(15px, 1vw, 18px);
+}
+.world-workspace.is-public-profile .contextual-dock .reverse-truth-cue {
+  margin: 3px 0 0;
+  padding-left: 9px;
+  border-left: 2px solid #7A8791;
+  color: #A7B2BC;
+  font-size: clamp(14px, 0.92vw, 17px);
+  line-height: 1.4;
+}
+.world-workspace.is-public-profile .contextual-dock .dock-stage-result .stage-result-label {
+  font-size: clamp(12px, 0.82vw, 14px);
+}
+.world-workspace.is-public-profile .contextual-dock .dock-slot-primary .primary-action,
+.world-workspace.is-public-profile .contextual-dock .primary-action {
+  font-size: clamp(17px, 1vw, 18px);
+}
+.contextual-dock .execution-frontier-tag {
+  color: #62C7E8;
+  border-color: #62C7E8;
+  border-style: dashed;
+}
+
+/* Accept and Discard are peer state decisions, not right/wrong answers. */
+.contextual-dock .candidate-decision-pair {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.contextual-dock .candidate-decision-pair button.decision-action {
+  min-height: 54px;
+  height: clamp(54px, 4.2vh, 60px);
+  min-width: clamp(150px, 11vw, 210px);
+  padding: 0 20px;
+  background: #18222A;
+  border: 2px solid #7A8791;
+  color: #F2F5F7;
+}
+.contextual-dock .candidate-decision-pair button.decision-action:hover:not(:disabled) {
+  background: #202B35;
+  border-color: #62C7E8;
+  color: #FFFFFF;
+}
+.contextual-dock .candidate-decision-pair button.decision-action:disabled {
+  background: #16222A;
+  border-color: #2B3942;
+  color: #6B7780;
+}
+
+/* Constrained height sheds low-priority chrome before required teaching copy. */
+@media (max-height: 800px) {
+  .spatial-shell[data-experience-profile="visitor"] .world-brand small,
+  .spatial-shell[data-experience-profile="facilitator"] .world-brand small,
+  .spatial-shell[data-experience-profile="visitor"] .spatial-badge,
+  .spatial-shell[data-experience-profile="facilitator"] .spatial-badge {
+    display: none;
+  }
+  .spatial-shell[data-experience-profile="visitor"] .spatial-status [data-testid="spatial-relationship"],
+  .spatial-shell[data-experience-profile="facilitator"] .spatial-status [data-testid="spatial-relationship"] {
+    display: none;
+  }
+  .world-workspace.is-public-profile > .world-pane {
+    min-height: 160px;
+    max-height: calc(100% - clamp(260px, 35vh, 300px));
+  }
+  .world-workspace.is-public-profile > .contextual-dock .dock-body {
+    padding: 8px 14px;
+  }
+  .world-workspace.is-public-profile .dock-overview {
+    gap: 16px;
+  }
+  .world-workspace.is-public-profile .dock-stage-meaning {
+    gap: 5px;
+  }
+  .world-workspace.is-public-profile .dock-stage-meaning .construction-purpose {
+    display: none;
+  }
+  .world-workspace.is-public-profile .dock-stage-result .teaching-step {
+    padding: 8px 12px;
+    gap: 5px;
+  }
+  .world-workspace.is-public-profile .contextual-dock .dock-route-info {
+    gap: 8px;
+  }
+  .world-workspace.is-public-profile .contextual-dock .dock-selected-object,
+  .world-workspace.is-public-profile .contextual-dock .execution-frontier-tag {
+    max-width: min(28vw, 300px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .contextual-dock .candidate-decision-pair {
+    gap: 6px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spatial-world .execution-frontier-outline,
+  .world-workspace.is-public-profile .spatial-world .explanation-active .field,
+  .world-workspace.is-public-profile .spatial-world .explanation-input .field,
+  .world-workspace.is-public-profile .spatial-world .explanation-link,
+  .world-workspace.is-public-profile .spatial-world .external-reticle,
+  .world-workspace.is-public-profile .spatial-world .parameter-focus-reticle,
+  .world-workspace.is-public-profile .objective-anchor,
+  .world-workspace.is-public-profile .parameter-learning-overlay,
+  .world-workspace.is-public-profile .adam-learning-overlay {
+    animation: none !important;
+    transition: none !important;
+  }
+}

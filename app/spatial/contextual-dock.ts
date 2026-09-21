@@ -610,7 +610,6 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
                 <button id="short-resume" class="secondary-action">Resume route</button>
               ` : `
                 ${hasComparison ? `<button class="secondary-action dock-tab" data-dock-depth="compare">Compare candidate</button>` : ''}
-                <button id="execution-cancel" class="decision-action discard-action" ${candidateDecisionDisabled || opts.trainingState?.cancelling ? 'disabled' : ''}>Discard candidate</button>
               `
             ) : opts.tourContent.state === 'tour_complete' ? `
               ${!isFacilitator && !opts.attract ? `<button id="visitor-explore-toggle" class="secondary-action">${freeExplore ? 'Close free exploration' : 'Explore freely'}</button>` : ''}
@@ -638,7 +637,10 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
         <div class="dock-slot-primary">
           ${opts.tourContent ? (
             opts.tourContent.state === 'candidate_ready' && !shortDetour ? `
-              <button id="execution-accept" class="decision-action accept-action primary-action" ${candidateDecisionDisabled ? 'disabled' : ''}>Accept update</button>
+              <div class="candidate-decision-pair" role="group" aria-label="Candidate decision">
+                <button id="execution-cancel" class="decision-action discard-action" ${candidateDecisionDisabled || opts.trainingState?.cancelling ? 'disabled' : ''}>Discard candidate</button>
+                <button id="execution-accept" class="decision-action accept-action" ${candidateDecisionDisabled ? 'disabled' : ''}>Accept update</button>
+              </div>
             ` : `
               ${primaryAction}
             `

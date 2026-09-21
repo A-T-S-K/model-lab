@@ -203,24 +203,33 @@ export class SpatialPresenter {
     root.querySelectorAll('.explanation-active,.explanation-input,.explanation-link').forEach(el =>
       el.classList.remove('explanation-active', 'explanation-input', 'explanation-link')
     );
-    if (!focus || view.navigation.mode === 'detail' || view.navigation.mode === 'explore') return;
+    if (
+      view.navigation.mode === 'detail' ||
+      view.navigation.mode === 'explore' ||
+      this.state?.attract ||
+      view.content.state === 'cold' ||
+      view.content.state === 'tour_complete'
+    ) return;
 
     const repeated = model.forward.descriptor.presentation === 'microgpt-repeated-blocks';
     const nodeSelector = (kind: string, layer?: number, head?: number) =>
       `[data-world-kind="${kind}"]${repeated && layer !== undefined ? `[data-world-layer="${layer}"]` : ''}${head !== undefined ? `[data-world-head="${head}"]` : ''}`;
 
-    for (const node of focus.nodes) {
+    for (const node of focus?.nodes ?? []) {
       root.querySelectorAll(nodeSelector(node.kind, node.layer, node.head))
         .forEach(el => el.classList.add('explanation-input'));
     }
 
     const anchor = view.content.selectionIntent;
-    root.querySelectorAll(nodeSelector(anchor.kind, anchor.layer, anchor.head)).forEach(el => {
+    const anchorElements = anchor.parameter
+      ? Array.from(root.querySelectorAll('[data-world-parameter]')).filter(el => el.getAttribute('data-world-parameter') === anchor.parameter)
+      : Array.from(root.querySelectorAll(nodeSelector(anchor.kind, anchor.layer, anchor.head)));
+    for (const el of anchorElements) {
       el.classList.remove('explanation-input');
       el.classList.add('explanation-active');
-    });
+    }
 
-    for (const edge of focus.edges) {
+    for (const edge of focus?.edges ?? []) {
       const headSelector = edge.head === undefined ? '' : `[data-edge-head="${edge.head}"]`;
       const selectedSelector = edge.selected === 'key'
         ? '[data-selected-key-edge]'
@@ -231,6 +240,54 @@ export class SpatialPresenter {
         `[data-edge-from="${edge.from}"][data-edge-to="${edge.to}"]${headSelector}${selectedSelector}`
       ).forEach(el => el.classList.add('explanation-link'));
     }
+  }
+  private positionPublicTeachingLocator(root: HTMLElement) {
+    const locator = root.querySelector<HTMLElement>('[data-testid="teaching-locator"]');
+    const pane = root.querySelector<HTMLElement>('.world-workspace.is-public-profile > .world-pane');
+    const view = this.state?.publicLesson;
+    if (!locator || !pane || !view || view.navigation.mode !== 'guided') return;
+
+    const intent = view.content.selectionIntent;
+    const repeated = this.model?.forward.descriptor.presentation === 'microgpt-repeated-blocks';
+    const nodeSelector = (kind: string, layer?: number, head?: number) =>
+      `[data-world-kind="${kind}"]${repeated && layer !== undefined ? `[data-world-layer="${layer}"]` : ''}${head !== undefined ? `[data-world-head="${head}"]` : ''}`;
+    const anchor = intent.parameter
+      ? Array.from(root.querySelectorAll('[data-world-parameter]')).find(el => el.getAttribute('data-world-parameter') === intent.parameter)
+      : root.querySelector(nodeSelector(intent.kind, intent.layer, intent.head));
+    if (!anchor) return;
+
+    const anchorRect = (anchor.querySelector('rect.field, rect') ?? anchor).getBoundingClientRect();
+    const paneRect = pane.getBoundingClientRect();
+    const locatorRect = locator.getBoundingClientRect();
+    if (paneRect.width <= 0 || paneRect.height <= 0 || locatorRect.width <= 0 || locatorRect.height <= 0) return;
+
+    const margin = 12;
+    const gap = 14;
+    const width = locatorRect.width;
+    const height = locatorRect.height;
+    const anchorCenterX = anchorRect.left - paneRect.left + anchorRect.width / 2;
+    const anchorCenterY = anchorRect.top - paneRect.top + anchorRect.height / 2;
+    const candidates = [
+      { placement: 'above', left: anchorCenterX - width / 2, top: anchorRect.top - paneRect.top - height - gap },
+      { placement: 'below', left: anchorCenterX - width / 2, top: anchorRect.bottom - paneRect.top + gap },
+      { placement: 'right', left: anchorRect.right - paneRect.left + gap, top: anchorCenterY - height / 2 },
+      { placement: 'left', left: anchorRect.left - paneRect.left - width - gap, top: anchorCenterY - height / 2 },
+    ];
+    const fits = (candidate: { left: number; top: number }) =>
+      candidate.left >= margin &&
+      candidate.top >= margin &&
+      candidate.left + width <= paneRect.width - margin &&
+      candidate.top + height <= paneRect.height - margin;
+    const preferred = candidates.find(fits);
+    const fallback = preferred ?? (
+      paneRect.bottom - anchorRect.bottom >= anchorRect.top - paneRect.top ? candidates[1] : candidates[0]
+    );
+    const maxLeft = Math.max(margin, paneRect.width - width - margin);
+    const maxTop = Math.max(margin, paneRect.height - height - margin);
+    locator.style.left = `${Math.round(Math.min(maxLeft, Math.max(margin, fallback.left)))}px`;
+    locator.style.top = `${Math.round(Math.min(maxTop, Math.max(margin, fallback.top)))}px`;
+    locator.dataset.placement = fallback.placement;
+    locator.style.visibility = 'visible';
   }
   private dispatchPublicLesson(event: PublicLessonEvent): boolean {
     return this.state?.publicLessonDispatch?.(event) ?? false;
@@ -503,6 +560,16 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
       publicTargetState,
       publicCurrentState,
     );
+    const publicTeachingLocator = (() => {
+      if (!tourContent || state.attract || state.evidenceWorld || publicNavigationMode !== 'guided') return '';
+      if (tourContent.state === 'cold' || tourContent.state === 'p1_complete' || tourContent.state === 'tour_complete') return '';
+      const intent = tourContent.selectionIntent;
+      const occurrence = [
+        intent.parameter ? `${intent.parameter}[${this.pin.row},${this.pin.column}]` : `p${intent.token}`,
+        intent.head === undefined ? '' : `h${intent.head}`,
+      ].filter(Boolean).join(' · ');
+      return `<div class="teaching-locator" data-testid="teaching-locator" data-world-kind="${esc(intent.kind)}" data-world-parameter="${esc(intent.parameter ?? '')}"><strong>${esc(tourContent.headline)}</strong>${occurrence ? `<span>${esc(occurrence)}</span>` : ''}</div>`;
+    })();
     if (tourContent) {
       if (state.attract) {
         lessonProgress = "";
@@ -625,7 +692,7 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
       <div class="spatial-status"><span role="status" data-testid="status">${esc(state.status.replace(/ · [a-f0-9-]{36}:.*$/, ""))}</span>${state.interventionPending?'<button id="cancel-ablation">Cancel intervention</button>':""}<span data-testid="spatial-relationship">${m?`${state.execution?'ACTIVE EXECUTION':m.source.relationship} · captured input ${esc(m.source.capturedDocument)}`:"NO SELECTED RUN"}</span></div>${state.error?`<p role="alert">${esc(state.error)}</p>`:""}${!isPublicProfile && !m&&state.execution?this.controls():""}${!isPublicProfile && state.attract?`<section class="exhibit-entry"><div><strong>RECORDED RUN · REPLAY</strong><h1>How does a tiny model choose what comes next?</h1><p>Recorded real run. Not live. Start to make a fresh prediction, then follow the numbers through attention.</p></div><button id="exhibit-start" ${state.ready&&!state.busy?'':'disabled'}>Start · explore a real prediction</button></section>`:m&&!state.execution&&!state.intervention&&!state.evidenceWorld?`${isVisitor?'':isFacilitator?(this.operatorControls?`<div class="facilitator-panel" data-testid="facilitator-panel"><p class="facilitator-retention">${retentionWording}</p><nav class="facilitator-landmarks" aria-label="Shared Guided lesson"><button id="operator-controls">Hide operator controls</button><button id="short-sample">Sample abca · q3 / h0 / k0</button>${facilitatorLessonControls}${capabilities.configurableIdleReset?`<button id="exhibit-opt-out">${state.idleResetEnabled?"Disable idle reset · facilitated session":`Enable idle reset · ${state.idleResetSeconds} seconds`}</button>`:""}</nav><p role="status">${esc(this.shortMessage)} ${this.shortDetour?'Exploring a detour. Resume explicitly to return. ':''}</p></div>`:''):`<details class="short-guide" ${state.exhibit?'open':''}><summary>Short teaching route · causal prediction explanation</summary><div class="short-guide-body">${this.operatorControls?`<div class="facilitator-panel" data-testid="facilitator-panel"><p class="facilitator-retention">${retentionWording}</p><p class="route-purpose" data-testid="route-purpose"><strong style="color:#F2F5F7;">${isAttn ? currentAttnStep.name : currentLandmark.name}:</strong> ${esc(isAttn ? currentAttnStep.purpose : currentLandmark.purpose)}</p></div>`:""}<nav aria-label="Short teaching route"><button id="operator-controls">${this.operatorControls?"Hide":"Show"} operator controls</button><button id="short-sample">Sample abca · q3 / h0 / k0</button><button data-short-stop="0">Prediction</button><button data-short-stop="1">Represent</button><button data-short-stop="2">Mix Context</button><button data-short-stop="3">Transform</button><button data-short-stop="4">Score</button><button data-short-stop="5">Predict</button><button id="facilitator-attention-detail">Attention detail</button>${this.shortDetour?'<button id="short-resume">Resume short route</button>':''}</nav><p role="status">${esc(this.shortMessage)} ${this.shortDetour?'Exploring a detour. Resume explicitly to return. ':''}${currStop<1?"Teacher-forced prediction · selected position and known target; learning uses all positions.":"Follow the selected operands → calculation → result. Exact values and source remain available."}</p></div></details>`}`:''}
       ${m?`${showDeeperControls?`<nav class="spatial-selection" aria-label="Semantic selection"><label>Layer<select id="spatial-layer">${options(Array.from({length:m.forward.layers},(_,i)=>`Layer ${i}`),s.layer)}</select></label><label>Position<select id="spatial-query">${options(m.labels,s.query)}</select></label><label>Head<select id="spatial-head">${options(m.heads.map(h=>`Head ${h.head}`),s.head)}</select></label><label>Key<select id="spatial-key">${options(m.labels,s.key)}</select></label><label>Q feature<select id="spatial-feature">${options(Array.from({length:m.width},(_,i)=>String(i)),s.feature)}</select></label><label>${state.execution?.progress?.training?"Forward selection":"Operation"}<select id="spatial-operation">${m.forward.operations.map(o=>`<option value="${o.kind}" ${o.kind===this.kind?"selected":""}>${esc(o.title)}</option>`).join("")}</select></label><span class="scope-note">Full semantic identity · run / node / port / layer / position / head</span></nav>`:""}
       ${capabilities.teachingSelectors && (capabilities.profile === 'workbench' || (state.experiments?.length ?? 0) > 0) ? `<nav ${state.execution||state.intervention||state.evidenceWorld?'hidden':''} class="learning-toolbar" aria-label="Learning transition"><strong>Live model step <span data-testid="spatial-live-step">${state.liveStep??0}</span></strong><span>Pinned ${esc(parameterLabel(this.pin))}</span><button id="learning-owner">Owner</button><label>Transition<select id="spatial-experiment"><option value="">Choose completed transition</option>${state.experiments?.map(e=>`<option value="${esc(e.id)}" ${e.id===state.experimentId?"selected":""}>Update ${e.step}</option>`).join("")??""}</select></label><button id="spatial-experiment-prev" ${state.experimentsWindow?.hasPrevious?'':'disabled'}>Previous transitions</button><button id="spatial-experiment-next" ${state.experimentsWindow?.hasNext?'':'disabled'}>Next transitions</button><span>${state.experimentsWindow?`showing ${state.experimentsWindow.total?state.experimentsWindow.offset+1:0}–${state.experimentsWindow.end} of ${state.experimentsWindow.total} retained transitions`:''}</span><button data-learning-phase="before">Before</button><button data-learning-phase="training">Training</button><button data-learning-phase="after">After</button><button ${state.intervention?'':'id="spatial-current"'}>Return to current model</button><button data-learning-stage="gradient">Contributions</button><button data-learning-stage="adam">Adam</button><button data-learning-stage="compare">Compare</button></nav>`:""}
-      ${!isPublicProfile ? (state.intervention?`<details class="comparison-playback"><summary>Explanation playback · completed evidence</summary>${this.controls()}</details>`:this.controls()) : ""}${state.intervention?`<div class="intervention-banner" data-testid="spatial-intervention">READ-ONLY · ${esc(state.intervention.arm)} · ${esc(state.intervention.summary)}. Same checkpoint <code title="${esc(state.intervention.snapshot)}">${esc(state.intervention.snapshot.slice(0,19))}…</code>. The comparison policy is matched intervention; recorded values remain observed evidence.${state.intervention.receipt?`<details data-testid="intervention-receipt"><summary>Donor / target receipt</summary><p>Policy: ${esc(state.intervention.receipt.policy)} · ${state.intervention.receipt.noOp?'truthful no-op':'numerical replacement observed'}</p><p>Donor [${state.intervention.receipt.donor.join(', ')}]<br>Original target [${state.intervention.receipt.original.join(', ')}]<br>Effective replacement [${state.intervention.receipt.replacement.join(', ')}]</p></details>`:''}</div>`:""}${!isPublicProfile && pair?`<div class="decision-summary">${state.inspectedArm?`<small data-testid="inspected-arm">Inspecting ${esc(state.inspectedArm)}${state.comparison?" · paired map enabled":""}</small>`:""}${outputSummary(pair,s.query,labels)}<nav>${state.intervention?`<span>Accepted model step ${state.liveStep??0}</span><button id="spatial-current">Return to current model</button>`:""}<button data-compare-arm="before">Inspect ${labels[0].toLowerCase()}</button><button data-compare-arm="after">Inspect ${labels[1].toLowerCase()}</button><button data-compare-arm="pair">Shared-scale comparison</button></nav></div>`:""}${isPublicProfile ? `<div class="world-workspace is-public-profile ${this.freeExplore ? 'is-free-explore' : ''}"><div class="world-pane">${sceneSvg(m.forward,a,s.key,this.learningStage?this.pin.name:this.parameter,m.labels,s.query,state.comparison??(this.learningStage==="compare"&&state.learning?.available?state.learning.comparison:undefined),publicLearningMarkup,state.execution?.progress,this.element)}<div data-testid="landmark-occurrence" data-semantic-anchor="${a.kind}" data-position="${a.token}" data-layer="${a.layer !== undefined ? a.layer : ''}" data-run-id="${esc(m?.source.sourceRunId ?? '')}" style="display:none;" aria-hidden="true"></div>${this.freeExplore ? `<div class="camera-controls"><button id="zoom-in" aria-label="Zoom in">+</button><button id="zoom-out" aria-label="Zoom out">−</button><button data-pan="-1,0" aria-label="Pan left">←</button><button data-pan="1,0" aria-label="Pan right">→</button><button data-pan="0,-1" aria-label="Pan up">↑</button><button data-pan="0,1" aria-label="Pan down">↓</button></div><svg class="world-minimap" viewBox="0 0 ${m.forward.descriptor.presentation==='microgpt-canonical-curated'?4500:1250+m.forward.layers*2500} ${m.forward.descriptor.presentation==='microgpt-canonical-curated'?1700:Math.max(1500,420+m.forward.heads*270)}" aria-label="Same world camera footprint"><path d="M100 600 H${m.forward.descriptor.presentation==='microgpt-canonical-curated'?4300:1050+m.forward.layers*2500}"/>${m.forward.operations.map((o)=>{const t=stationForWorld(m.forward,o.kind,s.head,s.layer);return `<rect x="${t.x}" y="${t.y}" width="100" height="160" class="${o.kind===this.kind?"selected":""}"/>`;}).join("")}<rect id="camera-footprint"/></svg>` : ''}</div>${renderContextualDock({
+      ${!isPublicProfile ? (state.intervention?`<details class="comparison-playback"><summary>Explanation playback · completed evidence</summary>${this.controls()}</details>`:this.controls()) : ""}${state.intervention?`<div class="intervention-banner" data-testid="spatial-intervention">READ-ONLY · ${esc(state.intervention.arm)} · ${esc(state.intervention.summary)}. Same checkpoint <code title="${esc(state.intervention.snapshot)}">${esc(state.intervention.snapshot.slice(0,19))}…</code>. The comparison policy is matched intervention; recorded values remain observed evidence.${state.intervention.receipt?`<details data-testid="intervention-receipt"><summary>Donor / target receipt</summary><p>Policy: ${esc(state.intervention.receipt.policy)} · ${state.intervention.receipt.noOp?'truthful no-op':'numerical replacement observed'}</p><p>Donor [${state.intervention.receipt.donor.join(', ')}]<br>Original target [${state.intervention.receipt.original.join(', ')}]<br>Effective replacement [${state.intervention.receipt.replacement.join(', ')}]</p></details>`:''}</div>`:""}${!isPublicProfile && pair?`<div class="decision-summary">${state.inspectedArm?`<small data-testid="inspected-arm">Inspecting ${esc(state.inspectedArm)}${state.comparison?" · paired map enabled":""}</small>`:""}${outputSummary(pair,s.query,labels)}<nav>${state.intervention?`<span>Accepted model step ${state.liveStep??0}</span><button id="spatial-current">Return to current model</button>`:""}<button data-compare-arm="before">Inspect ${labels[0].toLowerCase()}</button><button data-compare-arm="after">Inspect ${labels[1].toLowerCase()}</button><button data-compare-arm="pair">Shared-scale comparison</button></nav></div>`:""}${isPublicProfile ? `<div class="world-workspace is-public-profile ${this.freeExplore ? 'is-free-explore' : ''}"><div class="world-pane">${sceneSvg(m.forward,a,s.key,this.learningStage?this.pin.name:this.parameter,m.labels,s.query,state.comparison??(this.learningStage==="compare"&&state.learning?.available?state.learning.comparison:undefined),publicLearningMarkup,state.execution?.progress,this.element)}${publicTeachingLocator}<div data-testid="landmark-occurrence" data-semantic-anchor="${a.kind}" data-position="${a.token}" data-layer="${a.layer !== undefined ? a.layer : ''}" data-run-id="${esc(m?.source.sourceRunId ?? '')}" style="display:none;" aria-hidden="true"></div>${this.freeExplore ? `<div class="camera-controls"><button id="zoom-in" aria-label="Zoom in">+</button><button id="zoom-out" aria-label="Zoom out">−</button><button data-pan="-1,0" aria-label="Pan left">←</button><button data-pan="1,0" aria-label="Pan right">→</button><button data-pan="0,-1" aria-label="Pan up">↑</button><button data-pan="0,1" aria-label="Pan down">↓</button></div><svg class="world-minimap" viewBox="0 0 ${m.forward.descriptor.presentation==='microgpt-canonical-curated'?4500:1250+m.forward.layers*2500} ${m.forward.descriptor.presentation==='microgpt-canonical-curated'?1700:Math.max(1500,420+m.forward.heads*270)}" aria-label="Same world camera footprint"><path d="M100 600 H${m.forward.descriptor.presentation==='microgpt-canonical-curated'?4300:1050+m.forward.layers*2500}"/>${m.forward.operations.map((o)=>{const t=stationForWorld(m.forward,o.kind,s.head,s.layer);return `<rect x="${t.x}" y="${t.y}" width="100" height="160" class="${o.kind===this.kind?"selected":""}"/>`;}).join("")}<rect id="camera-footprint"/></svg>` : ''}</div>${renderContextualDock({
         model: m,
         address: a,
         element: this.element,
@@ -803,12 +870,13 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
             ) {
               this.camera.move(frame, false);
             }
+            this.positionPublicTeachingLocator(root);
           }
         }
       });
       this.worldPaneObserver.observe(wp);
     }
-    if(svg){this.camera.attach(svg,()=>{const p=root.querySelector("#camera-footprint"),b=this.camera.box;p?.setAttribute("x",String(b.x));p?.setAttribute("y",String(b.y));p?.setAttribute("width",String(b.width));p?.setAttribute("height",String(b.height));
+    if(svg){this.camera.attach(svg,()=>{this.positionPublicTeachingLocator(root);const p=root.querySelector("#camera-footprint"),b=this.camera.box;p?.setAttribute("x",String(b.x));p?.setAttribute("y",String(b.y));p?.setAttribute("width",String(b.width));p?.setAttribute("height",String(b.height));
       const lensEl=root.querySelector<HTMLElement>(".context-lens"),tether=root.querySelector<SVGPathElement>("#context-tether-path");
       if(this.lens && !this.construction && lensEl && tether){
         const workspace=root.querySelector(".world-workspace")!.getBoundingClientRect(),lens=lensEl.getBoundingClientRect();
