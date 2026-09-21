@@ -1315,8 +1315,10 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   vector-effect: non-scaling-stroke;
   pointer-events: none;
 }
-.world-workspace.is-public-profile .spatial-world .parameter-focus-reticle {
+.spatial-world .parameter-focus-reticle {
   display: none;
+  fill: none;
+  pointer-events: none;
 }
 .world-workspace.is-public-profile .spatial-world .parameter-bank.explanation-active .parameter-focus-reticle {
   display: block;
@@ -1517,9 +1519,6 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   }
   .world-workspace.is-public-profile .dock-stage-meaning {
     gap: 5px;
-  }
-  .world-workspace.is-public-profile .dock-stage-meaning .construction-purpose {
-    display: none;
   }
   .world-workspace.is-public-profile .dock-stage-result .teaching-step {
     padding: 8px 12px;
