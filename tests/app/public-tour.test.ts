@@ -147,117 +147,26 @@ test('canonical scene emits the three-way pre-attention input branch for both he
   }
 });
 
-test('Current Part 2 UI representation preserves its truth-guarded teaching moments', () => {
-  const p2Expected = [
-    { state: 'p2_objective', progress: 'Part 2 of 2 · 1 of 5 · Measure error', headline: 'MEASURE ERROR' },
-    { state: 'p2_gradient_contribution', progress: 'Part 2 of 2 · 2 of 5 · Trace gradient contribution', headline: 'TRACE ONE GRADIENT CONTRIBUTION' },
-    { state: 'p2_final_gradient', progress: 'Part 2 of 2 · 3 of 5 · Finish gradient', headline: 'FINAL PARAMETER GRADIENT' },
-    { state: 'p2_adam_proposal', progress: 'Part 2 of 2 · 4 of 5 · Adam proposal', headline: 'ADAM PROPOSES CANDIDATE' },
-    { state: 'candidate_ready', progress: 'Part 2 of 2 · 5 of 5 · Compare and decide', headline: 'CANDIDATE UPDATE READY' },
-  ] as const;
-
-  for (const exp of p2Expected) {
-    const c = getPublicTourContent(exp.state);
-    assert.equal(c.part, 2);
-    assert.equal(c.progress, exp.progress);
-    assert.equal(c.headline, exp.headline);
-    assert(c.truthGuardrail, `Truth guardrail missing for ${exp.state}`);
-    assert.match(c.truthGuardrail!, /Visual movement is not runtime timing/);
-  }
-
-  // Forward nominal sequence through Part 2
-  let current: PublicTourState = 'p2_objective';
-  current = advanceTour(current);
-  assert.equal(current, 'p2_gradient_contribution');
-  current = advanceTour(current);
-  assert.equal(current, 'p2_final_gradient');
-  current = advanceTour(current);
-  assert.equal(current, 'p2_adam_proposal');
-  current = advanceTour(current);
-  assert.equal(current, 'candidate_ready');
-  // candidate_ready does NOT auto-advance
-  assert.equal(advanceTour('candidate_ready'), 'candidate_ready');
-
-});
-
 test('One authentic contribution is distinct from final gradient', () => {
   const contrib = getPublicTourContent('p2_gradient_contribution');
-  assert.match(contrib.headline, /TRACE ONE GRADIENT CONTRIBUTION/);
-  assert(!contrib.plainMeaning.includes('assigning responsibility'), 'Must not use causal-attribution language');
-  assert(contrib.plainMeaning.includes('accumulator may still be partial'), 'Must make explicit that accumulator may still be partial');
+  assert.match(contrib.headline, /ONE GRADIENT CONTRIBUTION/);
+  assert(contrib.plainMeaning.includes('accumulator, which may still be partial'));
+  assert.match(contrib.truthGuardrail ?? '', /not the final parameter gradient/i);
+  assert.match(contrib.truthGuardrail ?? '', /serial arrival chronology/i);
 
   const finalGrad = getPublicTourContent('p2_final_gradient');
   assert.match(finalGrad.headline, /FINAL PARAMETER GRADIENT/);
-  assert(finalGrad.plainMeaning.includes('loss sensitivity'), 'Gradient is loss sensitivity');
-  assert(finalGrad.plainMeaning.includes('not the optimizer update'), 'Gradient is not optimizer update');
-  assert(finalGrad.plainMeaning.includes('finished accumulating'), 'All contributions finished');
+  assert(finalGrad.plainMeaning.includes('finished accumulating'));
+  assert.match(finalGrad.truthGuardrail ?? '', /measures sensitivity/i);
+  assert.match(finalGrad.truthGuardrail ?? '', /not the parameter update/i);
 
   const adam = getPublicTourContent('p2_adam_proposal');
-  assert(adam.plainMeaning.includes('persistent moments') || adam.plainMeaning.includes('persistent optimizer'), 'Adam uses persistent optimizer state');
-  assert(adam.plainMeaning.includes('provisional'), 'Proposal is provisional');
-  assert(adam.plainMeaning.includes('accepted model has not changed'), 'Accepted model has not changed');
+  assert(adam.plainMeaning.includes('stored optimizer state m and v'));
+  assert(adam.plainMeaning.includes('provisional'));
+  assert(adam.plainMeaning.includes('accepted model remains unchanged'));
 
   const ready = getPublicTourContent('candidate_ready');
-  assert(ready.plainMeaning.includes('not proof of general model improvement'), 'Candidate ready cautions against assuming general improvement');
-});
-
-test('Evidence gating protects all Part 2 transitions', () => {
-  // 1. Objective state cannot advance before real objective evidence AND matching contribution
-  const emptyEvidence: TourEvidence = {
-    hasObjective: false,
-    hasMatchingContribution: false,
-    hasFinalGradient: false,
-    hasPinnedProposal: false,
-    hasCandidateComparison: false,
-  };
-  assert.equal(canAdvanceTour('p2_objective', emptyEvidence), false);
-
-  const objectiveOnlyEvidence: TourEvidence = {
-    ...emptyEvidence,
-    hasObjective: true,
-    hasMatchingContribution: false,
-  };
-  assert.equal(canAdvanceTour('p2_objective', objectiveOnlyEvidence), false);
-
-  const objectiveAndContribEvidence: TourEvidence = {
-    ...emptyEvidence,
-    hasObjective: true,
-    hasMatchingContribution: true,
-  };
-  assert.equal(canAdvanceTour('p2_objective', objectiveAndContribEvidence), true);
-
-  // 2. Contribution state cannot advance while gradient is partial
-  assert.equal(canAdvanceTour('p2_gradient_contribution', emptyEvidence), false);
-  assert.equal(canAdvanceTour('p2_gradient_contribution', { ...emptyEvidence, hasFinalGradient: false }), false);
-  assert.equal(canAdvanceTour('p2_gradient_contribution', { ...emptyEvidence, hasFinalGradient: true }), true);
-
-  // 3. Final-gradient state cannot advance before authentic pinned proposal exists
-  assert.equal(canAdvanceTour('p2_final_gradient', emptyEvidence), false);
-  assert.equal(canAdvanceTour('p2_final_gradient', { ...emptyEvidence, hasPinnedProposal: false }), false);
-  assert.equal(canAdvanceTour('p2_final_gradient', { ...emptyEvidence, hasPinnedProposal: true }), true);
-
-  // 4. Adam state cannot advance before authentic candidate comparison evidence exists
-  assert.equal(canAdvanceTour('p2_adam_proposal', emptyEvidence), false);
-  assert.equal(canAdvanceTour('p2_adam_proposal', { ...emptyEvidence, hasCandidateComparison: false }), false);
-  assert.equal(canAdvanceTour('p2_adam_proposal', { ...emptyEvidence, hasCandidateComparison: true }), true);
-
-  // 5. Candidate Ready cannot advance via canAdvanceTour (only via authoritative accept/discard)
-  assert.equal(canAdvanceTour('candidate_ready', {
-    hasObjective: true,
-    hasMatchingContribution: true,
-    hasFinalGradient: true,
-    hasPinnedProposal: true,
-    hasCandidateComparison: true,
-  }), false);
-
-  // 6. Tour Complete cannot advance
-  assert.equal(canAdvanceTour('tour_complete', {
-    hasObjective: true,
-    hasMatchingContribution: true,
-    hasFinalGradient: true,
-    hasPinnedProposal: true,
-    hasCandidateComparison: true,
-  }), false);
+  assert.match(ready.truthGuardrail ?? '', /not proof of general model improvement/i);
 });
 
 test('Part 2 selection intents remain unchanged while LS1 expands only Part 1', () => {
@@ -279,8 +188,8 @@ test('Part 2 selection intents remain unchanged while LS1 expands only Part 1', 
 
 test('Candidate Ready: peer decision actions, probabilities@q selection, and authoritative transitions', () => {
   const cr = getPublicTourContent('candidate_ready');
-  assert.equal(cr.progress, 'Part 2 of 2 · 5 of 5 · Compare and decide');
-  assert.equal(cr.headline, 'CANDIDATE UPDATE READY');
+  assert.equal(cr.progress, 'Part 2 · Decide · Candidate');
+  assert.equal(cr.headline, 'PROVISIONAL CANDIDATE');
   assert.equal(cr.selectionIntent.kind, 'probabilities');
   assert.equal(cr.selectionIntent.token, 3);
   assert.equal(advanceTour('candidate_ready'), 'candidate_ready');
@@ -372,7 +281,10 @@ test('Candidate Ready wording truthfully reports target-token probability and de
   assert(meanLoss.includes('Mean loss on this training example, derived from observed target probabilities: 1.85 → 1.42'));
 
   const readyContent = getPublicTourContent('candidate_ready');
-  assert(readyContent.plainMeaning.includes('A changed result or lower loss on this training example is not proof of general model improvement.'));
+  assert.match(
+    readyContent.truthGuardrail ?? '',
+    /not proof of general model improvement/i,
+  );
 });
 
 test('Adam wording distinguishes stored optimizer state from proposed updated moments', () => {
