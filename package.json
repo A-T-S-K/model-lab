@@ -26,7 +26,8 @@
     "measure:guided": "node --import tsx scripts/measure-guided.ts",
     "test:reference:portable": "python3 -m unittest discover -s tests/reference -v && python3 reference/portable_conformance.py",
     "test:reference:canonical": "python3 -m unittest discover -s tests/canonical -v && python3 reference/generate_fixture.py --check",
-    "prepare:abq": "node scripts/prepare-abq.mjs"
+    "prepare:abq": "node scripts/prepare-abq.mjs",
+    "qualify:public": "node --import tsx scripts/qualify-public-experience.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

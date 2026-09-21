@@ -32,8 +32,8 @@ export async function validateScratchPath(root: string, path: string) {
   return target;
 }
 
-export async function allocateSliceOutput(root: string, destination?: string) {
-  const output = await allocateTestOutput(root, destination);
+export async function allocateSliceOutput(root: string, destination?: string, prefix = 'training-') {
+  const output = await allocateTestOutput(root, destination, prefix);
   // Runner cleanup can only reach this child. Custom evidence and replay handoff
   // remain siblings, never nested in a runner or reporter cleanup directory.
   for (const child of ['runner', 'evidence', 'report']) await mkdir(join(output.directory, child));

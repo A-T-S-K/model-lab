@@ -1,18 +1,35 @@
 import { test, expect, type Page } from '@playwright/test';
-import { mkdir, writeFile, copyFile, readFile } from 'node:fs/promises';
-import { execSync } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { RUNTIME_REVISION } from '../../runtime/revision.js';
+import { join, relative, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  qualificationBrowserContext,
+  writeQualificationJson,
+} from '../support/qualification-evidence.js';
 
-const evidenceDir = process.env.PRE_M5_EVIDENCE_DIR ?? 'test-results/scratch/p0-e3c-review-evidence-20260919-01';
+const root = fileURLToPath(new URL('../../', import.meta.url));
+const qualification = await qualificationBrowserContext(root);
 
 test.describe.configure({ mode: 'serial' });
 
 interface EvidenceCapture {
   filename: string;
+  sha256: string;
+  capturedAt: string;
   viewport: { width: number; height: number };
-  actualState: string;
-  sha256?: string;
+  devicePixelRatio: number;
+  reducedMotion: 'reduce' | 'no-preference';
+  experienceProfile?: string;
+  activeDepth?: string;
+  lesson?: {
+    canonicalState?: string;
+    displayedState?: string;
+    targetState?: string;
+    navigationMode?: string;
+    outcome?: string;
+  };
+  legacyStateLabel: string;
   cameraViewBox?: { x: number; y: number; width: number; height: number };
   evidenceWorldBounds?: Record<string, any>;
   intersectionRatio?: number;
@@ -20,6 +37,8 @@ interface EvidenceCapture {
 }
 
 const manifestCaptures: EvidenceCapture[] = [];
+let browserMetadata: { name: string; version: string } | undefined;
+let servedRuntimeObservation: string | undefined;
 
 async function assertSvgElementInViewBox(
   page: Page,
@@ -149,19 +168,36 @@ async function captureEvidence(
     }
   } catch {}
 
-  const fullPath = `${evidenceDir}/${filename}`;
+  const browser = page.context().browser();
+  if (!browserMetadata && browser) {
+    browserMetadata = { name: browser.browserType().name(), version: browser.version() };
+  }
+  const observed = await page.evaluate(() => ({
+    devicePixelRatio: window.devicePixelRatio,
+    reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'reduce' : 'no-preference',
+    experienceProfile: document.querySelector('.spatial-shell')?.getAttribute('data-experience-profile') ?? undefined,
+    activeDepth: document.querySelector('[data-testid="contextual-dock"]')?.getAttribute('data-active-depth') ?? undefined,
+  }));
+  const fullPath = qualification
+    ? join(qualification.captureDirectory, filename)
+    : test.info().outputPath(filename);
   await page.screenshot({ path: fullPath });
-  let sha256: string | undefined;
-  try {
-    const bytes = await readFile(fullPath);
-    sha256 = createHash('sha256').update(bytes).digest('hex');
-  } catch {}
+  const bytes = await readFile(fullPath);
+  const sha256 = createHash('sha256').update(bytes).digest('hex');
+  const recordedFilename = qualification
+    ? relative(qualification.evidence, fullPath).split(sep).join('/')
+    : filename;
 
   manifestCaptures.push({
-    filename,
-    viewport: vp,
-    actualState,
+    filename: recordedFilename,
     sha256,
+    capturedAt: new Date().toISOString(),
+    viewport: vp,
+    devicePixelRatio: observed.devicePixelRatio,
+    reducedMotion: observed.reducedMotion,
+    experienceProfile: observed.experienceProfile,
+    activeDepth: observed.activeDepth,
+    legacyStateLabel: actualState,
     cameraViewBox,
     evidenceWorldBounds: Object.keys(evidenceWorldBounds).length > 0 ? evidenceWorldBounds : undefined,
     intersectionRatio,
@@ -192,7 +228,6 @@ async function audit(page: Page) {
 }
 
 test('1. Visitor profile DOM omissions hide unneeded workbench controls', async ({ page }) => {
-  await mkdir(evidenceDir, { recursive: true });
   await page.setViewportSize({ width: 1920, height: 1080 });
   await audit(page);
   await page.goto('/?presentation=spatial&kiosk=1');
@@ -201,6 +236,22 @@ test('1. Visitor profile DOM omissions hide unneeded workbench controls', async 
   await captureEvidence(page, '01-attract-1920.png', 'attract', '#exhibit-start');
   await page.locator('#exhibit-start').click();
   await expect(page.getByTestId('status')).toContainText('Live prediction complete');
+  if (qualification) {
+    const servedRuntime = await page.evaluate(() =>
+      (window as any).abq.lastResult?.run?.manifest?.runtimeRevision as string | undefined
+    );
+    servedRuntimeObservation = servedRuntime;
+    await writeQualificationJson(
+      root,
+      qualification.allocation,
+      join(qualification.report, 'served-runtime.json'),
+      {
+        observedAt: new Date().toISOString(),
+        runtimeRevision: servedRuntime ?? null,
+      },
+    );
+    expect(servedRuntime).toBe(qualification.expectedRuntimeIdentity);
+  }
   await captureEvidence(page, '02-prediction-payoff-1920.png', 'prediction payoff', '[data-world-kind="probabilities"]');
 
   // Verify persistent profile marker
@@ -1377,7 +1428,6 @@ test('7. 1280x720 layout and reduced motion visual captures', async ({ page }) =
 });
 
 test('8. P0-E2 Unified contextual dock, depth switching, world dominant floor, and 40vh bound', async ({ page }) => {
-  await mkdir(evidenceDir, { recursive: true });
 
   // 1. Test at 1920x1080
   await page.setViewportSize({ width: 1920, height: 1080 });
@@ -1469,47 +1519,18 @@ test('8. P0-E2 Unified contextual dock, depth switching, world dominant floor, a
 });
 
 test.afterAll(async () => {
-  if (manifestCaptures.length === 0) return;
-  const brainDir = process.env.BRAIN_DIR ?? '/Users/joshuahansen/.gemini/antigravity/brain/3a325773-362b-41b7-8686-9d9806a443f8';
-  try {
-    await mkdir(brainDir, { recursive: true });
-  } catch {}
-
-  for (const capture of manifestCaptures) {
-    const fullPath = `${evidenceDir}/${capture.filename}`;
-    try {
-      await copyFile(fullPath, `${brainDir}/${capture.filename}`);
-    } catch (e) {
-      console.error(`Failed to copy ${capture.filename} to brain directory:`, e);
-    }
-  }
-
-  const manifest = {
-    repository: 'A-T-S-K/model-lab',
-    branch: execSync('git rev-parse --abbrev-ref HEAD').toString().trim(),
-    implementationCommit: execSync('git rev-parse HEAD').toString().trim(),
-    implementationTree: execSync('git rev-parse HEAD^{tree}').toString().trim(),
-    applicationRuntime: RUNTIME_REVISION,
-    nativeRuntime: 'sha256:1e6828657d55bb74295bfc95bd2e7af64d0e7c5516ace241207a7244ff3d012a',
-    generatedFromExactCandidate: true,
-    captures: manifestCaptures,
-  };
-  await writeFile(`${evidenceDir}/manifest.json`, JSON.stringify(manifest, null, 2));
-  try {
-    await copyFile(`${evidenceDir}/manifest.json`, `${brainDir}/manifest.json`);
-  } catch {}
-
-  await writeFile(`${evidenceDir}/qualification-summary.json`, JSON.stringify({
-    qualifiedAt: new Date().toISOString(),
-    candidateCommit: manifest.implementationCommit,
-    candidateTree: manifest.implementationTree,
-    applicationRuntime: manifest.applicationRuntime,
-    nativeRuntime: manifest.nativeRuntime,
-    totalCaptures: manifestCaptures.length,
-    viewports: {
-      '1920x1080': manifestCaptures.filter(c => c.viewport.width === 1920).length,
-      '1280x720': manifestCaptures.filter(c => c.viewport.width === 1280).length,
+  if (!qualification) return;
+  await writeQualificationJson(
+    root,
+    qualification.allocation,
+    join(qualification.report, 'browser-evidence.json'),
+    {
+      schemaVersion: 1,
+      recordedAt: new Date().toISOString(),
+      expectedRuntimeIdentity: qualification.expectedRuntimeIdentity,
+      servedRuntimeRevision: servedRuntimeObservation ?? null,
+      browser: browserMetadata ?? null,
+      captures: manifestCaptures,
     },
-  }, null, 2));
+  );
 });
-

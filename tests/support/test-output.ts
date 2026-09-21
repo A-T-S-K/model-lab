@@ -5,13 +5,14 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 // Test-only ownership: all historical/project paths are outside this namespace.
 // An override names a NEW immediate child; no invocation can adopt an old run.
 // There is deliberately no cleanup API or delete-and-retry collision fallback.
-export async function allocateTestOutput(root: string, destination?: string) {
+export async function allocateTestOutput(root: string, destination?: string, prefix = 'training-') {
   const canonicalRoot = await realpath(root);
   const scratch = join(canonicalRoot, 'test-results', 'scratch');
   if (destination !== undefined && (!destination || destination.includes('\\') ||
       destination.split('/').some(part => part === '..' || part === '.'))) {
     throw new Error('Unsafe output path');
   }
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(prefix)) throw new Error('Unsafe output prefix');
   const requested = destination === undefined ? undefined :
     resolve(canonicalRoot, destination);
   if (requested !== undefined && (dirname(requested) !== scratch ||
@@ -39,7 +40,7 @@ export async function allocateTestOutput(root: string, destination?: string) {
     await verify(directory);
   }
   let directory: string;
-  if (requested === undefined) directory = await mkdtemp(join(scratch, 'training-'));
+  if (requested === undefined) directory = await mkdtemp(join(scratch, prefix));
   else {
     await mkdir(requested, { mode: 0o700 }); // EEXIST is a refusal, including symlinks.
     directory = requested;
