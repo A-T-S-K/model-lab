@@ -243,7 +243,7 @@ test('PD1-2 inverse parameter resolution exactly round-trips runtime flattening 
     { name: 'wpe', row: 3, column: 0 },
     { name: 'layer0.attn_wq', row: 2, column: 3 },
   ]) {
-    const forward = resolveParameter(response.archivedSnapshot, pin)!;
+    const forward: ParameterRef = resolveParameter(response.archivedSnapshot, pin)!;
     assert(forward);
     assert.deepEqual(resolveParameterIndex(response.archivedSnapshot, forward.index), forward);
   }
