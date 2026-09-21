@@ -77,6 +77,11 @@ export function resolveParameter(snapshot:ArchivedSnapshot|undefined,pin:Paramet
  let index=0;
  for(const name of snapshot.state.parameterOrder)for(let row=0;row<snapshot.state.parameters[name].length;row++)for(let column=0;column<snapshot.state.parameters[name][row].length;column++,index++)if(name===pin.name&&row===pin.row&&column===pin.column)return {...pin,index};
 }
+export function resolveParameterIndex(snapshot:ArchivedSnapshot|undefined,index:number):ParameterRef|undefined{
+ if(!snapshot||!Number.isInteger(index)||index<0)return;
+ let flatIndex=0;
+ for(const name of snapshot.state.parameterOrder)for(let row=0;row<snapshot.state.parameters[name].length;row++)for(let column=0;column<snapshot.state.parameters[name][row].length;column++,flatIndex++)if(flatIndex===index)return {index,name,row,column};
+}
 const values=(run:RecordedRun,kind:string,token?:number)=>run.artifacts.find(a=>a.kind===kind&&(token===undefined||a.concept.token===token)&&a.availability==='available')?.values;
 export function targetLosses(run:RecordedRun,experiment:LearningExperiment){
  if(JSON.stringify(run.manifest.input)!==JSON.stringify(experiment.objective.inputIds)||JSON.stringify(run.manifest.targets)!==JSON.stringify(experiment.objective.targetIds))return;

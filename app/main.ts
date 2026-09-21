@@ -11,6 +11,7 @@ import { learningReadModel, resolveParameter, type LearningStage } from "./spati
 import { SpatialPresenter } from "./spatial/presenter.js";
 import { PUBLIC_HOME } from "./spatial/camera.js";
 import { computeLiveTourEvidence, getPublicExecutionStatus } from "./spatial/public-tour.js";
+import { isPublicPart2DetailRenderOnly } from "./spatial/public-training-depth.js";
 import { createPublicLessonSession, getPublicLessonView, transitionPublicLesson, type PublicLessonEvent, type PublicLessonRuntimeEffect, type PublicLessonTransitionContext } from "./presentation/public-lesson-controller.js";
 import { exhibitTiming, exhibitState } from "./presentation/exhibit-state.js";
 import { experienceCapabilities, resolveExperienceProfile, type ExperienceCapabilities, type ExperienceProfile } from "./presentation/experience-profile.js";
@@ -285,18 +286,15 @@ function interpretPublicLessonEffect(effect: PublicLessonRuntimeEffect): void {
       void startForward(true);
       break;
     case 'CONTINUE':
-      syncTrainingPin();
       forwardDriver.continue();
       break;
     case 'PAUSE':
       forwardDriver.pause();
       break;
     case 'RUN_TO_CONTRIBUTION':
-      syncTrainingPin();
       forwardDriver.runToContribution();
       break;
     case 'RUN_TO_PROPOSAL':
-      syncTrainingPin();
       forwardDriver.runToProposal();
       break;
     case 'ACCEPT_CANDIDATE':
@@ -505,9 +503,12 @@ let operation = 0;
 let parameterCount: number | undefined;
 
 function sourceSnapshot(id: string) {
+  const liveStarting = forwardDriver.progress?.training?.readyOutputs?.starting;
   return (
     archive.snapshots.get(id) ??
-    result?.snapshots.find((snapshot) => snapshot.id === id)
+    result?.snapshots.find((snapshot) => snapshot.id === id) ??
+    beforeForward?.snapshots.find((snapshot) => snapshot.id === id) ??
+    (liveStarting?.id === id ? liveStarting : undefined)
   );
 }
 
@@ -821,6 +822,8 @@ function render(): void {
       interventionPending: activeIntervention!==undefined,
       inspectedArm:forwardDriver.progress?.training?.readyOutputs?(result?.run.manifest.runId===forwardDriver.progress.training.readyOutputs.before.manifest.runId?'Current · accepted checkpoint':'Candidate · provisional checkpoint'):interventionExperiment?(result?.run.manifest.runId===interventionExperiment.baselineRun.manifest.runId?'Baseline':result?.run.manifest.runId===interventionExperiment.donorRun?.manifest.runId?'Donor':'Intervention'):variantExperiment?(result?.run.manifest.runId===variantExperiment.baselineRun.manifest.runId?'Canonical definition':'Leaky ReLU definition'):compositeExperiment?(result?.run.manifest.runId===compositeExperiment.baselineRun.manifest.runId?'Canonical definition':result?.run.manifest.runId===compositeExperiment.initializedRun.manifest.runId?'Composite · initialized':'Composite · trained A/B'):undefined,
       document: documentText, busy, ready, status:evidenceRun?'Read-only admitted evidence · no execution requested':status, error, execution: evidenceRun?undefined:forwardDriver.active?forwardDriver:undefined,
+      trainingStartingSnapshot: !evidenceRun && forwardDriver.progress?.training ? sourceSnapshot(forwardDriver.progress.training.startingSnapshotId) : undefined,
+      trainingInspection: !evidenceRun ? inspection : undefined,
       outputPair:interventionExperiment?{before:interventionExperiment.baselineRun,after:interventionExperiment.interventionRun}:variantExperiment?{before:variantExperiment.baselineRun,after:variantExperiment.variantRun}:compositeExperiment?{before:compositeExperiment.baselineRun,after:compositeExperiment.trainedRun}:undefined,
       comparisonLabels:ablation?['Baseline','Head output zeroed']:patch?['Baseline','Donor patched']:variantExperiment?['Canonical ReLU','Leaky ReLU']:compositeExperiment?['Canonical W x','Composite W x + s B(Ax)']:undefined,
       intervention:ablation?{snapshot:ablation.startingSnapshotId,arm:result?.run.manifest.runId===ablation.baselineRun.manifest.runId?'Baseline':'Head output zeroed',summary:`layer ${ablation.selection.layer} / head ${ablation.selection.head} · all positions, aggregated output → zero → concat`}:patch?{snapshot:patch.startingSnapshotId,arm:result?.run.manifest.runId===patch.baselineRun.manifest.runId?'Baseline':result?.run.manifest.runId===patch.donorRun.manifest.runId?'Donor':'Donor patched',summary:`target p${patch.declaration.target.token}/L${patch.declaration.target.layer}/h${patch.declaration.target.head} ← donor p${patch.declaration.donor.token}/L${patch.declaration.donor.layer}/h${patch.declaration.donor.head} · exact observed vector → concat`,receipt:{policy:`${patch.comparison.policy.id}@${patch.comparison.policy.version}`,donor:patch.receipt.donorVector,original:patch.receipt.originalTargetVector,replacement:patch.receipt.effectiveReplacement,noOp:patch.receipt.noOp}}:undefined,
@@ -1058,7 +1061,19 @@ function selectGuidedComparison(): boolean {
 }
 
 // Stable callbacks do not retain a render frame (including its previously focused DOM).
-function spatialSelectionChanged(){if(forwardDriver.active){forwardDriver.follow=false;const previous=forwardDriver.pin;syncTrainingPin();if(previous!==forwardDriver.pin)void forwardDriver.inspectPin(forwardDriver.pin).catch(()=>{});}syncSpatialSelection();clearDisplayedInspection();}
+function spatialSelectionChanged(){
+  const profile=currentProfile();
+  const publicLesson=profile==='workbench'?undefined:currentPublicLessonView();
+  const renderOnlyDetail=isPublicPart2DetailRenderOnly(profile,publicLesson?.content,publicLesson?.navigation.mode);
+  if(forwardDriver.active&&!renderOnlyDetail){
+    forwardDriver.follow=false;
+    const previous=forwardDriver.pin;
+    syncTrainingPin();
+    if(previous!==forwardDriver.pin)void forwardDriver.inspectPin(forwardDriver.pin).catch(()=>{});
+  }
+  syncSpatialSelection();
+  if(!renderOnlyDetail)clearDisplayedInspection();
+}
 function selectExplanationPhase(phase:string){
   const m=spatialLearningModel();
   if(m.available){const id=phase==='after'?m.experiment.afterRunId:m.experiment.trainingRunId;if(result?.run.manifest.runId!==id)selectRun(id);}

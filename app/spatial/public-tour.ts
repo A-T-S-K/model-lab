@@ -84,7 +84,13 @@ export type PublicDepthKind =
   | 'attention-integration'
   | 'mlp'
   | 'logits'
-  | 'probabilities';
+  | 'probabilities'
+  | 'objective'
+  | 'backward-trace'
+  | 'gradient-contribution'
+  | 'final-gradient'
+  | 'adam'
+  | 'candidate';
 
 export type PublicDepthOccurrence =
   | { readonly kind: 'canonical' }
@@ -622,6 +628,7 @@ export function getPublicTourContent(
         truthGuardrail: 'The objective uses multiple target positions, not only the single prediction followed in Part 1.',
         resultConcept: { label: 'Mean training objective' },
         selectionIntent: { kind: 'probabilities', token: 3 },
+        depthSpec: { kind: 'objective', defaultMember: 'objective', members: [{ id: 'objective', role: 'Teacher-forced training objective', kind: 'objective' }] },
         primaryAction: { id: 'reverse-continue', label: 'Continue: Trace backward sensitivity', role: 'primary' },
         optionalActions: [],
       };
@@ -639,6 +646,7 @@ export function getPublicTourContent(
         truthGuardrail: REVERSE_TRUTH_GUARDRAIL,
         resultConcept: { label: 'Backward dependency and sensitivity' },
         selectionIntent: { kind: 'probabilities', token: 3, derivedReverseStop: 0 },
+        depthSpec: { kind: 'backward-trace', defaultMember: 'dependency', members: [{ id: 'dependency', role: 'Backward dependency structure', kind: 'backward-trace' }] },
         primaryAction: { id: 'reverse-continue', label: 'Continue: Inspect one contribution', role: 'primary' },
         optionalActions: [],
       };
@@ -656,6 +664,7 @@ export function getPublicTourContent(
         truthGuardrail: 'One contribution is not the final parameter gradient. The dependency overlay does not claim an observed serial arrival chronology.',
         resultConcept: { label: 'One gradient contribution' },
         selectionIntent: { kind: 'tokenEmbedding', parameter: 'wte', token: 3, derivedReverseStop: 5 },
+        depthSpec: { kind: 'gradient-contribution', defaultMember: 'contribution', members: [{ id: 'contribution', role: 'Retained matching contribution', kind: 'gradient-contribution' }] },
         primaryAction: { id: 'reverse-continue', label: 'Continue: Finish parameter gradient', role: 'primary' },
         optionalActions: [],
       };
@@ -673,6 +682,7 @@ export function getPublicTourContent(
         truthGuardrail: 'The final gradient measures sensitivity. It is not the parameter update and not the new parameter value.',
         resultConcept: { label: 'Final parameter gradient' },
         selectionIntent: { kind: 'tokenEmbedding', parameter: 'wte', token: 3, derivedReverseStop: 5 },
+        depthSpec: { kind: 'final-gradient', defaultMember: 'gradient', members: [{ id: 'gradient', role: 'Completed parameter gradient', kind: 'final-gradient' }] },
         primaryAction: { id: 'reverse-continue', label: 'Continue: Propose candidate with Adam', role: 'primary' },
         optionalActions: [],
       };
@@ -690,6 +700,7 @@ export function getPublicTourContent(
         truthGuardrail: 'Adam is not backward; gradient is not update; proposal is not acceptance.',
         resultConcept: { label: 'Provisional parameter proposal' },
         selectionIntent: { kind: 'wte', parameter: 'wte', token: 3, derivedReverseStop: 6 },
+        depthSpec: { kind: 'adam', defaultMember: 'proposal', members: [{ id: 'proposal', role: 'Provisional Adam proposal', kind: 'adam' }] },
         primaryAction: { id: 'reverse-continue', label: 'Continue: Evaluate candidate', role: 'primary' },
         optionalActions: [],
       };
@@ -707,6 +718,7 @@ export function getPublicTourContent(
         truthGuardrail: 'A changed result or lower loss on this one training example is not proof of general model improvement.',
         resultConcept: { label: 'Provisional candidate outcome' },
         selectionIntent: { kind: 'probabilities', token: 3, derivedShortStop: 0 },
+        depthSpec: { kind: 'candidate', defaultMember: 'comparison', members: [{ id: 'comparison', role: 'Baseline and provisional candidate comparison', kind: 'candidate' }] },
         decisionActions: [
           { id: 'execution-accept', label: 'Accept update', role: 'peer-decision' },
           { id: 'execution-cancel', label: 'Discard candidate', role: 'peer-decision' },

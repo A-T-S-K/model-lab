@@ -9,6 +9,8 @@ import type { ForwardBoundary } from '../../model/microgpt.js';
 import { ExplanationPlayback } from "./playback.js";
 import { learningScene, learningInspector, parameterLabel, learningStations } from "./learning-view.js";
 import { learningPhasePresentation, type LearningModel, type LearningPhasePresentation, type LearningStage, type ParameterPin } from "./learning.js";
+import type { ArchivedSnapshot } from "../../archive/session.js";
+import type { InspectionResult } from "../../inspect/types.js";
 export { learningPhasePresentation, type LearningPhasePresentation } from "./learning.js";
 import { isRegisteredWorld, type AnySpatialReadModel, type MicrogptSelection, type SpatialReadModel } from "./bindings.js";
 import { SpatialCamera, HOME, PUBLIC_HOME, PUBLIC_CONTENT_BOUNDS, responsivePublicFrame, type CameraBox } from "./camera.js";
@@ -20,6 +22,11 @@ import { escapeHtml as esc } from "../views/evidence.js";
 import { experienceCapabilities, type ExperienceProfile } from "../presentation/experience-profile.js";
 import { renderContextualDock, type DockDepth, type PublicTrainingActionState } from "./contextual-dock.js";
 import type { PublicDepthSelection } from './public-depth.js';
+import {
+  isPublicPart2DetailRenderOnly,
+  resolvePublicTrainingParameter,
+  type PublicTrainingDepthSelection,
+} from './public-training-depth.js';
 export { type PublicTrainingActionState } from "./contextual-dock.js";
 import type { PublicLessonFocus, PublicTourState } from './public-tour.js';
 import { getPendingTourActionLabel, getPublicExecutionStatus } from './public-tour.js';
@@ -111,7 +118,7 @@ export const REVERSE_LANDMARKS: readonly ReverseLandmark[] = [
   { stop: 6, name: 'ADAM', technical: 'Optimizer Proposal', purpose: 'Adam computes provisional candidate weights from accumulated gradients and persistent moments.', kind: 'wte' },
 ];
 interface Location {selection:MicrogptSelection;kind:string;element:number;parameter?:string;row:number;column:number;lens:boolean;learningStage?:LearningStage;box:CameraBox}
-export interface PresentationState {profile?:ExperienceProfile;idleResetEnabled?:boolean;idleResetSeconds?:number;retention?:{bytes:number;runs:number;snapshots:number;experiments:number;hardLimitBytes?:number};attract?:boolean;exhibit?:boolean;interventionPending?:boolean;inspectedArm?:string;intervention?:{snapshot:string;arm:string;summary:string;receipt?:{policy:string;donor:readonly number[];original:readonly number[];replacement:readonly number[];noOp:boolean}};patchDonor?:{head:number;token:number};comparison?:{before:ForwardModel;after:ForwardModel}; outputPair?:OutputPair; comparisonLabels?:[string,string]; execution?:ForwardDriver;publicLesson?:PublicLessonView;publicLessonDispatch?:(event:PublicLessonEvent)=>boolean;document:string;busy:boolean;ready:boolean;status:string;error:string;scalar:string; learning?:LearningModel; experiments?:readonly {id:string;step:number}[]; experimentsWindow?:{offset:number;end:number;total:number;hasPrevious:boolean;hasNext:boolean}; experimentId?:string; liveStep?:number; canLearn?:boolean; evidenceWorld?:{label:string;replay:boolean}}
+export interface PresentationState {profile?:ExperienceProfile;idleResetEnabled?:boolean;idleResetSeconds?:number;retention?:{bytes:number;runs:number;snapshots:number;experiments:number;hardLimitBytes?:number};attract?:boolean;exhibit?:boolean;interventionPending?:boolean;inspectedArm?:string;intervention?:{snapshot:string;arm:string;summary:string;receipt?:{policy:string;donor:readonly number[];original:readonly number[];replacement:readonly number[];noOp:boolean}};patchDonor?:{head:number;token:number};comparison?:{before:ForwardModel;after:ForwardModel}; outputPair?:OutputPair; comparisonLabels?:[string,string]; execution?:ForwardDriver;trainingStartingSnapshot?:ArchivedSnapshot;trainingInspection?:InspectionResult;publicLesson?:PublicLessonView;publicLessonDispatch?:(event:PublicLessonEvent)=>boolean;document:string;busy:boolean;ready:boolean;status:string;error:string;scalar:string; learning?:LearningModel; experiments?:readonly {id:string;step:number}[]; experimentsWindow?:{offset:number;end:number;total:number;hasPrevious:boolean;hasNext:boolean}; experimentId?:string; liveStep?:number; canLearn?:boolean; evidenceWorld?:{label:string;replay:boolean}}
 export class SpatialPresenter {
   profile?: ExperienceProfile;
   dockDepth: DockDepth = 'explain';
@@ -123,6 +130,7 @@ export class SpatialPresenter {
   learningRouteStop?:number;
   private publicLessonVisualKey="";
   private publicDepthSelection: PublicDepthSelection = {};
+  private publicTrainingDepthSelection: PublicTrainingDepthSelection = {};
   private shortSelection?:MicrogptSelection;
   private shortMessage="";
   private shortDetour=false;
@@ -152,10 +160,32 @@ export class SpatialPresenter {
     return Boolean(this.state?.exhibit);
   }
 
+  private publicRuntimePin(view = this.state?.publicLesson): ParameterPin | undefined {
+    if (view?.content.part !== 2) return undefined;
+    const ref = resolvePublicTrainingParameter(
+      this.state?.execution?.progress?.training,
+      this.state?.trainingStartingSnapshot,
+    );
+    return ref ? { name: ref.name, row: ref.row, column: ref.column } : undefined;
+  }
+
+  private effectivePublicPin(view = this.state?.publicLesson): ParameterPin {
+    return this.publicRuntimePin(view) ?? this.pin;
+  }
+
+  private publicParameterFocus(view = this.state?.publicLesson): string | undefined {
+    if (!view) return undefined;
+    if (['p2_gradient_contribution', 'p2_final_gradient', 'p2_adam_proposal'].includes(view.currentState)) {
+      return this.publicRuntimePin(view)?.name ?? view.content.selectionIntent.parameter;
+    }
+    return view.content.selectionIntent.parameter;
+  }
+
   resetVisitor(){
     const wasPublic = this.isPublicProfile();
     this.publicLessonVisualKey="";
     this.publicDepthSelection = {};
+    this.publicTrainingDepthSelection = {};
     this.invalidate(); this.playback.cursor=0; this.playback.phase=2; this.playback.follow=true; this.playback.route="forward"; this.camera.detach();
     this.worldPaneObserver?.disconnect(); this.worldPaneObserver = undefined;
     this.camera.box = wasPublic ? this.getResponsivePublicFrame() : { ...HOME };
@@ -183,7 +213,14 @@ export class SpatialPresenter {
     if (!force && key === this.publicLessonVisualKey) return;
     this.publicLessonVisualKey = key;
     this.publicDepthSelection = {};
+    this.publicTrainingDepthSelection = {};
     const intent = view.content.selectionIntent;
+    const runtimePin = this.publicRuntimePin(view);
+    if (runtimePin && ['p2_gradient_contribution', 'p2_final_gradient', 'p2_adam_proposal'].includes(visualState)) {
+      this.pin = { ...runtimePin };
+      this.row = runtimePin.row;
+      this.column = runtimePin.column;
+    }
     this.attentionSubstep = undefined;
     this.dockDepth = 'explain';
     this.construction = Boolean(view.content.focus);
@@ -193,10 +230,12 @@ export class SpatialPresenter {
     if (visualState === 'candidate_ready') {
       this.go({ kind: 'probabilities', token: intent.token ?? 3 }, true);
     } else if (intent.derivedReverseStop === 5) {
-      const ownerKind = parameterOwners[this.pin.name] ?? 'tokenEmbedding';
+      const pin = runtimePin ?? this.pin;
+      const ownerKind = parameterOwners[pin.name] ?? 'tokenEmbedding';
       this.go({ kind: ownerKind, token: intent.token }, true);
     } else if (intent.derivedReverseStop === 6) {
-      this.go({ kind: this.pin.name, token: intent.token }, true);
+      const pin = runtimePin ?? this.pin;
+      this.go({ kind: pin.name, token: intent.token }, true);
     } else {
       this.go({kind:intent.kind,token:intent.token,...(intent.layer !== undefined ? { layer: intent.layer } : {}),...(intent.head !== undefined ? { head: intent.head } : {})}, true);
     }
@@ -224,8 +263,9 @@ export class SpatialPresenter {
     }
 
     const anchor = view.content.selectionIntent;
-    const anchorElements = anchor.parameter
-      ? Array.from(root.querySelectorAll('[data-world-parameter]')).filter(el => el.getAttribute('data-world-parameter') === anchor.parameter)
+    const parameterFocus = this.publicParameterFocus(view);
+    const anchorElements = parameterFocus
+      ? Array.from(root.querySelectorAll('[data-world-parameter]')).filter(el => el.getAttribute('data-world-parameter') === parameterFocus)
       : Array.from(root.querySelectorAll(nodeSelector(anchor.kind, anchor.layer, anchor.head)));
     for (const el of anchorElements) {
       el.classList.remove('explanation-input');
@@ -251,11 +291,12 @@ export class SpatialPresenter {
     if (!locator || !pane || !view || (view.navigation.mode !== 'guided' && view.navigation.mode !== 'detail')) return;
 
     const intent = view.content.selectionIntent;
+    const parameterFocus = this.publicParameterFocus(view);
     const repeated = this.model?.forward.descriptor.presentation === 'microgpt-repeated-blocks';
     const nodeSelector = (kind: string, layer?: number, head?: number) =>
       `[data-world-kind="${kind}"]${repeated && layer !== undefined ? `[data-world-layer="${layer}"]` : ''}${head !== undefined ? `[data-world-head="${head}"]` : ''}`;
-    const anchor = intent.parameter
-      ? Array.from(root.querySelectorAll('[data-world-parameter]')).find(el => el.getAttribute('data-world-parameter') === intent.parameter)
+    const anchor = parameterFocus
+      ? Array.from(root.querySelectorAll('[data-world-parameter]')).find(el => el.getAttribute('data-world-parameter') === parameterFocus)
       : root.querySelector(nodeSelector(intent.kind, intent.layer, intent.head));
     if (!anchor) return;
 
@@ -556,9 +597,10 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
     const publicCurrentState = state.publicLesson?.canonicalState ?? 'cold';
     const publicTargetState = state.publicLesson?.targetState;
     const publicNavigationMode = state.publicLesson?.navigation.mode ?? 'guided';
+    const effectivePublicPin = isPublicProfile ? this.effectivePublicPin(state.publicLesson) : this.pin;
     const trainingState = computeTrainingActionState(
       state.execution,
-      this.pin,
+      effectivePublicPin,
       isPublicProfile,
       publicTargetState,
       publicCurrentState,
@@ -567,11 +609,12 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
       if (!tourContent || state.attract || state.evidenceWorld || (publicNavigationMode !== 'guided' && publicNavigationMode !== 'detail')) return '';
       if (tourContent.state === 'cold' || tourContent.state === 'p1_complete' || tourContent.state === 'tour_complete') return '';
       const intent = tourContent.selectionIntent;
+      const parameterFocus = this.publicParameterFocus(state.publicLesson);
       const occurrence = [
-        intent.parameter ? `${intent.parameter}[${this.pin.row},${this.pin.column}]` : `p${intent.token}`,
+        parameterFocus ? `${parameterFocus}[${effectivePublicPin.row},${effectivePublicPin.column}]` : `p${intent.token}`,
         intent.head === undefined ? '' : `h${intent.head}`,
       ].filter(Boolean).join(' · ');
-      return `<div class="teaching-locator" data-testid="teaching-locator" data-world-kind="${esc(intent.kind)}" data-world-parameter="${esc(intent.parameter ?? '')}"><strong>${esc(tourContent.headline)}</strong>${occurrence ? `<span>${esc(occurrence)}</span>` : ''}</div>`;
+      return `<div class="teaching-locator" data-testid="teaching-locator" data-world-kind="${esc(intent.kind)}" data-world-parameter="${esc(parameterFocus ?? '')}"><strong>${esc(tourContent.headline)}</strong>${occurrence ? `<span>${esc(occurrence)}</span>` : ''}</div>`;
     })();
     if (tourContent) {
       if (state.attract) {
@@ -670,7 +713,7 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
     const publicLearningMarkup = isPublicProfile
       ? (m ? publicLearningScene({
           f: m.forward,
-          pin: this.pin,
+          pin: effectivePublicPin,
           training: state.execution?.progress?.training,
           learning: state.learning,
           learningRouteStop: this.derivedLearningRouteStop,
@@ -702,7 +745,7 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
         parameter: this.parameter,
         row: this.row,
         column: this.column,
-        pin: this.pin,
+        pin: effectivePublicPin,
         scalar: state.scalar,
         depth: this.dockDepth,
         profile,
@@ -728,6 +771,10 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
         selectedLabel: label,
         tourContent,
         publicDepthSelection: this.publicDepthSelection,
+        publicTrainingDepthSelection: this.publicTrainingDepthSelection,
+        trainingStartingSnapshot: state.trainingStartingSnapshot,
+        trainingPreview: state.execution?.preview,
+        trainingInspection: state.trainingInspection,
       })}</div>` : `<div class="world-workspace ${lensActive?"has-lens":""}"><div class="world-pane ${sceneOpen?"has-construction":""}">${sceneSvg(m.forward,a,s.key,this.learningStage?this.pin.name:this.parameter,m.labels,s.query,state.comparison??(this.learningStage==="compare"&&state.learning?.available?state.learning.comparison:undefined),expertLearningMarkup,state.execution?.progress,this.element)}<div class="camera-controls"><button id="zoom-in" aria-label="Zoom in">+</button><button id="zoom-out" aria-label="Zoom out">−</button><button data-pan="-1,0" aria-label="Pan left">←</button><button data-pan="1,0" aria-label="Pan right">→</button><button data-pan="0,-1" aria-label="Pan up">↑</button><button data-pan="0,1" aria-label="Pan down">↓</button></div>
       <div class="selection-card" data-landmark-anchor="${a.kind}" data-landmark-token="${a.token}" data-landmark-layer="${a.layer ?? ''}" data-landmark-run="${esc(m?.source.sourceRunId ?? '')}"><div data-testid="landmark-occurrence" data-semantic-anchor="${a.kind}" data-position="${a.token}" data-layer="${a.layer !== undefined ? a.layer : ''}" data-run-id="${esc(m?.source.sourceRunId ?? '')}" style="display:none;" aria-hidden="true"></div><small>SELECTED WORLD OBJECT</small><strong data-testid="selected-world-object" data-semantic-anchor="${a.kind}" data-position="${a.token}" data-layer="${a.layer ?? ''}" data-run-id="${esc(m?.source.sourceRunId ?? '')}">${esc(label)}</strong><span>layer ${a.layer??'model'} · position ${a.token} · query ${s.query} / key ${s.key} · head ${s.head}</span><span>${state.comparison?`${labels[0]}: neutral. ${labels[1]}: cyan. Shared scale per pair.`:this.learningStage==="compare"?"Before: neutral. After: cyan. Shared scale per pair.":"Signed strips: independent scales. Q/K lens: shared scale."}</span><div class="selection-actions"><button id="open-spatial-detail">Values / arithmetic / source</button><button id="scene-construction">${this.construction?"Close scene math":"Scene math"}</button></div>${this.kind==="headOutput"&&!state.evidenceWorld?`${capabilities.headAblation?`<button id="spatial-ablate" ${state.execution||state.busy?"disabled":""}>Test without this head</button>`:""}${capabilities.donorPatch?`<button id="spatial-patch" ${state.execution||state.busy?"disabled":""}>Patch from observed donor</button>`:""}<small class="head-action-scope">${state.execution?"Finish/cancel execution or accept/discard candidate first.":`Selected checkpoint ${esc((m.source.sourceSnapshotId??"unavailable").slice(0,19))}… · ablation: all positions; patch target: p${s.query}/h${s.head}, donor: p${state.patchDonor?.token??0}/h${state.patchDonor?.head??0}; after aggregation / before concat.`}</small>`:""}${!m.valid?'<p role="alert">Selection unavailable in this run. Choose valid indices; prior evidence is not rebound.</p>':""}</div>
       <svg class="world-minimap" viewBox="0 0 ${m.forward.descriptor.presentation==='microgpt-canonical-curated'?4500:1250+m.forward.layers*2500} ${m.forward.descriptor.presentation==='microgpt-canonical-curated'?1700:Math.max(1500,420+m.forward.heads*270)}" aria-label="Same world camera footprint"><path d="M100 600 H${m.forward.descriptor.presentation==='microgpt-canonical-curated'?4300:1050+m.forward.layers*2500}"/>${m.forward.operations.map((o)=>{const t=stationForWorld(m.forward,o.kind,s.head,s.layer);return `<rect x="${t.x}" y="${t.y}" width="100" height="160" class="${o.kind===this.kind?"selected":""}"/>`;}).join("")}<rect id="camera-footprint"/></svg>${sceneOpen?sceneConstruction(m,a,this.element,state.execution?.progress):""}</div>
@@ -926,7 +973,22 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
         changed();render();
       });
     });
+    root.querySelectorAll<HTMLElement>('[data-training-objective-position],[data-training-contribution-ordinal],[data-training-candidate-position]').forEach(el=>{
+      el.addEventListener('click',event=>{
+        event.stopPropagation();
+        const next: PublicTrainingDepthSelection = { ...this.publicTrainingDepthSelection };
+        if(el.dataset.trainingObjectivePosition!==undefined) next.objectivePosition=Number(el.dataset.trainingObjectivePosition);
+        if(el.dataset.trainingContributionOrdinal!==undefined) next.contributionOrdinal=Number(el.dataset.trainingContributionOrdinal);
+        if(el.dataset.trainingCandidatePosition!==undefined) next.candidatePosition=Number(el.dataset.trainingCandidatePosition);
+        this.publicTrainingDepthSelection=next;
+        render();
+      });
+    });
     const select=(el:HTMLElement|SVGElement)=>{
+      if(isPublicPart2DetailRenderOnly(this.profile, this.state?.publicLesson?.content, this.state?.publicLesson?.navigation.mode)){
+        render();
+        return;
+      }
       if(el.dataset.worldKind){
         const worldKind=el.dataset.worldKind;
         if(this.isPublicProfile()&&this.state?.publicLesson?.navigation.mode==='detail'){
@@ -960,7 +1022,7 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
       if(token<0||token>=m.forward.input.length){root.querySelector("#parameter-output")?.insertAdjacentHTML("afterend",'<p role="status">This lookup row has no occurrence in the selected run; checkpoint values remain available.</p>');return;}
       this.go({kind,token,...(owner?.layer===undefined?{}:{layer:owner.layer})});this.element=name==="wte"||name==="wpe"?this.column:this.row;change();
     });
-    root.addEventListener('click',event=>{const el=(event.target as Element).closest<HTMLElement>('button,[data-world-kind],[data-learning-stage]');if(el&&!el.id.startsWith('explanation-')&&!el.id.startsWith('waypoint-')&&!el.id.startsWith('short-')&&!el.id.startsWith('attention-')&&!el.id.startsWith('reverse-')&&el.id!=='start-reverse-learning'&&el.id!=='short-teach'&&el.id!=='tour-restart'&&el.id!=='execution-accept'&&el.id!=='execution-cancel'&&el.id!=='facilitator-attention-detail'&&el.dataset.shortStop===undefined&&el.dataset.reverseStop===undefined&&el.dataset.dockDepth===undefined&&el.dataset.depthMember===undefined&&el.dataset.depthKey===undefined&&el.dataset.depthHead===undefined&&el.dataset.depthElement===undefined&&el.dataset.depthHiddenFeature===undefined&&el.dataset.depthOutputFeature===undefined&&!el.classList.contains('dock-tab')&&!el.classList.contains('dock-tab-close')&&el.id!=='visitor-explore-toggle'&&el.id!=='operator-controls'&&el.id!=='scene-construction'&&el.id!=='open-spatial-detail'&&el.id!=='close-spatial-lens'&&el.id!=='spatial-focus'&&!el.id.startsWith('zoom-')&&el.dataset.pan===undefined){this.interrupt();const status=root.querySelector('[data-testid="explanation-status"]');if(status&&this.playback.source)status.textContent=`Explore detour · ${this.playback.cursor+1}/${this.playback.length}`;}},{capture:true});
+    root.addEventListener('click',event=>{const el=(event.target as Element).closest<HTMLElement>('button,[data-world-kind],[data-learning-stage]');if(el&&!el.id.startsWith('explanation-')&&!el.id.startsWith('waypoint-')&&!el.id.startsWith('short-')&&!el.id.startsWith('attention-')&&!el.id.startsWith('reverse-')&&el.id!=='start-reverse-learning'&&el.id!=='short-teach'&&el.id!=='tour-restart'&&el.id!=='execution-accept'&&el.id!=='execution-cancel'&&el.id!=='facilitator-attention-detail'&&el.dataset.shortStop===undefined&&el.dataset.reverseStop===undefined&&el.dataset.dockDepth===undefined&&el.dataset.depthMember===undefined&&el.dataset.depthKey===undefined&&el.dataset.depthHead===undefined&&el.dataset.depthElement===undefined&&el.dataset.depthHiddenFeature===undefined&&el.dataset.depthOutputFeature===undefined&&el.dataset.trainingObjectivePosition===undefined&&el.dataset.trainingContributionOrdinal===undefined&&el.dataset.trainingCandidatePosition===undefined&&!el.classList.contains('dock-tab')&&!el.classList.contains('dock-tab-close')&&el.id!=='visitor-explore-toggle'&&el.id!=='operator-controls'&&el.id!=='scene-construction'&&el.id!=='open-spatial-detail'&&el.id!=='close-spatial-lens'&&el.id!=='spatial-focus'&&!el.id.startsWith('zoom-')&&el.dataset.pan===undefined){this.interrupt();const status=root.querySelector('[data-testid="explanation-status"]');if(status&&this.playback.source)status.textContent=`Explore detour · ${this.playback.cursor+1}/${this.playback.length}`;}},{capture:true});
     root.querySelector('#explanation-route')?.addEventListener('change',event=>{this.invalidate();this.routeChoice=(event.target as HTMLSelectElement).value as 'forward'|'learning';render();});
     root.querySelector('#explanation-follow')?.addEventListener('change',event=>{this.playback.follow=(event.target as HTMLInputElement).checked;this.interrupt();render();});
     on('#explanation-play',()=>{if(this.playback.playing){this.playback.pause();render();}else{if(!this.playback.source)this.start();this.playback.play();}});

@@ -1,7 +1,9 @@
 import type { SpatialReadModel } from './bindings.js';
 import type { Address, Explanation } from './forward.js';
 import { operations, parameterOwners } from './forward.js';
-import type { ForwardProgress } from '../worker/protocol.js';
+import type { ForwardProgress, RunResult } from '../worker/protocol.js';
+import type { ArchivedSnapshot } from '../../archive/session.js';
+import type { InspectionResult } from '../../inspect/types.js';
 import type { TrainingProgress } from '../worker/training-execution.js';
 import type { LearningModel, LearningStage, ParameterPin } from './learning.js';
 import type { PublicTourContent } from './public-tour.js';
@@ -11,6 +13,11 @@ import {
   type ResolvedPublicDepthContext,
   type ResolvedPublicDepthMember,
 } from './public-depth.js';
+import {
+  resolvePublicTrainingDepthContext,
+  type PublicTrainingDepthSelection,
+  type ResolvedPublicTrainingDepthContext,
+} from './public-training-depth.js';
 import { formatAdamGlanceNote, formatCandidateOutcomeMeanLoss, formatCandidateTargetTokenProbability } from './public-tour.js';
 import { outputTokenName, outputSummary, outputMetrics, componentComparison, type OutputPair } from './comparison.js';
 import { geometry, projection } from './view.js';
@@ -74,6 +81,10 @@ export interface ContextualDockOptions {
   readonly selectedLabel?: string;
   readonly tourContent?: PublicTourContent;
   readonly publicDepthSelection?: PublicDepthSelection;
+  readonly publicTrainingDepthSelection?: PublicTrainingDepthSelection;
+  readonly trainingStartingSnapshot?: ArchivedSnapshot;
+  readonly trainingPreview?: RunResult;
+  readonly trainingInspection?: InspectionResult;
 }
 
 function renderExplain(opts: ContextualDockOptions): string {
@@ -299,6 +310,206 @@ function stepTeachingSection(m: SpatialReadModel, a: Address, element: number): 
 function resolvedPart1Depth(opts: ContextualDockOptions): ResolvedPublicDepthContext | undefined {
   if (!opts.model || opts.tourContent?.part !== 1 || !opts.tourContent.depthSpec) return undefined;
   return resolvePublicDepthContext(opts.tourContent, opts.model, opts.publicDepthSelection);
+}
+
+function resolvedPart2Depth(opts: ContextualDockOptions): ResolvedPublicTrainingDepthContext | undefined {
+  if (opts.tourContent?.part !== 2 || !opts.tourContent.depthSpec) return undefined;
+  return resolvePublicTrainingDepthContext(
+    opts.tourContent,
+    opts.executionProgress,
+    opts.trainingStartingSnapshot,
+    opts.trainingPreview,
+    opts.publicTrainingDepthSelection,
+    opts.trainingInspection,
+  );
+}
+
+function publicTrainingUnavailable(ctx: ResolvedPublicTrainingDepthContext, depth: 'values' | 'math' | 'source'): string {
+  return `<div class="dock-${depth}-content" data-testid="dock-${depth}" data-public-training-depth-kind="${esc(ctx.kind)}">
+    <p data-testid="public-training-depth-unavailable"><strong>UNAVAILABLE</strong> · ${esc(ctx.reason ?? 'Compatible live training evidence is unavailable.')}</p>
+  </div>`;
+}
+
+function publicTrainingParameter(ctx: ResolvedPublicTrainingDepthContext): string {
+  const p = ctx.parameter;
+  return p ? `${esc(p.name)}[${p.row},${p.column}] · flat index ${p.index}` : 'unavailable';
+}
+
+function publicTrainingDistribution(values: readonly number[], labels: readonly string[]): string {
+  return values.map((value, index) => `${esc(labels[index] ?? String(index))} ${fmt(value)}`).join(' · ');
+}
+
+function renderPublicPart2Values(opts: ContextualDockOptions, ctx: ResolvedPublicTrainingDepthContext): string {
+  if (!ctx.available) return publicTrainingUnavailable(ctx, 'values');
+  if (ctx.kind === 'objective') {
+    const objective = ctx.objective!;
+    return `<div class="dock-values-content" data-testid="dock-values" data-public-training-depth-kind="objective">
+      <h3>All teacher-forced training positions</h3>
+      <table data-testid="public-training-objective"><thead><tr><th>Position / input</th><th>Known target</th><th>P(target) [origin]</th><th>Recorded loss [origin]</th></tr></thead><tbody>
+        ${objective.rows.map(row => `<tr><th><button data-training-objective-position="${row.position}" ${row.position === objective.selectedPosition ? 'aria-pressed="true"' : ''}>p${row.position}</button> · ${esc(row.inputLabel)}${row.input === undefined ? '' : ` (${row.input})`}</th><td>${esc(row.targetLabel)} (${row.target})</td><td>${row.probability === undefined ? 'unavailable [UNAVAILABLE]' : `${fmt(row.probability)} [OBSERVED]`}</td><td>${row.recordedLoss === undefined ? 'pending [PENDING]' : `${fmt(row.recordedLoss)} [OBSERVED]`}</td></tr>`).join('')}
+      </tbody></table>
+      <p>Observed mean objective: ${objective.observedMean === undefined ? 'pending' : fmt(objective.observedMean)} ${objective.observedMean === undefined ? '[PENDING]' : '[OBSERVED]'}</p>
+    </div>`;
+  }
+  if (ctx.kind === 'backward-trace') {
+    return `<div class="dock-values-content" data-testid="dock-values" data-public-training-depth-kind="backward-trace">
+      <h3>Backward witness</h3>
+      <p>Objective source: <code>${esc(ctx.gradientSourceRunId ?? 'unavailable')}</code></p>
+      <p>Runtime parameter witness: <strong>${publicTrainingParameter(ctx)}</strong></p>
+      <p>Dependency topology: STRUCTURAL · numeric sensitivity: ${ctx.numericAdjointsAvailable ? 'AVAILABLE from already-verified inspection evidence' : 'UNAVAILABLE in the retained detail context'}</p>
+    </div>`;
+  }
+  if (ctx.kind === 'gradient-contribution') {
+    return `<div class="dock-values-content" data-testid="dock-values" data-public-training-depth-kind="gradient-contribution">
+      <h3>Retained matching live contributions · ${publicTrainingParameter(ctx)}</h3>
+      <p data-testid="retained-contribution-truth">This list is a retained matching subset, capped by the live transaction. It is not claimed to be complete fan-in.</p>
+      <table data-testid="public-training-contributions"><thead><tr><th>Occurrence ordinal</th><th>Child</th><th>Operand</th><th>Child adjoint</th><th>Local derivative</th><th>Contribution</th><th>Before</th><th>After</th></tr></thead><tbody>
+        ${ctx.retainedContributions.map(event => `<tr><td><button data-training-contribution-ordinal="${event.ordinal}" ${event.ordinal === ctx.selectedContribution?.ordinal ? 'aria-pressed="true"' : ''}>${event.ordinal}</button></td><td>${event.child ?? 'unavailable'}</td><td>${event.operand}</td><td>${fmt(event.childAdjoint)}</td><td>${fmt(event.localDerivative)}</td><td>${fmt(event.contribution)}</td><td>${fmt(event.before)}</td><td>${fmt(event.after)}</td></tr>`).join('')}
+      </tbody></table>
+    </div>`;
+  }
+  if (ctx.kind === 'final-gradient') {
+    return `<div class="dock-values-content" data-testid="dock-values" data-public-training-depth-kind="final-gradient">
+      <h3>Completed parameter gradient · ${publicTrainingParameter(ctx)}</h3>
+      <p>Backward complete: <strong>${ctx.backwardComplete ? 'YES' : 'NO'}</strong></p>
+      <p>Authentic final gradient: <span data-testid="public-final-gradient">${ctx.finalGradient === undefined ? 'unavailable' : fmt(ctx.finalGradient)}</span></p>
+      <p data-testid="retained-fanin-status">Retained contribution rows: ${ctx.retainedContributions.length} · completeness: RETAINED SUBSET, not complete fan-in.</p>
+    </div>`;
+  }
+  if (ctx.kind === 'adam') {
+    const u = ctx.proposal!;
+    const o = ctx.optimizer!;
+    return `<div class="dock-values-content" data-testid="dock-values" data-public-training-depth-kind="adam">
+      <h3>Adam proposal · ${publicTrainingParameter(ctx)}</h3>
+      <table data-testid="public-adam-values"><tbody>
+        <tr><th>Starting accepted optimizer step</th><td>${ctx.acceptedStep}</td></tr>
+        <tr><th>Bias-correction exponent step</th><td>${(ctx.acceptedStep ?? 0) + 1}</td></tr>
+        <tr><th>θ before</th><td>${val(u.before)}</td></tr><tr><th>g</th><td>${val(u.gradient)}</td></tr>
+        <tr><th>m before → after</th><td>${val(u.mBefore)} → ${val(u.mAfter)}</td></tr>
+        <tr><th>v before → after</th><td>${val(u.vBefore)} → ${val(u.vAfter)}</td></tr>
+        <tr><th>β1 / β2</th><td>${val(o.beta1)} / ${val(o.beta2)}</td></tr>
+        <tr><th>ε</th><td>${val(o.epsilon)}</td></tr><tr><th>effective learning rate</th><td>${val(o.effectiveLearningRate)}</td></tr>
+        <tr><th>bias correction 1 / 2</th><td>${val(u.biasCorrection1)} / ${val(u.biasCorrection2)}</td></tr>
+        <tr><th>mHat / vHat</th><td>${val(u.mHat)} / ${val(u.vHat)}</td></tr>
+        <tr><th>stored delta</th><td>${val(u.delta)}</td></tr><tr><th>provisional θ after</th><td>${val(u.after)}</td></tr>
+      </tbody></table>
+      <p><strong>PROVISIONAL</strong> · ACCEPTED MODEL UNCHANGED</p>
+    </div>`;
+  }
+  const candidate = ctx.candidate!;
+  return `<div class="dock-values-content" data-testid="dock-values" data-public-training-depth-kind="candidate">
+    <h3>Baseline vs provisional candidate · same training example</h3>
+    <table data-testid="public-candidate-values"><thead><tr><th>Position</th><th>Input → target</th><th>Baseline full distribution</th><th>Candidate full distribution</th><th>P(target)</th></tr></thead><tbody>
+      ${candidate.rows.map(row => `<tr><th><button data-training-candidate-position="${row.position}" ${row.position === candidate.selectedPosition ? 'aria-pressed="true"' : ''}>p${row.position}</button></th><td>${esc(row.inputLabel)} → ${esc(row.targetLabel)}</td><td>${publicTrainingDistribution(row.baselineDistribution, candidate.outputLabels)}</td><td>${publicTrainingDistribution(row.candidateDistribution, candidate.outputLabels)}</td><td>${fmt(row.baselineTargetProbability)} → ${fmt(row.candidateTargetProbability)}</td></tr>`).join('')}
+    </tbody></table>
+    <p>Complete output domain: ${candidate.outputLabels.map(esc).join(', ')}.</p>
+    <p>candidate evaluated · candidate provisional · candidate not accepted · candidate not live</p>
+  </div>`;
+}
+
+function renderPublicPart2Math(opts: ContextualDockOptions, ctx: ResolvedPublicTrainingDepthContext): string {
+  if (!ctx.available) return publicTrainingUnavailable(ctx, 'math');
+  if (ctx.kind === 'objective') {
+    const objective = ctx.objective!;
+    const row = objective.rows.find(candidate => candidate.position === objective.selectedPosition) ?? objective.rows[0];
+    return `<div class="dock-math-content" data-testid="dock-math" data-public-training-depth-kind="objective">
+      <h3>Cross-entropy witness · p${row?.position ?? 0}</h3>
+      ${row?.derivedLoss === undefined ? '<p>DERIVED −log(Ptarget): unavailable because authentic target probability is unavailable.</p>' : `<p>DERIVED: −log(${fmt(row.probability)}) = ${fmt(row.derivedLoss)}</p>`}
+      <p>Recorded loss: ${row?.recordedLoss === undefined ? 'unavailable' : fmt(row.recordedLoss)} ${row?.recordedLoss === undefined ? '[UNAVAILABLE]' : '[OBSERVED]'}</p>
+      ${objective.derivedMean === undefined ? '<p>DERIVED mean unavailable until every authentic recorded per-position loss operand is available.</p>' : `<p>DERIVED: sum(${objective.rows.length} observed per-position losses) / ${objective.rows.length} = ${fmt(objective.derivedMean)}</p>`}
+      <p>Observed runtime mean: ${objective.observedMean === undefined ? 'unavailable' : fmt(objective.observedMean)} ${objective.observedMean === undefined ? '[UNAVAILABLE]' : '[OBSERVED]'}</p>
+    </div>`;
+  }
+  if (ctx.kind === 'backward-trace') {
+    return `<div class="dock-math-content" data-testid="dock-math" data-public-training-depth-kind="backward-trace">
+      <h3>Chain-rule structure</h3><p>incoming sensitivity × local derivative → contribution to an upstream value or parameter use</p>
+      <p>No numerical adjoint is substituted here. Numeric adjoints are ${ctx.numericAdjointsAvailable ? 'available only from already-verified bound inspection evidence.' : 'unavailable in this retained context.'}</p>
+    </div>`;
+  }
+  if (ctx.kind === 'gradient-contribution') {
+    const event = ctx.selectedContribution;
+    return `<div class="dock-math-content" data-testid="dock-math" data-public-training-depth-kind="gradient-contribution">
+      <h3>One retained matching contribution · ${publicTrainingParameter(ctx)}</h3>
+      ${event ? `<p>Occurrence ordinal ${event.ordinal} · operand ${event.operand} · child ${event.child ?? 'unavailable'}</p>
+        <p data-testid="public-contribution-math">${fmt(event.childAdjoint)} × ${fmt(event.localDerivative)} = ${fmt(event.contribution)}</p>
+        <p data-testid="public-accumulator-math">${fmt(event.before)} + ${fmt(event.contribution)} = ${fmt(event.after)}</p>
+        ${event.child === undefined ? '' : `<button data-live-child="${event.child}" data-live-source="${esc(ctx.gradientSourceRunId ?? '')}">Inspect this retained child scalar in Microscope</button>`}` : '<p>No matching retained contribution is available.</p>'}
+      <p>This occurrence ordinal identifies the retained event. It is not wall-clock arrival timing or teaching chronology.</p>
+      <section class="spatial-scalar" id="microscope"><h3>Scalar / source inspection</h3>${opts.scalar}</section>
+    </div>`;
+  }
+  if (ctx.kind === 'final-gradient') {
+    const event = ctx.selectedContribution;
+    return `<div class="dock-math-content" data-testid="dock-math" data-public-training-depth-kind="final-gradient">
+      <h3>Completed backward result</h3>
+      <p>Final gradient = ${ctx.finalGradient === undefined ? 'unavailable' : fmt(ctx.finalGradient)} [OBSERVED COMPLETED BACKWARD RESULT]</p>
+      <p data-testid="no-retained-sum">The retained matching contribution subset is not summed or presented as complete fan-in.</p>
+      ${event?.child === undefined ? '' : `<button data-live-child="${event.child}" data-live-source="${esc(ctx.gradientSourceRunId ?? '')}">Inspect a retained contributing child scalar in Microscope</button>`}
+      <section class="spatial-scalar" id="microscope"><h3>Scalar / source inspection</h3>${opts.scalar}</section>
+    </div>`;
+  }
+  if (ctx.kind === 'adam') {
+    const u = ctx.proposal!, o = ctx.optimizer!;
+    const symbolic = o.effectiveLearningRate * u.mHat / (Math.sqrt(u.vHat) + o.epsilon);
+    const symbolicAfter = u.before - symbolic;
+    return `<div class="dock-math-content" data-testid="dock-math" data-public-training-depth-kind="adam">
+      <h3>Native Adam equations · ${publicTrainingParameter(ctx)}</h3>
+      <p>m′ = β1·m + (1−β1)·g = ${fmt(u.mAfter)}</p>
+      <p>v′ = β2·v + (1−β2)·g² = ${fmt(u.vAfter)}</p>
+      <p>mHat = m′ / biasCorrection1 = ${fmt(u.mHat)}</p>
+      <p>vHat = v′ / biasCorrection2 = ${fmt(u.vHat)}</p>
+      <p>DERIVED symbolic step quantity = effectiveLearningRate × mHat / (sqrt(vHat) + epsilon) = ${fmt(symbolic)}</p>
+      <p>DERIVED θ′ = θ − symbolic step quantity = ${fmt(symbolicAfter)}</p>
+      <p>OBSERVED stored delta = actual representable θ′ − θ = ${fmt(u.delta)}; proposed θ′ = ${fmt(u.after)}.</p>
+      <p>Starting accepted optimizer step = ${ctx.acceptedStep}; bias-correction exponent uses acceptedStep + 1 = ${(ctx.acceptedStep ?? 0) + 1}.</p>
+      <p><strong>PROVISIONAL</strong> · ACCEPTED MODEL UNCHANGED</p>
+    </div>`;
+  }
+  const candidate = ctx.candidate!;
+  const row = candidate.rows.find(item => item.position === candidate.selectedPosition) ?? candidate.rows[0];
+  return `<div class="dock-math-content" data-testid="dock-math" data-public-training-depth-kind="candidate">
+    <h3>Derived candidate comparison · p${row?.position ?? 0}</h3>
+    ${row?.baselineDerivedLoss === undefined || row?.candidateDerivedLoss === undefined ? '<p>DERIVED per-position loss unavailable because complete authentic target probability support is unavailable.</p>' : `<p>DERIVED baseline loss = −log(${fmt(row.baselineTargetProbability)}) = ${fmt(row.baselineDerivedLoss)}</p><p>DERIVED candidate loss = −log(${fmt(row.candidateTargetProbability)}) = ${fmt(row.candidateDerivedLoss)}</p>`}
+    <p>DERIVED baseline mean: ${candidate.baselineDerivedMean === undefined ? 'unavailable' : fmt(candidate.baselineDerivedMean)}</p>
+    <p>DERIVED candidate mean: ${candidate.candidateDerivedMean === undefined ? 'unavailable' : fmt(candidate.candidateDerivedMean)}</p>
+    <p>These derived values describe this one fixed training example only; they do not establish general model quality.</p>
+  </div>`;
+}
+
+function renderPublicPart2Source(ctx: ResolvedPublicTrainingDepthContext): string {
+  if (!ctx.available) return publicTrainingUnavailable(ctx, 'source');
+  const common = `<div class="dock-provenance-grid">
+    <p><strong>LIVE TRAINING TRANSACTION</strong></p>
+    <p>Execution: <code>${esc(ctx.executionId ?? 'unavailable')}</code></p>
+    <p>Phase: ${esc(ctx.phase ?? 'unavailable')}</p>
+    <p>Starting snapshot: <code>${esc(ctx.startingSnapshotId ?? 'unavailable')}</code></p>
+    <p>Training source: <code>${esc(ctx.gradientSourceRunId ?? 'unavailable')}</code></p>
+    <p>Current source: <code>${esc(ctx.sourceRunId ?? 'unavailable')}</code></p>
+    <p>Parameter witness: ${publicTrainingParameter(ctx)}</p>
+    <p>Runtime: <code>${esc(ctx.runtimeVersion ?? 'unavailable')}</code> · revision <code>${esc(ctx.runtimeRevision ?? 'unavailable')}</code></p>
+  </div>`;
+  let detail = '';
+  if (ctx.kind === 'objective') {
+    const manifest = ctx.trainingRun?.manifest;
+    detail = `<p>Input IDs: <code>${esc(JSON.stringify(manifest?.input ?? 'unavailable'))}</code></p><p>Target IDs: <code>${esc(JSON.stringify(manifest?.targets ?? 'unavailable'))}</code></p>`;
+  } else if (ctx.kind === 'backward-trace') {
+    detail = `<p>Dependency topology: STRUCTURAL.</p><p>Numeric adjoints: ${ctx.numericAdjointsAvailable ? 'available from already-verified evidence bound to this training source' : 'unavailable; opening Details did not recompute them'}.</p>`;
+  } else if (ctx.kind === 'gradient-contribution') {
+    const event = ctx.selectedContribution;
+    detail = event ? `<p>Selected retained event: child ${event.child ?? 'unavailable'} · operand ${event.operand} · occurrence ordinal ${event.ordinal}.</p>` : '<p>No retained matching event is available.</p>';
+  } else if (ctx.kind === 'final-gradient') {
+    detail = `<p>Backward complete: ${ctx.backwardComplete ? 'YES' : 'NO'}.</p><p>Fan-in completeness: retained matching subset only; complete fan-in is unavailable in this context.</p>`;
+  } else if (ctx.kind === 'adam') {
+    detail = `<p>Proposal identity matches the exact runtime parameter index/name/row/column.</p><p>Status: PROVISIONAL · ACCEPTED MODEL UNCHANGED.</p>`;
+  } else if (ctx.candidate) {
+    const c = ctx.candidate;
+    detail = `<p>Candidate snapshot: <code>${esc(c.candidateSnapshotId)}</code></p>
+      <p>Baseline run: <code>${esc(c.baselineRunId)}</code></p><p>Training run: <code>${esc(c.trainingRunId)}</code></p><p>Candidate run: <code>${esc(c.candidateRunId)}</code></p>
+      <p>Baseline runtime: <code>${esc(c.baselineRuntimeVersion)}</code> · revision <code>${esc(c.baselineRuntimeRevision)}</code></p>
+      <p>Candidate runtime: <code>${esc(c.candidateRuntimeVersion)}</code> · revision <code>${esc(c.candidateRuntimeRevision)}</code></p>
+      <p>Comparison compatibility: COMPATIBLE · candidate evaluated · candidate provisional · candidate not accepted · candidate not live.</p>`;
+  }
+  return `<div class="dock-source-content" data-testid="dock-source" data-public-training-depth-kind="${esc(ctx.kind)}">${common}${detail}</div>`;
 }
 
 function publicDepthValues(model: SpatialReadModel, member: ResolvedPublicDepthMember): readonly number[] | undefined {
@@ -582,6 +793,8 @@ function renderValues(opts: ContextualDockOptions): string {
   if (!m) return '<p>No model loaded.</p>';
   const publicDepth = resolvedPart1Depth(opts);
   if (publicDepth) return renderPublicPart1Values(opts, publicDepth);
+  const publicTrainingDepth = resolvedPart2Depth(opts);
+  if (publicTrainingDepth) return renderPublicPart2Values(opts, publicTrainingDepth);
 
   if (learningRouteStop === 6 || opts.tourContent?.state === 'p2_adam_proposal' || opts.tourContent?.state === 'candidate_ready') {
     const u = trainingProgress?.proposal ?? (learningModel?.available ? learningModel.adam.update : undefined);
@@ -689,6 +902,8 @@ function renderMath(opts: ContextualDockOptions): string {
   if (!m) return '<p>No model loaded.</p>';
   const publicDepth = resolvedPart1Depth(opts);
   if (publicDepth) return renderPublicPart1Math(opts, publicDepth);
+  const publicTrainingDepth = resolvedPart2Depth(opts);
+  if (publicTrainingDepth) return renderPublicPart2Math(opts, publicTrainingDepth);
 
   if (learningRouteStop === 6 || opts.tourContent?.state === 'p2_adam_proposal' || opts.tourContent?.state === 'candidate_ready') {
     const u = trainingProgress?.proposal ?? (learningModel?.available ? learningModel.adam.update : undefined);
@@ -780,6 +995,8 @@ function renderSource(opts: ContextualDockOptions): string {
   if (!m) return '<p>No model loaded.</p>';
   const publicDepth = resolvedPart1Depth(opts);
   if (publicDepth) return renderPublicPart1Source(opts, publicDepth);
+  const publicTrainingDepth = resolvedPart2Depth(opts);
+  if (publicTrainingDepth) return renderPublicPart2Source(publicTrainingDepth);
 
   const f = m.forward;
   const e = f.explain(a, element);
@@ -862,8 +1079,9 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
   const isFacilitator = profile === 'facilitator';
   const isPublic = profile === 'visitor' || Boolean(opts.tourContent);
   const publicDepthContext = resolvedPart1Depth(opts);
+  const publicTrainingDepthContext = resolvedPart2Depth(opts);
   const dockAddress = publicDepthContext?.canonical.anchor ?? opts.address;
-  const dockLabel = publicDepthContext ? (opts.tourContent?.headline ?? addressLabel(dockAddress)) : (opts.selectedLabel ?? addressLabel(opts.address));
+  const dockLabel = publicDepthContext || publicTrainingDepthContext ? (opts.tourContent?.headline ?? addressLabel(dockAddress)) : (opts.selectedLabel ?? addressLabel(opts.address));
 
   if (opts.attract) {
     return `<section class="contextual-dock short-guide" data-testid="contextual-dock" data-active-depth="explain" aria-label="Contextual explanation dock">
