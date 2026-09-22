@@ -36,6 +36,71 @@ interface EvidenceCapture {
   centerInside?: boolean;
 }
 
+
+interface PublicLessonDomState {
+  canonicalState: string;
+  displayedState: string;
+  navigationMode: string;
+  targetState: string;
+  outcome: string;
+}
+
+type PublicLessonExpectation = Pick<PublicLessonDomState, 'canonicalState'>
+  & Partial<Omit<PublicLessonDomState, 'canonicalState'>>;
+
+async function readPublicLesson(page: Page): Promise<PublicLessonDomState> {
+  return page.locator('.spatial-shell').evaluate(shell => ({
+    canonicalState: shell.getAttribute('data-public-canonical-state') ?? '',
+    displayedState: shell.getAttribute('data-public-displayed-state') ?? '',
+    navigationMode: shell.getAttribute('data-public-navigation-mode') ?? '',
+    targetState: shell.getAttribute('data-public-target-state') ?? '',
+    outcome: shell.getAttribute('data-public-outcome') ?? '',
+  }));
+}
+
+async function expectPublicLesson(
+  page: Page,
+  expected: PublicLessonExpectation,
+): Promise<void> {
+  const complete: PublicLessonDomState = {
+    canonicalState: expected.canonicalState,
+    displayedState: expected.displayedState ?? expected.canonicalState,
+    navigationMode: expected.navigationMode ?? 'guided',
+    targetState: expected.targetState ?? '',
+    outcome: expected.outcome ?? '',
+  };
+  await expect.poll(() => readPublicLesson(page)).toEqual(complete);
+}
+
+async function workerCommandCount(page: Page): Promise<number> {
+  return page.evaluate(() => (window as any).abq.commands.length as number);
+}
+
+async function displayedRunId(page: Page): Promise<string> {
+  const runId = await page.getByTestId('landmark-occurrence').getAttribute('data-run-id');
+  if (!runId) throw new Error('Expected a displayed source run ID');
+  return runId;
+}
+
+async function displayedCapturedInput(page: Page): Promise<string> {
+  const relationship = await page.getByTestId('spatial-relationship').textContent();
+  const marker = 'captured input ';
+  const offset = relationship?.lastIndexOf(marker) ?? -1;
+  if (!relationship || offset < 0) throw new Error('Expected displayed captured input metadata');
+  return relationship.slice(offset + marker.length).trim();
+}
+
+async function expectDisplayedComputation(
+  page: Page,
+  runId: string,
+  capturedInput: string,
+  commandCount: number,
+): Promise<void> {
+  await expect(page.getByTestId('landmark-occurrence')).toHaveAttribute('data-run-id', runId);
+  await expect.poll(() => displayedCapturedInput(page)).toBe(capturedInput);
+  await expect.poll(() => workerCommandCount(page)).toBe(commandCount);
+}
+
 const manifestCaptures: EvidenceCapture[] = [];
 let browserMetadata: { name: string; version: string } | undefined;
 let servedRuntimeObservation: string | undefined;
@@ -172,14 +237,24 @@ async function captureEvidence(
   if (!browserMetadata && browser) {
     browserMetadata = { name: browser.browserType().name(), version: browser.version() };
   }
-  const observed = await page.evaluate(() => ({
-    devicePixelRatio: window.devicePixelRatio,
-    reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      ? 'reduce' as const
-      : 'no-preference' as const,
-    experienceProfile: document.querySelector('.spatial-shell')?.getAttribute('data-experience-profile') ?? undefined,
-    activeDepth: document.querySelector('[data-testid="contextual-dock"]')?.getAttribute('data-active-depth') ?? undefined,
-  }));
+  const observed = await page.evaluate(() => {
+    const shell = document.querySelector('.spatial-shell');
+    return {
+      devicePixelRatio: window.devicePixelRatio,
+      reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? 'reduce' as const
+        : 'no-preference' as const,
+      experienceProfile: shell?.getAttribute('data-experience-profile') ?? undefined,
+      activeDepth: document.querySelector('[data-testid="contextual-dock"]')?.getAttribute('data-active-depth') ?? undefined,
+      lesson: shell ? {
+        canonicalState: shell.getAttribute('data-public-canonical-state') ?? undefined,
+        displayedState: shell.getAttribute('data-public-displayed-state') ?? undefined,
+        targetState: shell.getAttribute('data-public-target-state') ?? undefined,
+        navigationMode: shell.getAttribute('data-public-navigation-mode') ?? undefined,
+        outcome: shell.getAttribute('data-public-outcome') ?? undefined,
+      } : undefined,
+    };
+  });
   const fullPath = qualification
     ? join(qualification.captureDirectory, filename)
     : test.info().outputPath(filename);
@@ -199,6 +274,7 @@ async function captureEvidence(
     reducedMotion: observed.reducedMotion,
     experienceProfile: observed.experienceProfile,
     activeDepth: observed.activeDepth,
+    lesson: observed.lesson,
     legacyStateLabel: actualState,
     cameraViewBox,
     evidenceWorldBounds: Object.keys(evidenceWorldBounds).length > 0 ? evidenceWorldBounds : undefined,
@@ -304,245 +380,184 @@ test('1. Visitor profile DOM omissions hide unneeded workbench controls', async 
   await page.locator('#visitor-explore-toggle').click();
 });
 
-test('2. 5-stop causal forward spine traversal, primary actions, zero-execution guarantee, and detour resume', async ({ page }) => {
+test('2. current Part 1 semantics, representative depth, and zero-execution continuity', async ({ page }) => {
+  test.setTimeout(180_000);
   await page.setViewportSize({ width: 1920, height: 1080 });
   await audit(page);
   await page.goto('/?presentation=spatial&kiosk=1');
+  await expect(page.locator('#exhibit-start')).toBeEnabled();
   await page.locator('#exhibit-start').click();
-  await expect(page.getByTestId('status')).toContainText('Live prediction complete');
 
-  // Payoff: Prediction Payoff (not Step 1)
-  await expect(page.locator('#short-resume')).toHaveCount(0);
-  await expect(page.getByTestId('lesson-progress')).toContainText('Prediction payoff');
-  await expect(page.getByTestId('lesson-progress')).not.toContainText('Step 1');
-  await expect(page.getByTestId('route-purpose')).toContainText('What does the model predict comes next?');
-  await expect(page.locator('#short-continue')).toContainText('See how it got there');
-  await expect(page.getByTestId('scene-construction')).toBeVisible();
-  await expect(page.getByTestId('scene-construction')).toContainText('Known target: a');
-  await expect(page.getByTestId('scene-construction')).toContainText('Highest-probability token: a');
+  await expectPublicLesson(page, { canonicalState: 'p1_prediction_preview' });
+  const commandBaseline = await workerCommandCount(page);
+  const guidedRunId = await displayedRunId(page);
+  const guidedInput = await displayedCapturedInput(page);
+  await expectDisplayedComputation(page, guidedRunId, guidedInput, commandBaseline);
+  await captureEvidence(page, '03-part1-opening-1920.png', 'p1_prediction_preview', '[data-world-kind="probabilities"]');
 
-  // Record command baseline: explanation navigation must NOT send any Worker commands
-  const initialCommands = await page.evaluate(() => (window as any).abq.commands.length);
-  const payoffRunId = await page.locator('[data-testid="landmark-occurrence"]').getAttribute('data-run-id');
-  expect(payoffRunId).toBeTruthy();
-
-  // Verify Payoff occurrence attributes
-  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-semantic-anchor', 'probabilities');
-  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-position', '3');
-  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-layer', '');
-
-  // Advance to Stop 1: REPRESENT (preAttentionNorm · p3 · L0)
   await page.locator('#short-continue').click();
-  await expect(page.locator('#short-resume')).toHaveCount(0);
-  await expect(page.getByTestId('lesson-progress')).toContainText('Step 1 of 5 · REPRESENT');
-  await expect(page.getByTestId('route-purpose')).toContainText("Turn the token and its position into the model's working representation");
-  await expect(page.locator('#short-continue')).toContainText('Continue: MIX CONTEXT');
-  await expect(page.getByTestId('scene-construction')).toBeVisible();
-  // Occurrence verification
-  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-semantic-anchor', 'preAttentionNorm');
-  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-position', '3');
-  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-layer', '0');
-  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-run-id', payoffRunId!);
-  // Distinct normalizations check in Math, plain meaning in dock overview
-  await expect(page.getByTestId('scene-construction')).toContainText('preAttentionNorm');
-  await expect(page.getByTestId('scene-construction')).toContainText('working representation');
+  await expectPublicLesson(page, { canonicalState: 'p1_represent' });
+  await expectDisplayedComputation(page, guidedRunId, guidedInput, commandBaseline);
+  await captureEvidence(page, '04-part1-representation-1920.png', 'p1_represent', '[data-world-kind="preAttentionNorm"]');
+
   await page.locator('#dock-inspect').click();
+  await expectPublicLesson(page, { canonicalState: 'p1_represent', navigationMode: 'detail' });
+  await expect(page.getByTestId('contextual-dock')).toHaveAttribute('data-active-depth', 'values');
+  await expect(page.getByTestId('dock-values')).toHaveAttribute('data-public-depth-kind', 'representation');
+  await expectDisplayedComputation(page, guidedRunId, guidedInput, commandBaseline);
+
   await page.locator('button[data-dock-depth="math"]').click();
-  await expect(page.getByTestId('dock-math')).toContainText('embeddingNorm');
-  await expect(page.getByTestId('dock-math')).toContainText('preAttentionNorm');
-  await expect(page.getByTestId('dock-math')).toContainText('Two distinct normalizations are preserved');
-  await page.locator('.dock-tab-close').click();
-  await expect(page.getByTestId('dock-explain')).toBeVisible();
-  await captureEvidence(page, '03-represent-1920.png', 'REPRESENT', '[data-world-kind="tokenEmbedding"]');
-  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
+  await expectPublicLesson(page, { canonicalState: 'p1_represent', navigationMode: 'detail' });
+  await expect(page.getByTestId('contextual-dock')).toHaveAttribute('data-active-depth', 'math');
+  await expect(page.getByTestId('dock-math')).toHaveAttribute('data-public-depth-kind', 'representation');
+  const scalarAction = page.locator('#microscope button[data-source-run][data-artifact][data-element]');
+  await expect(scalarAction).toHaveAttribute('data-source-run', guidedRunId);
+  await expect(scalarAction).toHaveAttribute('data-artifact', /.+/);
+  await expect(scalarAction).toHaveAttribute('data-element', /^\d+$/);
+  await expectDisplayedComputation(page, guidedRunId, guidedInput, commandBaseline);
 
-  // Advance to Stop 2: MIX CONTEXT (attentionResidual · p3 · L0)
-  await page.locator('#short-continue').click();
-  await expect(page.locator('#short-resume')).toHaveCount(0);
-  await expect(page.getByTestId('lesson-progress')).toContainText('Step 2 of 5 · MIX CONTEXT');
-  await expect(page.getByTestId('route-purpose')).toContainText('Use causally available earlier information to update this position');
-  await expect(page.locator('#short-continue')).toContainText('Continue: TRANSFORM');
-  await expect(page.locator('#attention-drill-down')).toBeVisible();
-  await expect(page.locator('#attention-drill-down')).toContainText('How does attention work?');
-  await expect(page.getByTestId('scene-construction')).toBeVisible();
-  // Occurrence verification
-  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-semantic-anchor', 'attentionResidual');
-  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-position', '3');
-  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-layer', '0');
-  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-run-id', payoffRunId!);
-  await captureEvidence(page, '04-mix-context-1920.png', 'MIX CONTEXT', '[data-world-kind="attentionBlock"]');
-  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
+  await page.locator('button[data-dock-depth="source"]').click();
+  await expectPublicLesson(page, { canonicalState: 'p1_represent', navigationMode: 'detail' });
+  await expect(page.getByTestId('contextual-dock')).toHaveAttribute('data-active-depth', 'source');
+  await expect(page.getByTestId('dock-source')).toHaveAttribute('data-public-depth-kind', 'representation');
+  await expect(page.getByTestId('spatial-run')).toHaveText(guidedRunId);
+  await expectDisplayedComputation(page, guidedRunId, guidedInput, commandBaseline);
 
-  // Advance to Stop 3: TRANSFORM (mlpResidual · p3 · L0)
-  await page.locator('#short-continue').click();
-  await expect(page.locator('#short-resume')).toHaveCount(0);
-  await expect(page.getByTestId('lesson-progress')).toContainText('Step 3 of 5 · TRANSFORM');
-  await expect(page.getByTestId('route-purpose')).toContainText('Transform the context-enriched representation before scoring possible next tokens');
-  await expect(page.locator('#short-continue')).toContainText('Continue: SCORE');
-  await expect(page.getByTestId('scene-construction')).toBeVisible();
-  // Occurrence verification
-  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-semantic-anchor', 'mlpResidual');
-  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-position', '3');
-  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-layer', '0');
-  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-run-id', payoffRunId!);
-  // Stage meaning in dock overview, Canonical 5-op MLP pipeline preserved in Math
-  await expect(page.getByTestId('scene-construction')).toContainText('TRANSFORM');
-  await expect(page.getByTestId('scene-construction')).toContainText('feed-forward');
   await page.locator('#dock-inspect').click();
-  await page.locator('button[data-dock-depth="math"]').click();
-  await expect(page.getByTestId('dock-math')).toContainText('preMlpNorm');
-  await expect(page.getByTestId('dock-math')).toContainText('mlpUp');
-  await expect(page.getByTestId('dock-math')).toContainText('ReLU');
-  await expect(page.getByTestId('dock-math')).toContainText('mlpDown');
-  await expect(page.getByTestId('dock-math')).toContainText('mlpResidual');
-  await expect(page.getByTestId('dock-math')).toContainText('Canonical MLP pipeline');
-  await page.locator('.dock-tab-close').click();
-  await expect(page.getByTestId('dock-explain')).toBeVisible();
-  await captureEvidence(page, '06-transform-1920.png', 'TRANSFORM', '[data-world-kind="mlpBlock"]');
-  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
+  await expectPublicLesson(page, { canonicalState: 'p1_represent' });
+  await expect(page.getByTestId('contextual-dock')).toHaveAttribute('data-active-depth', 'explain');
+  await expectDisplayedComputation(page, guidedRunId, guidedInput, commandBaseline);
 
-  // Advance to Stop 4: SCORE (logits · p3)
   await page.locator('#short-continue').click();
-  await expect(page.locator('#short-resume')).toHaveCount(0);
-  await expect(page.getByTestId('lesson-progress')).toContainText('Step 4 of 5 · SCORE');
-  await expect(page.getByTestId('route-purpose')).toContainText('Give each possible next token a raw score');
-  await expect(page.locator('#short-continue')).toContainText('Continue: PREDICT');
-  await expect(page.getByTestId('scene-construction')).toBeVisible();
-  // Occurrence verification
-  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-semantic-anchor', 'logits');
-  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-position', '3');
-  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-layer', '');
-  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-run-id', payoffRunId!);
-  // Raw score vs probability distinction check in Math, plain meaning in dock overview
-  await expect(page.getByTestId('scene-construction')).toContainText('SCORE');
-  await expect(page.getByTestId('scene-construction')).toContainText('raw score');
+  await expectPublicLesson(page, { canonicalState: 'p1_qkv' });
+  await expectDisplayedComputation(page, guidedRunId, guidedInput, commandBaseline);
+  await captureEvidence(page, '05-part1-qkv-1920.png', 'p1_qkv', '[data-world-kind="q"]');
+
   await page.locator('#dock-inspect').click();
-  await page.locator('button[data-dock-depth="math"]').click();
-  await expect(page.getByTestId('dock-math')).toContainText('Raw unnormalized scores');
-  await expect(page.getByTestId('dock-math')).toContainText('Raw token scores are unnormalized logits, not probabilities');
-  await page.locator('.dock-tab-close').click();
-  await expect(page.getByTestId('dock-explain')).toBeVisible();
-  await captureEvidence(page, '07-score-1920.png', 'SCORE', '[data-world-kind="unembed"]');
-  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
+  await expectPublicLesson(page, { canonicalState: 'p1_qkv', navigationMode: 'detail' });
+  await expect(page.getByTestId('dock-values')).toHaveAttribute('data-public-depth-kind', 'qkv');
+  for (const member of ['q', 'k', 'v']) {
+    await expect(page.locator(`button[data-depth-member="${member}"]`).first()).toBeVisible();
+  }
+  await page.locator('button[data-dock-depth="source"]').click();
+  await expect(page.getByTestId('spatial-run')).toHaveText(guidedRunId);
+  await expectDisplayedComputation(page, guidedRunId, guidedInput, commandBaseline);
+  await page.locator('#dock-inspect').click();
+  await expectPublicLesson(page, { canonicalState: 'p1_qkv' });
 
-  // Advance to Stop 5: PREDICT (probabilities · p3)
   await page.locator('#short-continue').click();
-  await expect(page.locator('#short-resume')).toHaveCount(0);
-  await expect(page.getByTestId('lesson-progress')).toContainText('Step 5 of 5 · PREDICT');
-  await expect(page.getByTestId('route-purpose')).toContainText('Turn the raw token scores into a probability distribution');
-  await expect(page.locator('#short-continue')).toHaveCount(0);
-  await expect(page.locator('#short-teach')).toBeVisible();
-  await expect(page.locator('#short-teach')).toContainText('Teach: step through learning');
-  await expect(page.getByTestId('scene-construction')).toBeVisible();
-  // Occurrence verification
-  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-semantic-anchor', 'probabilities');
-  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-position', '3');
-  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-layer', '');
-  await expect(page.locator('[data-testid="landmark-occurrence"]')).toHaveAttribute('data-run-id', payoffRunId!);
-  // Endpoint identity matches payoff identity
-  await expect(page.getByTestId('scene-construction')).toContainText('Known target: a');
-  await expect(page.getByTestId('scene-construction')).toContainText('Highest-probability token: a');
-  await captureEvidence(page, '08-predict-1920.png', 'PREDICT', '[data-world-kind="probabilities"]');
-  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
+  await expectPublicLesson(page, { canonicalState: 'p1_attention_compare' });
+  await expectDisplayedComputation(page, guidedRunId, guidedInput, commandBaseline);
 
-  // Detour via Free Exploration: changing operation sets shortDetour = true
-  await page.locator('#visitor-explore-toggle').click();
-  await expect(page.locator('.spatial-selection')).toBeVisible();
-  await page.locator('#spatial-operation').selectOption('mlpRelu');
-  await expect(page.locator('.short-guide')).toContainText('Exploring a detour');
-  await expect(page.locator('#short-resume')).toBeVisible();
-  await captureEvidence(page, '09-free-explore-resume-1920.png', 'Free Explore / Resume', '#short-resume');
+  await page.locator('#short-continue').click();
+  await expectPublicLesson(page, { canonicalState: 'p1_attention_weights' });
+  await expectDisplayedComputation(page, guidedRunId, guidedInput, commandBaseline);
 
-  // Resume short route: clears detour state, returns to stop 5, hides resume button
-  await page.locator('#short-resume').click();
-  await expect(page.getByTestId('lesson-progress')).toContainText('Step 5 of 5 · PREDICT');
-  await expect(page.locator('.short-guide')).not.toContainText('Exploring a detour');
-  await expect(page.locator('#short-resume')).toHaveCount(0);
-  await expect(page.getByTestId('scene-construction')).toContainText('Highest-probability token: a');
-  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
+  await page.locator('#short-continue').click();
+  await expectPublicLesson(page, { canonicalState: 'p1_value_mixture' });
+  await expectDisplayedComputation(page, guidedRunId, guidedInput, commandBaseline);
+  await captureEvidence(page, '06-part1-value-mixture-1920.png', 'p1_value_mixture', '[data-world-kind="headOutput"]');
+
+  await page.locator('#dock-inspect').click();
+  await expectPublicLesson(page, { canonicalState: 'p1_value_mixture', navigationMode: 'detail' });
+  await expect(page.getByTestId('dock-values')).toHaveAttribute('data-public-depth-kind', 'value-mixture');
+  await expect(page.getByTestId('value-mixture-support')).toBeVisible();
+  await expect(page.getByTestId('value-mixture-incomplete')).toHaveCount(0);
+  for (const member of ['weights', 'values', 'headOutput']) {
+    await expect(page.locator(`button[data-depth-member="${member}"]`).first()).toBeVisible();
+  }
+  await expectDisplayedComputation(page, guidedRunId, guidedInput, commandBaseline);
+  await page.locator('#dock-inspect').click();
+  await expectPublicLesson(page, { canonicalState: 'p1_value_mixture' });
+
+  await page.locator('#short-continue').click();
+  await expectPublicLesson(page, { canonicalState: 'p1_attention_integration' });
+  await expectDisplayedComputation(page, guidedRunId, guidedInput, commandBaseline);
+
+  await page.locator('#short-continue').click();
+  await expectPublicLesson(page, { canonicalState: 'p1_transform' });
+  await expectDisplayedComputation(page, guidedRunId, guidedInput, commandBaseline);
+  await captureEvidence(page, '07-part1-mlp-1920.png', 'p1_transform', '[data-world-kind="mlpResidual"]');
+
+  await page.locator('#dock-inspect').click();
+  await expectPublicLesson(page, { canonicalState: 'p1_transform', navigationMode: 'detail' });
+  await expect(page.getByTestId('dock-values')).toHaveAttribute('data-public-depth-kind', 'mlp');
+  await expect(page.getByTestId('mlp-depth-shapes')).toContainText('8 -> 32 -> 32 -> 8');
+  for (const member of ['mlpUp', 'mlpRelu', 'mlpDown']) {
+    await expect(page.locator(`button[data-depth-member="${member}"]`).first()).toBeVisible();
+  }
+  await page.locator('button[data-dock-depth="math"]').click();
+  await expect(page.getByTestId('dock-math')).toHaveAttribute('data-public-depth-kind', 'mlp');
+  await expect(page.getByTestId('mlp-contraction-support')).toContainText('all 32 hidden activations');
+  await expectDisplayedComputation(page, guidedRunId, guidedInput, commandBaseline);
+  await page.locator('#dock-inspect').click();
+  await expectPublicLesson(page, { canonicalState: 'p1_transform' });
+
+  await page.locator('#short-continue').click();
+  await expectPublicLesson(page, { canonicalState: 'p1_score' });
+  await expectDisplayedComputation(page, guidedRunId, guidedInput, commandBaseline);
+
+  await page.locator('#short-continue').click();
+  await expectPublicLesson(page, { canonicalState: 'p1_probabilities' });
+  await expectDisplayedComputation(page, guidedRunId, guidedInput, commandBaseline);
+
+  await page.locator('#short-continue').click();
+  await expectPublicLesson(page, { canonicalState: 'p1_complete' });
+  await expectDisplayedComputation(page, guidedRunId, guidedInput, commandBaseline);
+  await captureEvidence(page, '08-part1-complete-1920.png', 'p1_complete', '[data-world-kind="probabilities"]');
 });
 
-test('2b. Optional attention drill-down from MIX CONTEXT, zero-execution traversal, and route return', async ({ page }) => {
+test('2b. Guided Explore restores the exact Part 1 computation', async ({ page }) => {
+  test.setTimeout(180_000);
   await page.setViewportSize({ width: 1920, height: 1080 });
   await audit(page);
   await page.goto('/?presentation=spatial&kiosk=1');
+  await expect(page.locator('#exhibit-start')).toBeEnabled();
   await page.locator('#exhibit-start').click();
-  await expect(page.getByTestId('status')).toContainText('Live prediction complete');
 
-  // Advance to Stop 2: MIX CONTEXT
-  await page.locator('#short-continue').click(); // to Represent
-  await page.locator('#short-continue').click(); // to Mix Context
-  await expect(page.getByTestId('lesson-progress')).toContainText('Step 2 of 5 · MIX CONTEXT');
-  await expect(page.locator('#attention-drill-down')).toBeVisible();
-
-  const cmdBaseline = await page.evaluate(() => (window as any).abq.commands.length);
-
-  // Click drill-down: Enter attention sub-route
-  await page.locator('#attention-drill-down').click();
-  await expect(page.getByTestId('lesson-progress')).toContainText('Attention detail · Step 1 of 4 · Compare positions');
-  await expect(page.locator('#attention-return')).toBeVisible();
-  await expect(page.locator('#short-continue')).toContainText('Continue: Turn scores into normalized weights');
-  await expect(page.getByTestId('scene-construction')).toContainText('Attention scores');
-  await captureEvidence(page, '05-attention-drilldown-1920.png', 'attention drill-down', '[data-world-kind="attentionBlock"]');
-
-  // Q/K Math in contextual dock via inspect affordance
-  await page.locator('#dock-inspect').click();
-  await page.locator('button[data-dock-depth="math"]').click();
-  await expect(page.getByTestId('dock-math')).toBeVisible();
-  await expect(page.locator('[data-testid="qk-products"]')).toBeVisible();
-
-  // Source tab in contextual dock
-  await page.locator('button[data-dock-depth="source"]').click();
-  await expect(page.getByTestId('dock-source')).toBeVisible();
-
-  // Return to Explain tab
-  await page.locator('.dock-tab-close').click();
-  await expect(page.getByTestId('dock-explain')).toBeVisible();
-  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(cmdBaseline);
-
-  // Advance substep 2: Softmax
+  await expectPublicLesson(page, { canonicalState: 'p1_prediction_preview' });
   await page.locator('#short-continue').click();
-  await expect(page.getByTestId('lesson-progress')).toContainText('Attention detail · Step 2 of 4 · Turn scores into normalized weights');
-  await expect(page.locator('#short-continue')).toContainText('Continue: Combine carried information');
-  await expect(page.getByTestId('scene-construction')).toContainText('Attention softmax');
-  await page.locator('#dock-inspect').click();
-  await page.locator('button[data-dock-depth="math"]').click();
-  await expect(page.getByTestId('dock-math')).toContainText('Shifted exponentials and denominator are derived from observed scores');
-  await page.locator('.dock-tab-close').click();
-  await expect(page.getByTestId('dock-explain')).toBeVisible();
-  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(cmdBaseline);
+  await expectPublicLesson(page, { canonicalState: 'p1_represent' });
 
-  // Advance substep 3: Value mixture
-  await page.locator('#short-continue').click();
-  await expect(page.getByTestId('lesson-progress')).toContainText('Attention detail · Step 3 of 4 · Combine carried information');
-  await expect(page.locator('#short-continue')).toContainText('Continue: Combine/project and add it back');
-  await expect(page.getByTestId('scene-construction')).toContainText('Weighted values');
-  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(cmdBaseline);
+  const originalRunId = await displayedRunId(page);
+  const originalInput = await displayedCapturedInput(page);
+  const commandBaseline = await workerCommandCount(page);
 
-  // Advance substep 4: Residual
-  await page.locator('#short-continue').click();
-  await expect(page.getByTestId('lesson-progress')).toContainText('Attention detail · Step 4 of 4 · Combine/project and add it back');
-  await expect(page.locator('#short-continue')).toContainText('Return to Mix Context');
-  await expect(page.getByTestId('scene-construction')).toContainText('Project the attention result and add it back');
-  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(cmdBaseline);
+  await page.locator('#visitor-explore-toggle').click();
+  await expectPublicLesson(page, {
+    canonicalState: 'p1_represent',
+    navigationMode: 'explore',
+  });
+  await expect(page.locator('#document')).toBeVisible();
+  await expect(page.locator('#predict')).toBeVisible();
+  await expect(page.getByTestId('landmark-occurrence')).toHaveAttribute('data-run-id', originalRunId);
 
-  // Return to Mix Context via continue button
-  await page.locator('#short-continue').click();
-  await expect(page.getByTestId('lesson-progress')).toContainText('Step 2 of 5 · MIX CONTEXT');
-  await expect(page.locator('#short-continue')).toContainText('Continue: TRANSFORM');
-  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(cmdBaseline);
+  const exploreInput = originalInput === 'abc' ? 'cba' : 'abc';
+  await page.locator('#document').fill(exploreInput);
+  await expect(page.locator('#document')).toHaveValue(exploreInput);
+  await page.locator('#predict').click();
 
-  // Also test Return button from drill-down
-  await page.locator('#attention-drill-down').click();
-  await expect(page.getByTestId('lesson-progress')).toContainText('Attention detail · Step 1 of 4');
-  await page.locator('#attention-return').click();
-  await expect(page.getByTestId('lesson-progress')).toContainText('Step 2 of 5 · MIX CONTEXT');
-  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(cmdBaseline);
+  await expect.poll(() => displayedRunId(page)).not.toBe(originalRunId);
+  await expectPublicLesson(page, {
+    canonicalState: 'p1_represent',
+    navigationMode: 'explore',
+  });
+  const exploreRunId = await displayedRunId(page);
+  expect(exploreRunId).not.toBe(originalRunId);
+  await expect.poll(() => displayedCapturedInput(page)).toBe(exploreInput);
+  const commandsAfterExplorePrediction = await workerCommandCount(page);
+  expect(commandsAfterExplorePrediction).toBeGreaterThan(commandBaseline);
 
-  // Continue to Stop 3: TRANSFORM without any re-execution
-  await page.locator('#short-continue').click();
-  await expect(page.getByTestId('lesson-progress')).toContainText('Step 3 of 5 · TRANSFORM');
-  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(cmdBaseline);
+  await page.locator('#visitor-explore-toggle').click();
+  await expectPublicLesson(page, { canonicalState: 'p1_represent' });
+  await expect(page.getByTestId('landmark-occurrence')).toHaveAttribute('data-run-id', originalRunId);
+  await expect.poll(() => displayedCapturedInput(page)).toBe(originalInput);
+  await expect.poll(() => workerCommandCount(page)).toBe(commandsAfterExplorePrediction);
+
+  const latestExecutedRunId = await page.evaluate(() =>
+    (window as any).abq.lastResult?.run?.manifest?.runId as string | undefined
+  );
+  expect(latestExecutedRunId).toBe(exploreRunId);
 });
 
 test('2c. Reverse learning traversal, objective anchor, backward landmarks, parameter owner, Adam, and zero-execution guarantee', async ({ page }) => {
