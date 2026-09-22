@@ -523,7 +523,11 @@ test('2b. Guided Explore restores the exact Part 1 computation', async ({ page }
   const originalInput = await displayedCapturedInput(page);
   const commandBaseline = await workerCommandCount(page);
 
-  await page.locator('#visitor-explore-toggle').click();
+  const guidedAnchor = page
+    .locator('#spatial-world [data-world-kind="preAttentionNorm"].explanation-active')
+    .first();
+  await expect(guidedAnchor).toBeVisible();
+  await guidedAnchor.click();
   await expectPublicLesson(page, {
     canonicalState: 'p1_represent',
     navigationMode: 'explore',
@@ -548,7 +552,8 @@ test('2b. Guided Explore restores the exact Part 1 computation', async ({ page }
   const commandsAfterExplorePrediction = await workerCommandCount(page);
   expect(commandsAfterExplorePrediction).toBeGreaterThan(commandBaseline);
 
-  await page.locator('#visitor-explore-toggle').click();
+  await expect(page.locator('#short-resume')).toBeVisible();
+  await page.locator('#short-resume').click();
   await expectPublicLesson(page, { canonicalState: 'p1_represent' });
   await expect(page.getByTestId('landmark-occurrence')).toHaveAttribute('data-run-id', originalRunId);
   await expect.poll(() => displayedCapturedInput(page)).toBe(originalInput);
