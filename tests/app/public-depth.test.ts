@@ -1,5 +1,6 @@
 import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { spatialReadModel, type SpatialReadModel } from '../../app/spatial/bindings.js';
 import { forwardReadModel } from '../../app/spatial/forward.js';
 import {
@@ -357,4 +358,42 @@ test('PD1 contextual dock renders complete Value support and truthful MLP width-
   assert.match(mlpMath, /data-testid="mlp-contraction-support"/);
   assert.match(mlpMath, /depends on all 32 hidden activations/);
   assert.match(mlpMath, /not paired one-to-one with hidden feature 17/);
+});
+
+test('PD1 public scalar action binds the canonical source run, exact artifact, and selected element', async () => {
+  const model = await part1Model();
+  const selection: PublicDepthSelection = { member: 'q', element: 2 };
+  const content = getPublicTourContent('p1_qkv');
+  const ctx = resolvePublicDepthContext(content, model, selection);
+  assert(ctx);
+  const member = ctx.members.find(candidate => candidate.memberId === 'q');
+  assert(member?.artifactId);
+
+  const html = await publicDock(model, 'p1_qkv', 'math', selection);
+  const expected =
+    'data-source-run="' + ctx.canonical.run +
+    '" data-artifact="' + member.artifactId +
+    '" data-element="2"';
+
+  assert(html.includes(expected), 'public scalar action must bind one canonical run/artifact/element tuple');
+  const newerGlobalRun = 'run-b';
+  assert.notEqual(ctx.canonical.run, newerGlobalRun);
+  assert(!html.includes('data-source-run="' + newerGlobalRun + '"'));
+});
+
+test('PD1 generic artifact handler prefers explicit source identity and preserves legacy fallback without runtime effects', () => {
+  const source = readFileSync(new URL('../../app/main.ts', import.meta.url), 'utf8');
+  const start = source.indexOf('.querySelectorAll<HTMLButtonElement>("[data-artifact]")');
+  const end = source.indexOf('.querySelectorAll<HTMLButtonElement>("[data-node]")', start);
+  assert.notEqual(start, -1);
+  assert.notEqual(end, -1);
+  const handler = source.slice(start, end);
+
+  assert.match(
+    handler,
+    /button\.dataset\.sourceRun\s*\?\?\s*result\?\.run\.manifest\.runId/,
+    'explicit data-source-run must win, with current result retained only as the legacy fallback',
+  );
+  assert.match(handler, /void inspect\(\s*sourceRunId,/);
+  assert.doesNotMatch(handler, /\bexecute\(|\bdispatchPublicLesson\(|\bselectRun\(|\bforwardDriver\b|liveRunId\s*=/);
 });

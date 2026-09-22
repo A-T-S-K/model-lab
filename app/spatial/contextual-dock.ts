@@ -597,11 +597,17 @@ function publicDepthSelected(ctx: ResolvedPublicDepthContext, memberId = ctx.sel
   ) ?? ctx.members.find(member => member.memberId === memberId);
 }
 
-function publicDepthScalar(model: SpatialReadModel, member: ResolvedPublicDepthMember, localElement: number): string {
+function publicDepthScalar(
+  model: SpatialReadModel,
+  ctx: ResolvedPublicDepthContext,
+  member: ResolvedPublicDepthMember,
+  localElement: number,
+): string {
   const element = publicDepthArtifactElement(member, localElement);
   const explanation = model.forward.explain(member.address, element);
   if (!explanation.indexValid || !explanation.artifact) return '<p>Selected scalar unavailable for this captured member.</p>';
-  return '<button data-artifact="' + esc(explanation.artifact.id) + '" data-element="' + element +
+  return '<button data-source-run="' + esc(ctx.canonical.run) + '" data-artifact="' +
+    esc(explanation.artifact.id) + '" data-element="' + element +
     '">Inspect selected scalar in Microscope</button>';
 }
 
@@ -748,7 +754,7 @@ function renderPublicPart1Math(opts: ContextualDockOptions, ctx: ResolvedPublicD
     const scalarElement = publicDepthScalarElement(ctx, scalarMember);
     body += '<section class="spatial-scalar" id="microscope"><h3>Selected scalar / Microscope</h3><p>' +
       esc(publicDepthMemberLabel(scalarMember)) + ' component [' + scalarElement + ']</p>' +
-      publicDepthScalar(model, scalarMember, scalarElement) + '</section>';
+      publicDepthScalar(model, ctx, scalarMember, scalarElement) + '</section>';
   }
   return '<div class="dock-math-content" data-testid="dock-math" data-public-depth-kind="' + esc(ctx.kind) + '"><p><strong>' +
     esc(opts.tourContent?.headline ?? ctx.kind) + '</strong> - authentic arithmetic remains bound to run <code>' +

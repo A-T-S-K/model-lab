@@ -1581,15 +1581,17 @@ function bind(): void {
     .querySelectorAll<HTMLButtonElement>("[data-artifact]")
     .forEach((button) =>
       button.addEventListener("click", () => {
-        if (result && !busy)
+        const sourceRunId =
+          button.dataset.sourceRun ?? result?.run.manifest.runId;
+        if (sourceRunId && !busy)
           void inspect(
-            result.run.manifest.runId,
+            sourceRunId,
             {
               kind: "artifact",
               artifactId: button.dataset.artifact!,
               index: Number(button.dataset.element),
             },
-            `${spatialActive ? result.run.artifacts.find(a => a.id === button.dataset.artifact)?.kind ?? selectedKind : selectedKind} · position ${selectedToken} · element ${button.dataset.element}`,
+            `${spatialActive ? result?.run.artifacts.find(a => a.id === button.dataset.artifact)?.kind ?? selectedKind : selectedKind} · position ${selectedToken} · element ${button.dataset.element}`,
           );
       }),
     );
