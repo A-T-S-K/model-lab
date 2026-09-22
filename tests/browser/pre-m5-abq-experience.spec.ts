@@ -707,8 +707,10 @@ test('2c. current Part 2 semantics, authentic depth, ancestry, and candidate con
   await expect(page.locator('.reverse-causal-edge[data-reverse-from-kind="attentionResidual"][data-reverse-to-kind="embeddingNorm"]')).toBeVisible();
   await expect(page.locator('.reverse-causal-edge[data-reverse-from-kind="headOutput"][data-reverse-to-kind="preAttentionNorm"]')).toHaveCount(0);
   await expect(page.locator('.reverse-region-guide')).not.toHaveCount(0);
-  await expect(page.getByTestId('reverse-truth-cue')).toContainText('Backward explanation path over the real computation');
-  await expect(page.getByTestId('reverse-truth-cue')).toContainText('Visual movement is not runtime timing');
+  const reverseTruthCue = page.getByTestId('reverse-truth-cue');
+  await expect(reverseTruthCue).toContainText('dependency and sensitivity through the same computation');
+  await expect(reverseTruthCue).toContainText('not measured runtime timing');
+  await expect(reverseTruthCue).toContainText('execution being undone');
   await captureEvidence(page, '11-part2-backward-trace-1920.png', 'p2_backward_trace', '.reverse-causal-overlay');
 
   // Backward trace -> one contribution is evidence-gated authentic execution.
