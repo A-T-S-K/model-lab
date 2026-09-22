@@ -565,259 +565,326 @@ test('2b. Guided Explore restores the exact Part 1 computation', async ({ page }
   expect(latestExecutedRunId).toBe(exploreRunId);
 });
 
-test('2c. Reverse learning traversal, objective anchor, backward landmarks, parameter owner, Adam, and zero-execution guarantee', async ({ page }) => {
+async function reachCurrentPart1Complete(page: Page): Promise<void> {
+  await page.goto('/?presentation=spatial&kiosk=1');
+  await expect(page.locator('#exhibit-start')).toBeEnabled();
+  await page.locator('#exhibit-start').click();
+  await expectPublicLesson(page, { canonicalState: 'p1_prediction_preview' });
+
+  const remainingStates = [
+    'p1_represent',
+    'p1_qkv',
+    'p1_attention_compare',
+    'p1_attention_weights',
+    'p1_value_mixture',
+    'p1_attention_integration',
+    'p1_transform',
+    'p1_score',
+    'p1_probabilities',
+    'p1_complete',
+  ];
+
+  for (const canonicalState of remainingStates) {
+    await page.locator('#short-continue').click();
+    await expectPublicLesson(page, { canonicalState });
+  }
+}
+
+async function waitForCurrentPublicState(
+  page: Page,
+  canonicalState: string,
+  timeout = 60_000,
+): Promise<void> {
+  await expect(page.locator('.spatial-shell')).toHaveAttribute(
+    'data-public-canonical-state',
+    canonicalState,
+    { timeout },
+  );
+  await expectPublicLesson(page, { canonicalState });
+}
+
+async function startCurrentPart2(page: Page): Promise<void> {
+  await reachCurrentPart1Complete(page);
+  await expect(page.locator('#short-teach')).toBeVisible();
+  await expect(page.locator('#short-teach')).toBeEnabled();
+  await page.locator('#short-teach').click();
+  await waitForCurrentPublicState(page, 'p2_objective');
+  await expect(page.locator('#reverse-continue')).toBeEnabled({ timeout: 60_000 });
+}
+
+async function advanceCurrentPart2(page: Page, target: string): Promise<void> {
+  await expect(page.locator('#reverse-continue')).toBeEnabled({ timeout: 60_000 });
+  await page.locator('#reverse-continue').click();
+  await waitForCurrentPublicState(page, target);
+  if (target === 'candidate_ready') {
+    await expect(page.locator('#execution-accept')).toBeEnabled({ timeout: 60_000 });
+    await expect(page.locator('#execution-cancel')).toBeEnabled({ timeout: 60_000 });
+  } else {
+    await expect(page.locator('#reverse-continue')).toBeEnabled({ timeout: 60_000 });
+  }
+}
+
+async function driveCurrentPart2ToCandidateReady(page: Page): Promise<void> {
+  await startCurrentPart2(page);
+  await advanceCurrentPart2(page, 'p2_backward_trace');
+  await advanceCurrentPart2(page, 'p2_gradient_contribution');
+  await advanceCurrentPart2(page, 'p2_final_gradient');
+  await advanceCurrentPart2(page, 'p2_adam_proposal');
+  await advanceCurrentPart2(page, 'candidate_ready');
+}
+
+test('2c. current Part 2 semantics, authentic depth, ancestry, and candidate contract', async ({ page }) => {
+  test.setTimeout(180_000);
   await page.setViewportSize({ width: 1920, height: 1080 });
   await audit(page);
-  await page.goto('/?presentation=spatial&kiosk=1');
-  await page.locator('#exhibit-start').click();
-  await expect(page.getByTestId('status')).toContainText('Live prediction complete');
+  await startCurrentPart2(page);
 
-  // Advance through 5 stops to PREDICT
-  for (let i = 0; i < 5; i++) {
-    await page.locator('#short-continue').click();
-  }
-  await expect(page.locator('#short-teach')).toBeVisible();
-  await expect(page.locator('#start-reverse-learning')).toBeVisible();
-
-  // Baseline commands: reverse explanation MUST issue zero worker commands
-  const initialCommands = await page.evaluate(() => (window as any).abq.commands.length);
-
-  // Click Walk through backward pass -> enters reverse route at Stop 0: PREDICT
-  await page.locator('#start-reverse-learning').click();
   await expect(page.locator('.spatial-shell')).toHaveAttribute('data-experience-profile', 'visitor');
-  await expect(page.getByTestId('lesson-progress')).toContainText('Learning · Stop 1 of 7 · PREDICT');
-  await expect(page.getByTestId('public-learning-world')).toBeVisible();
 
-  // 1. Objective Anchor attached near output probabilities
-  await expect(page.getByTestId('objective-anchor')).toBeVisible();
-  await expect(page.getByTestId('objective-anchor')).toContainText('p0');
-  await expect(page.getByTestId('objective-anchor')).toContainText('p1');
-  await expect(page.getByTestId('objective-anchor')).toContainText('p2');
-  await expect(page.getByTestId('objective-anchor')).toContainText('p3');
-  await expect(page.getByTestId('objective-anchor')).toContainText('p4');
-  await expect(page.getByTestId('objective-anchor')).toContainText('[PENDING]');
-  await expect(page.getByTestId('objective-anchor')).not.toContainText('[OBSERVED]');
+  // Objective is authentic multi-position evidence. Details are read-only.
+  const objectiveAnchor = page.getByTestId('objective-anchor');
+  await expect(objectiveAnchor).toBeVisible();
+  await expect(objectiveAnchor).toHaveAttribute('data-objective-availability', 'available');
+  await expect(objectiveAnchor).toHaveAttribute('data-objective-mean-origin', 'OBSERVED');
+  const objectivePositions = Number(await objectiveAnchor.getAttribute('data-objective-positions'));
+  expect(objectivePositions).toBeGreaterThan(1);
+  await assertSvgElementInViewBox(page, '[data-testid="objective-anchor"]', {
+    requireCenterInside: true,
+    minIntersectionRatio: 0.8,
+    description: 'Part 2 objective anchor',
+  });
+  await assertSvgElementInViewBox(page, '[data-world-kind="probabilities"]', {
+    requireCenterInside: true,
+    minIntersectionRatio: 0.8,
+    description: 'Part 2 objective probability station',
+  });
 
-  // Verify objective anchor and output probabilities are inside camera viewBox
-  await assertSvgElementInViewBox(page, '[data-testid="objective-anchor"]', { requireCenterInside: true, minIntersectionRatio: 0.8, description: 'Objective anchor' });
-  await assertSvgElementInViewBox(page, '[data-world-kind="probabilities"]', { requireCenterInside: true, minIntersectionRatio: 0.8, description: 'Probabilities station' });
+  const objectiveCommands = await workerCommandCount(page);
+  await page.locator('#dock-inspect').click();
+  await expectPublicLesson(page, { canonicalState: 'p2_objective', navigationMode: 'detail' });
+  await expect(page.getByTestId('contextual-dock')).toHaveAttribute('data-active-depth', 'values');
+  await expect(page.getByTestId('dock-values')).toHaveAttribute('data-public-training-depth-kind', 'objective');
+  await expect(page.getByTestId('public-training-objective')).toBeVisible();
+  expect(await page.getByTestId('public-training-objective').locator('tbody tr').count()).toBeGreaterThan(1);
+  expect(await workerCommandCount(page)).toBe(objectiveCommands);
 
-  // Reverse Causal Overlay: exact-address edges, residual branches, and region guides
-  await expect(page.locator('.reverse-causal-overlay')).toBeVisible();
+  await page.locator('button[data-dock-depth="math"]').click();
+  await expectPublicLesson(page, { canonicalState: 'p2_objective', navigationMode: 'detail' });
+  await expect(page.getByTestId('contextual-dock')).toHaveAttribute('data-active-depth', 'math');
+  await expect(page.getByTestId('dock-math')).toHaveAttribute('data-public-training-depth-kind', 'objective');
+  expect(await workerCommandCount(page)).toBe(objectiveCommands);
+
+  await page.locator('button[data-dock-depth="source"]').click();
+  await expectPublicLesson(page, { canonicalState: 'p2_objective', navigationMode: 'detail' });
+  await expect(page.getByTestId('contextual-dock')).toHaveAttribute('data-active-depth', 'source');
+  await expect(page.getByTestId('dock-source')).toHaveAttribute('data-public-training-depth-kind', 'objective');
+  const objectiveTrainingSource = (
+    await page.getByTestId('dock-source')
+      .locator('p', { hasText: 'Training source:' })
+      .locator('code')
+      .textContent()
+  )?.trim() ?? '';
+  expect(objectiveTrainingSource).not.toBe('');
+  expect(await workerCommandCount(page)).toBe(objectiveCommands);
+
+  await page.locator('button[data-dock-depth="math"]').click();
+  const objectiveMicroscopeActions = page.getByTestId('dock-math')
+    .locator('button[data-source-run][data-artifact][data-element]');
+  await expect(objectiveMicroscopeActions.first()).toBeVisible();
+  const objectiveMicroscopeCount = await objectiveMicroscopeActions.count();
+  expect(objectiveMicroscopeCount).toBeGreaterThan(0);
+  for (let i = 0; i < objectiveMicroscopeCount; i++) {
+    await expect(objectiveMicroscopeActions.nth(i)).toHaveAttribute('data-source-run', objectiveTrainingSource);
+    await expect(objectiveMicroscopeActions.nth(i)).toHaveAttribute('data-artifact', /.+/);
+    await expect(objectiveMicroscopeActions.nth(i)).toHaveAttribute('data-element', /^\d+$/);
+  }
+  expect(await workerCommandCount(page)).toBe(objectiveCommands);
+  await captureEvidence(page, '10-part2-objective-1920.png', 'p2_objective', '[data-testid="objective-anchor"]', {
+    probabilities: '[data-world-kind="probabilities"]',
+  });
+
+  await page.locator('#dock-inspect').click();
+  await expectPublicLesson(page, { canonicalState: 'p2_objective' });
+  expect(await workerCommandCount(page)).toBe(objectiveCommands);
+
+  // Objective -> backward trace is explanatory state progression, not new execution.
+  const beforeBackwardTrace = await workerCommandCount(page);
+  await advanceCurrentPart2(page, 'p2_backward_trace');
+  expect(await workerCommandCount(page)).toBe(beforeBackwardTrace);
+  await expect(page.getByTestId('reverse-causal-overlay')).toBeVisible();
   await expect(page.locator('.reverse-causal-edge').first()).toHaveAttribute('data-reverse-from-kind');
   await expect(page.locator('.reverse-causal-edge').first()).toHaveAttribute('data-reverse-to-kind');
-  // Residual branches: mlpResidual -> attentionResidual, attentionResidual -> embeddingNorm
   await expect(page.locator('.reverse-causal-edge[data-reverse-from-kind="mlpResidual"][data-reverse-to-kind="attentionResidual"]')).toBeVisible();
   await expect(page.locator('.reverse-causal-edge[data-reverse-from-kind="attentionResidual"][data-reverse-to-kind="embeddingNorm"]')).toBeVisible();
-  // Absence of false shortcut headOutput <- preAttentionNorm
   await expect(page.locator('.reverse-causal-edge[data-reverse-from-kind="headOutput"][data-reverse-to-kind="preAttentionNorm"]')).toHaveCount(0);
-  // Presence of reverse-region-guide for multi-key fan-in / landmarks
   await expect(page.locator('.reverse-region-guide')).not.toHaveCount(0);
+  await expect(page.getByTestId('reverse-truth-cue')).toContainText('Backward explanation path over the real computation');
+  await expect(page.getByTestId('reverse-truth-cue')).toContainText('Visual movement is not runtime timing');
+  await captureEvidence(page, '11-part2-backward-trace-1920.png', 'p2_backward_trace', '.reverse-causal-overlay');
 
-  await expect(page.getByTestId('reverse-truth-cue').first()).toContainText('Backward explanation path over the real computation. Visual movement is not runtime timing.');
-
-  // Check all-position objective in Values tab
-  await page.locator('button[data-dock-depth="values"]').click();
-  await expect(page.getByTestId('dock-values')).toBeVisible();
-  await expect(page.getByTestId('training-objective')).toBeVisible();
-  await expect(page.getByTestId('training-objective')).toContainText('[PENDING]');
-  await captureEvidence(page, '10-learning-objective-1920.png', 'learning objective', '[data-testid="objective-anchor"]', { probabilities: '[data-world-kind="probabilities"]' });
-  await page.locator('.dock-tab-close').click();
-  await expect(page.getByTestId('dock-explain')).toBeVisible();
-
-  // Stop 0 output probabilities
-  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
-
-  // Advance to Stop 1: SCORE
-  await page.locator('#reverse-continue').click();
-  await expect(page.getByTestId('lesson-progress')).toContainText('Learning · Stop 2 of 7 · SCORE');
-  await expect(page.locator('.reverse-causal-overlay')).toHaveAttribute('data-active-reverse-landmark', 'logits');
-  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
-  await captureEvidence(page, '11-reverse-path-1920.png', 'reverse path', '.reverse-causal-overlay');
-
-  // Advance to Stop 2: TRANSFORM
-  await page.locator('#reverse-continue').click();
-  await expect(page.getByTestId('lesson-progress')).toContainText('Learning · Stop 3 of 7 · TRANSFORM');
-  await expect(page.locator('.reverse-causal-overlay')).toHaveAttribute('data-active-reverse-landmark', 'mlpResidual');
-  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
-
-  // Advance to Stop 3: MIX CONTEXT
-  await page.locator('#reverse-continue').click();
-  await expect(page.getByTestId('lesson-progress')).toContainText('Learning · Stop 4 of 7 · MIX CONTEXT');
-  await expect(page.locator('.reverse-causal-overlay')).toHaveAttribute('data-active-reverse-landmark', 'attentionResidual');
-  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
-
-  // Advance to Stop 4: REPRESENT
-  await page.locator('#reverse-continue').click();
-  await expect(page.getByTestId('lesson-progress')).toContainText('Learning · Stop 5 of 7 · REPRESENT');
-  await expect(page.locator('.reverse-causal-overlay')).toHaveAttribute('data-active-reverse-landmark', 'preAttentionNorm');
-  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
-
-  // Advance to Stop 5: PARAMETER (reached in the same world, parameter contribution overlay visible)
-  await page.locator('#reverse-continue').click();
-  await expect(page.getByTestId('lesson-progress')).toContainText('Learning · Stop 6 of 7 · PARAMETER');
+  // Backward trace -> one contribution is evidence-gated authentic execution.
+  const beforeContribution = await workerCommandCount(page);
+  await advanceCurrentPart2(page, 'p2_gradient_contribution');
+  expect(await workerCommandCount(page)).toBeGreaterThan(beforeContribution);
   await expect(page.getByTestId('parameter-learning-overlay')).toBeVisible();
-  await expect(page.locator('.param-overlay-title')).toContainText('tokenEmbedding');
-  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
-
-  // Parameter math in dock via inspect affordance
-  await page.locator('#dock-inspect').click();
-  await page.locator('button[data-dock-depth="math"]').click();
-  await expect(page.getByTestId('dock-math')).toBeVisible();
-  await expect(page.getByTestId('dock-math')).toContainText('child adjoint');
-  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
-  await page.locator('.dock-tab-close').click();
-
-  // Advance to Stop 6: ADAM (Adam proposal attached to parameter bank, provisional)
-  await page.locator('#reverse-continue').click();
-  await expect(page.getByTestId('lesson-progress')).toContainText('Learning · Stop 7 of 7 · ADAM');
-  await expect(page.getByTestId('adam-learning-overlay')).toBeVisible();
-  await expect(page.getByTestId('adam-learning-overlay')).toHaveAttribute('data-provisional', 'true');
-  await expect(page.getByTestId('adam-learning-overlay')).toHaveAttribute('data-status', 'pending');
-  await expect(page.getByTestId('adam-proposal-pending')).toBeVisible();
-  await expect(page.getByTestId('adam-learning-overlay')).not.toContainText('-0.042');
-  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
-  await captureEvidence(page, '14-adam-pending-1920.png', 'Adam pending', '[data-testid="adam-learning-overlay"]');
-
-  // Adam dock values: pending proposal status
-  await page.locator('button[data-dock-depth="values"]').click();
-  await expect(page.getByTestId('dock-values')).toBeVisible();
-  await expect(page.getByTestId('dock-values')).toContainText('Adam Optimizer Proposal');
-  await expect(page.getByTestId('dock-values').getByTestId('adam-proposal-pending')).toBeVisible();
-  await page.locator('.dock-tab-close').click();
-
-  // Adam math in dock via inspect affordance
-  await page.locator('#dock-inspect').click();
-  await page.locator('button[data-dock-depth="math"]').click();
-  await expect(page.getByTestId('dock-math')).toBeVisible();
-  await expect(page.getByTestId('dock-math')).toContainText('Adam Optimizer Equations');
-  await expect(page.getByTestId('dock-math').getByTestId('proposal-pending')).toBeVisible();
-  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
-  await page.locator('.dock-tab-close').click();
-
-  // Assert entire reverse traversal executed zero worker commands
-  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(initialCommands);
-});
-
-test('3. Stepped training, candidate discard, and authority preservation', async ({ page }) => {
-  test.setTimeout(120_000);
-  await page.setViewportSize({ width: 1920, height: 1080 });
-  await audit(page);
-  await page.goto('/?presentation=spatial&kiosk=1');
-  await page.locator('#exhibit-start').click();
-  await expect(page.getByTestId('status')).toContainText('Live prediction complete');
-
-  // Navigate to stop 5
-  for (let i = 0; i < 5; i++) {
-    await page.locator('#short-continue').click();
-  }
-  await expect(page.locator('#short-teach')).toBeVisible();
-
-  // Launch stepped training from short route
-  await page.locator('#short-teach').click();
-  await expect(page.locator('#execution-controls')).toBeVisible();
-  await expect(page.locator('.spatial-shell')).toHaveAttribute('data-experience-profile', 'visitor');
-
-  // Verify learning bridge causal sequence and pinned parameter rationale (Outcome C)
-  await expect(page.getByTestId('learning-bridge')).toBeVisible();
-  await expect(page.getByTestId('learning-bridge')).toContainText('Predictions for known targets');
-  await expect(page.getByTestId('learning-bridge')).toContainText('losses combine into training objective');
-  await expect(page.getByTestId('learning-bridge')).toContainText('Backpropagation carries backward signal');
-  await expect(page.getByTestId('learning-bridge')).toContainText('Parameter uses produce gradient contributions');
-  await expect(page.getByTestId('learning-bridge')).toContainText('Contributions accumulate into final gradient');
-  await expect(page.getByTestId('learning-bridge')).toContainText('Adam uses final gradient for parameter proposal');
-  await expect(page.getByTestId('learning-bridge')).toContainText('Provisional candidate: Accept or Discard');
-  await expect(page.locator('.bridge-scope')).toContainText('We follow one selected parameter');
-
-  // Verify diagnostic stepping buttons are omitted in visitor profile
-  await expect(page.locator('#execution-next')).toHaveCount(0);
-  await expect(page.locator('#execution-pause')).toHaveCount(0);
-  await expect(page.locator('#execution-follow')).toHaveCount(0);
-  await expect(page.locator('#execution-controls details')).toHaveCount(0);
-
-  // Stepped controls permitted in visitor profile
-  await expect(page.locator('#execution-continue')).toBeVisible();
-  await expect(page.locator('#execution-pin')).toBeVisible();
-  await expect(page.locator('#execution-cancel')).toBeVisible();
-
-  // Advance via pin to stopped gradient contribution
-  await page.locator('#execution-pin').click();
-  await expect(page.locator('#execution-continue')).toBeEnabled({ timeout: 60000 });
-  await expect(page.getByTestId('execution-frontier')).toContainText('stopped after matching backward node');
-  await expect(page.getByTestId('lesson-progress')).toContainText('Learning · Backward');
-  await expect(page.getByTestId('lesson-progress')).not.toContainText('Candidate');
-
-  // Positive contract for live backward camera (Amendments 6 & 7)
-  await assertSvgElementInViewBox(page, '.parameter-learning-overlay', { requireCenterInside: true, minIntersectionRatio: 0.8, description: 'Parameter accumulation overlay' });
-  await assertSvgElementInViewBox(page, '[data-world-parameter="wte"]', { requireCenterInside: true, minIntersectionRatio: 0.8, description: 'wte parameter bank' });
-  await assertSvgElementInViewBox(page, '[data-world-kind="tokenEmbedding"]', { requireCenterInside: true, minIntersectionRatio: 0.8, description: 'tokenEmbedding owner station' });
+  await expect(page.getByTestId('dock-explain')).toContainText('Partial gradient');
   await expect(page.locator('.learning-stations')).toHaveCount(0);
   await expect(page.locator('[data-learning-stage]')).toHaveCount(0);
 
-  // Explain tab is meaning-first (no raw contribution arithmetic or signed tracks)
-  await expect(page.getByTestId('dock-explain')).toContainText('Parameter uses contribute and accumulate');
-  await expect(page.getByTestId('dock-explain')).toContainText('Partial gradient');
-  await expect(page.getByTestId('dock-explain').locator('[data-testid="live-contribution"]')).toHaveCount(0);
-  await expect(page.getByTestId('dock-explain').locator('.live-signed-track')).toHaveCount(0);
-  await captureEvidence(page, '12-live-backward-contribution-explain-1920.png', 'live backward contribution Explain', '.parameter-learning-overlay', { wteBank: '[data-world-parameter="wte"]', owner: '[data-world-kind="tokenEmbedding"]' });
-
-  // Math tab retains exact learning evidence
+  const contributionCommands = await workerCommandCount(page);
   await page.locator('#dock-inspect').click();
+  await expectPublicLesson(page, { canonicalState: 'p2_gradient_contribution', navigationMode: 'detail' });
+  await expect(page.getByTestId('contextual-dock')).toHaveAttribute('data-active-depth', 'values');
+  await expect(page.getByTestId('dock-values')).toHaveAttribute('data-public-training-depth-kind', 'gradient-contribution');
+  await expect(page.getByTestId('retained-contribution-truth')).toContainText('retained matching subset');
+  await expect(page.getByTestId('retained-contribution-truth')).toContainText('not claimed to be complete fan-in');
+  await expect(page.getByTestId('public-final-gradient')).toHaveCount(0);
+
+  const contributionHeading = page.getByTestId('dock-values').locator('h3');
+  const parameterWitnessBeforeSelection = (await contributionHeading.textContent())?.trim() ?? '';
+  expect(parameterWitnessBeforeSelection).toContain('wte[');
+  expect(parameterWitnessBeforeSelection).toContain('flat index');
+
+  const firstRetainedOccurrence = page.locator('button[data-training-contribution-ordinal]').first();
+  await expect(firstRetainedOccurrence).toBeVisible();
+  const retainedRow = firstRetainedOccurrence.locator('xpath=ancestor::tr');
+  const retainedChild = (await retainedRow.locator('td').nth(1).textContent())?.trim() ?? '';
+  expect(retainedChild).not.toBe('');
+  await firstRetainedOccurrence.click();
+  await expect(contributionHeading).toHaveText(parameterWitnessBeforeSelection);
+  await expectPublicLesson(page, { canonicalState: 'p2_gradient_contribution', navigationMode: 'detail' });
+  expect(await workerCommandCount(page)).toBe(contributionCommands);
+
+  await page.locator('button[data-dock-depth="source"]').click();
+  const contributionSource = page.getByTestId('dock-source');
+  await expect(contributionSource).toHaveAttribute('data-public-training-depth-kind', 'gradient-contribution');
+  const contributionTrainingSource = (
+    await contributionSource.locator('p', { hasText: 'Training source:' }).locator('code').textContent()
+  )?.trim() ?? '';
+  expect(contributionTrainingSource).not.toBe('');
+  const exactParameterWitness = (await contributionSource.locator('p', { hasText: 'Parameter witness:' }).textContent())?.trim() ?? '';
+  expect(exactParameterWitness).toContain('wte[');
+  expect(exactParameterWitness).toContain('flat index');
+  expect(await workerCommandCount(page)).toBe(contributionCommands);
+
   await page.locator('button[data-dock-depth="math"]').click();
-  await expect(page.getByTestId('dock-math')).toBeVisible();
-  await expect(page.getByTestId('dock-math').getByTestId('live-contribution')).toBeVisible();
-  await expect(page.getByTestId('dock-math').locator('.live-signed-track').first()).toBeVisible();
-  await captureEvidence(page, '13-live-backward-contribution-math-1920.png', 'live backward contribution Math', '.parameter-learning-overlay');
+  await expect(page.getByTestId('dock-math')).toHaveAttribute('data-public-training-depth-kind', 'gradient-contribution');
+  await expect(page.getByTestId('public-contribution-math')).toBeVisible();
+  const retainedChildAction = page.getByTestId('dock-math').locator('button[data-live-source][data-live-child]');
+  await expect(retainedChildAction).toHaveAttribute('data-live-source', contributionTrainingSource);
+  await expect(retainedChildAction).toHaveAttribute('data-live-child', retainedChild);
+  expect(await workerCommandCount(page)).toBe(contributionCommands);
+  await captureEvidence(page, '12-part2-one-contribution-1920.png', 'p2_gradient_contribution', '.parameter-learning-overlay', {
+    wteBank: '[data-world-parameter="wte"]',
+    owner: '[data-world-kind="tokenEmbedding"]',
+  });
+  await page.locator('#dock-inspect').click();
+  await expectPublicLesson(page, { canonicalState: 'p2_gradient_contribution' });
 
-  // Return to Explain tab
-  await page.locator('.dock-tab-close').click();
-  await expect(page.getByTestId('dock-explain')).toBeVisible();
+  // Complete backward and bind explicit final-gradient ancestry.
+  const beforeFinalGradient = await workerCommandCount(page);
+  await advanceCurrentPart2(page, 'p2_final_gradient');
+  expect(await workerCommandCount(page)).toBeGreaterThan(beforeFinalGradient);
+  await expect(page.getByTestId('parameter-learning-overlay')).toBeVisible();
 
-  // Advance to Candidate ready
-  await page.locator('#execution-continue').click();
-  await expect(page.locator('#execution-controls')).toHaveAttribute('data-training-phase', 'ready', { timeout: 60000 });
-  await expect(page.getByTestId('lesson-progress')).toContainText('Learning · Candidate Ready');
-  await expect(page.getByTestId('lesson-progress')).not.toContainText('Backward');
+  const finalGradientCommands = await workerCommandCount(page);
+  await page.locator('#dock-inspect').click();
+  await expectPublicLesson(page, { canonicalState: 'p2_final_gradient', navigationMode: 'detail' });
+  await expect(page.getByTestId('dock-values')).toHaveAttribute('data-public-training-depth-kind', 'final-gradient');
+  await expect(page.getByTestId('dock-values')).toContainText('Backward complete: YES');
+  await expect(page.getByTestId('public-final-gradient')).toBeVisible();
+  await expect(page.getByTestId('retained-fanin-status')).toContainText('RETAINED SUBSET, not complete fan-in');
+  expect(await workerCommandCount(page)).toBe(finalGradientCommands);
+
+  await page.locator('button[data-dock-depth="math"]').click();
+  await expect(page.getByTestId('dock-math')).toHaveAttribute('data-public-training-depth-kind', 'final-gradient');
+  await expect(page.getByTestId('no-retained-sum')).toContainText('not summed or presented as complete fan-in');
+  const finalGradientAction = page.getByTestId('dock-math')
+    .locator('button[data-source-run][data-gradient-parameter]')
+    .first();
+  await expect(finalGradientAction).toBeVisible();
+  const finalGradientSourceRun = await finalGradientAction.getAttribute('data-source-run');
+  const finalGradientParameter = await finalGradientAction.getAttribute('data-gradient-parameter');
+  expect(finalGradientSourceRun).toBeTruthy();
+  expect(finalGradientParameter).toMatch(/^\d+$/);
+  expect(await workerCommandCount(page)).toBe(finalGradientCommands);
+  await captureEvidence(page, '13-part2-final-gradient-1920.png', 'p2_final_gradient', '.parameter-learning-overlay', {
+    wteBank: '[data-world-parameter="wte"]',
+  });
+  await page.locator('#dock-inspect').click();
+  await expectPublicLesson(page, { canonicalState: 'p2_final_gradient' });
+
+  // Adam consumes the same completed gradient but remains a provisional proposal.
+  const beforeAdam = await workerCommandCount(page);
+  await advanceCurrentPart2(page, 'p2_adam_proposal');
+  expect(await workerCommandCount(page)).toBeGreaterThan(beforeAdam);
+  await expect(page.getByTestId('adam-learning-overlay')).toBeVisible();
+  await expect(page.getByTestId('adam-learning-overlay')).toHaveAttribute('data-provisional', 'true');
+  await expect(page.getByTestId('adam-learning-overlay')).toHaveAttribute('data-status', 'ready');
+  await expect(page.getByTestId('adam-learning-overlay')).toContainText('ACCEPTED MODEL UNCHANGED');
+
+  const adamCommands = await workerCommandCount(page);
+  await page.locator('#dock-inspect').click();
+  await expectPublicLesson(page, { canonicalState: 'p2_adam_proposal', navigationMode: 'detail' });
+  await expect(page.getByTestId('dock-values')).toHaveAttribute('data-public-training-depth-kind', 'adam');
+  await expect(page.getByTestId('dock-values')).toContainText('PROVISIONAL');
+  await expect(page.getByTestId('dock-values')).toContainText('ACCEPTED MODEL UNCHANGED');
+  expect(await workerCommandCount(page)).toBe(adamCommands);
+
+  await page.locator('button[data-dock-depth="math"]').click();
+  await expect(page.getByTestId('dock-math')).toHaveAttribute('data-public-training-depth-kind', 'adam');
+  const adamGradientAction = page.getByTestId('dock-math')
+    .locator('button[data-source-run][data-gradient-parameter]')
+    .first();
+  await expect(adamGradientAction).toHaveAttribute('data-source-run', finalGradientSourceRun!);
+  await expect(adamGradientAction).toHaveAttribute('data-gradient-parameter', finalGradientParameter!);
+  await expect(page.getByTestId('dock-math').locator('button[data-artifact][data-element]')).toHaveCount(0);
+  expect(await workerCommandCount(page)).toBe(adamCommands);
+  await captureEvidence(page, '14-part2-adam-proposal-1920.png', 'p2_adam_proposal', '[data-testid="adam-learning-overlay"]', {
+    wteBank: '[data-world-parameter="wte"]',
+  });
+  await page.locator('#dock-inspect').click();
+  await expectPublicLesson(page, { canonicalState: 'p2_adam_proposal' });
+
+  // Candidate evaluation is authentic execution; acceptance state remains untouched.
+  const beforeCandidate = await workerCommandCount(page);
+  await advanceCurrentPart2(page, 'candidate_ready');
+  expect(await workerCommandCount(page)).toBeGreaterThan(beforeCandidate);
+  await expectPublicLesson(page, {
+    canonicalState: 'candidate_ready',
+    displayedState: 'candidate_ready',
+    navigationMode: 'guided',
+    outcome: '',
+  });
+  await expect(page.locator('.candidate-decision-pair')).toBeVisible();
   await expect(page.locator('#execution-accept')).toBeVisible();
   await expect(page.locator('#execution-cancel')).toBeVisible();
   await expect(page.locator('#execution-cancel')).toContainText('Discard candidate');
-  await expect(page.getByTestId('execution-frontier')).toContainText('Candidate ready');
-
-  // Assert legacy upper comparison is suppressed
+  await expect(page.locator('button[data-dock-depth="compare"]')).toBeVisible();
   await expect(page.locator('.decision-summary')).toHaveCount(0);
-  await expect(page.locator('.output-comparison')).toHaveCount(0);
-
-  // Assert authentic Adam proposal is rendered in overlay
-  await expect(page.getByTestId('adam-learning-overlay')).toBeVisible();
-  await expect(page.getByTestId('adam-learning-overlay')).toHaveAttribute('data-status', 'ready');
-  await expect(page.getByTestId('adam-learning-overlay').getByTestId('adam-proposal-table')).toBeVisible();
-
-  // Positive contract for Candidate Ready camera (Amendments 6 & 7)
-  await assertSvgElementInViewBox(page, '[data-testid="adam-learning-overlay"]', { requireCenterInside: true, minIntersectionRatio: 0.8, description: 'Adam learning overlay' });
-  await assertSvgElementInViewBox(page, '[data-world-parameter="wte"]', { requireCenterInside: true, minIntersectionRatio: 0.8, description: 'wte parameter bank' });
   await expect(page.locator('.learning-stations')).toHaveCount(0);
   await expect(page.locator('[data-learning-stage]')).toHaveCount(0);
+  await captureEvidence(page, '15-candidate-ready-1920.png', 'candidate_ready', '[data-world-kind="probabilities"]');
 
-  await captureEvidence(page, '15-candidate-ready-1920.png', 'Candidate Ready', '[data-testid="adam-learning-overlay"]', { wteBank: '[data-world-parameter="wte"]' });
-
-  // Candidate Ready Compare regression (Amendment 8):
-  // Assert Compare tab exists in the contextual dock
-  const compareTab = page.locator('button[data-dock-depth="compare"]');
-  await expect(compareTab).toBeVisible();
-
-  // Capture world camera box before opening Compare
+  // Compare is a read-only detail detour and must not move the public camera or decision state.
   const cameraBeforeCompare = await page.evaluate(() => {
     const vb = (document.querySelector('#spatial-world') as any).viewBox.baseVal;
     return { x: vb.x, y: vb.y, width: vb.width, height: vb.height };
   });
+  const commandsBeforeCompare = await workerCommandCount(page);
+  await page.locator('button[data-dock-depth="compare"]').click();
+  await expectPublicLesson(page, { canonicalState: 'candidate_ready', navigationMode: 'detail', outcome: '' });
+  await expect(page.getByTestId('contextual-dock')).toHaveAttribute('data-active-depth', 'compare');
+  expect(await workerCommandCount(page)).toBe(commandsBeforeCompare);
+  const compareContent = page.getByTestId('dock-compare');
+  await expect(compareContent).toBeVisible();
+  await expect(compareContent).toContainText('Current / Candidate');
+  await expect(compareContent.getByTestId('before-mean')).toBeVisible();
+  await expect(compareContent.getByTestId('after-mean')).toBeVisible();
+  await expect(compareContent).not.toContainText('No active comparison available');
+  await expect(page.locator('#execution-accept')).toBeVisible();
+  await expect(page.locator('#execution-cancel')).toBeVisible();
 
-  // Assert opening Compare issues zero execution
-  const commandsBeforeCompare = await page.evaluate(() => (window as any).abq.commands.length);
-  const runBefore = await page.locator('[data-testid="selected-world-object"]').getAttribute('data-run-id');
-  await compareTab.click();
-  expect(await page.evaluate(() => (window as any).abq.commands.length)).toBe(commandsBeforeCompare);
-
-  // Assert camera remains unchanged after opening Compare (Amendment 8)
   const cameraAfterCompare = await page.evaluate(() => {
     const vb = (document.querySelector('#spatial-world') as any).viewBox.baseVal;
     return { x: vb.x, y: vb.y, width: vb.width, height: vb.height };
@@ -826,104 +893,126 @@ test('3. Stepped training, candidate discard, and authority preservation', async
   expect(cameraAfterCompare.y).toBeCloseTo(cameraBeforeCompare.y, 0);
   expect(cameraAfterCompare.width).toBeCloseTo(cameraBeforeCompare.width, 0);
   expect(cameraAfterCompare.height).toBeCloseTo(cameraBeforeCompare.height, 0);
+  await captureEvidence(page, '16-candidate-compare-1920.png', 'candidate_ready compare', '[data-world-kind="probabilities"]');
 
-  // Assert exactly one public .output-comparison exists and is inside contextual dock
-  await expect(page.locator('.output-comparison')).toHaveCount(1);
-  await expect(page.locator('.contextual-dock .output-comparison')).toHaveCount(1);
+  await page.locator('#dock-inspect').click();
+  await expectPublicLesson(page, { canonicalState: 'candidate_ready', outcome: '' });
 
-  // Assert Compare content contains real Current/Candidate evidence
-  const compareContent = page.getByTestId('dock-compare');
-  await expect(compareContent).toBeVisible();
-  await expect(compareContent).toContainText('Current / Candidate');
-  await expect(compareContent.getByTestId('before-mean')).toBeVisible();
-  await expect(compareContent.getByTestId('after-mean')).toBeVisible();
-  await expect(compareContent.locator('.output-comparison table')).toBeVisible();
-  await expect(compareContent).not.toContainText('No active comparison available');
+  // Candidate Details expose only candidate-side live scalar ancestry.
+  const candidateDetailCommands = await workerCommandCount(page);
+  await page.locator('#dock-inspect').click();
+  await expectPublicLesson(page, { canonicalState: 'candidate_ready', navigationMode: 'detail', outcome: '' });
+  await expect(page.getByTestId('contextual-dock')).toHaveAttribute('data-active-depth', 'values');
+  await expect(page.getByTestId('dock-values')).toHaveAttribute('data-public-training-depth-kind', 'candidate');
+  await expect(page.getByTestId('dock-values')).toContainText('candidate evaluated');
+  await expect(page.getByTestId('dock-values')).toContainText('candidate not accepted');
+  await expect(page.getByTestId('dock-values')).toContainText('candidate not live');
+  expect(await workerCommandCount(page)).toBe(candidateDetailCommands);
 
-  // Assert Adam overlay and parameter bank remain visible inside active viewBox
-  await assertSvgElementInViewBox(page, '[data-testid="adam-learning-overlay"]', { requireCenterInside: true, minIntersectionRatio: 0.8, description: 'Adam overlay during Compare' });
-  await assertSvgElementInViewBox(page, '[data-world-parameter="wte"]', { requireCenterInside: true, minIntersectionRatio: 0.8, description: 'wte bank during Compare' });
+  await page.locator('button[data-dock-depth="source"]').click();
+  const candidateSourcePane = page.getByTestId('dock-source');
+  const baselineRunId = (
+    await candidateSourcePane.locator('p', { hasText: 'Baseline run:' }).locator('code').textContent()
+  )?.trim() ?? '';
+  const candidateRunId = (
+    await candidateSourcePane.locator('p', { hasText: 'Candidate run:' }).locator('code').textContent()
+  )?.trim() ?? '';
+  expect(baselineRunId).not.toBe('');
+  expect(candidateRunId).not.toBe('');
+  expect(candidateRunId).not.toBe(baselineRunId);
+  expect(await workerCommandCount(page)).toBe(candidateDetailCommands);
 
-  // Assert Accept / Discard transaction controls remain visible
-  await expect(page.locator('#execution-accept')).toBeVisible();
-  await expect(page.locator('#execution-cancel')).toBeVisible();
-  await expect(page.locator('#execution-cancel')).toContainText('Discard candidate');
+  await page.locator('button[data-dock-depth="math"]').click();
+  const candidateMath = page.getByTestId('dock-math');
+  await expect(candidateMath).toHaveAttribute('data-public-training-depth-kind', 'candidate');
+  const candidateScalarActions = candidateMath.locator('button[data-source-run][data-artifact][data-element]');
+  await expect(candidateScalarActions).toHaveCount(1);
+  await expect(candidateScalarActions.first()).toHaveAttribute('data-source-run', candidateRunId);
+  await expect(candidateScalarActions.first()).toHaveAttribute('data-artifact', /.+/);
+  await expect(candidateScalarActions.first()).toHaveAttribute('data-element', /^\d+$/);
+  await expect(page.getByTestId('baseline-scalar-inspection-unavailable')).toBeVisible();
+  expect(await workerCommandCount(page)).toBe(candidateDetailCommands);
 
-  // Assert run/candidate identities remain unchanged
-  expect(await page.locator('[data-testid="selected-world-object"]').getAttribute('data-run-id')).toBe(runBefore);
-  await captureEvidence(page, '16-candidate-compare-1920.png', 'Candidate Compare', '[data-testid="adam-learning-overlay"]', { wteBank: '[data-world-parameter="wte"]' });
-
-  // Assert closing Compare preserves Candidate Ready state
-  await page.locator('.dock-tab-close').click();
-  await expect(page.getByTestId('dock-explain')).toBeVisible();
-  await expect(page.locator('#execution-controls')).toHaveAttribute('data-training-phase', 'ready');
-  await expect(page.locator('#execution-accept')).toBeVisible();
-  await expect(page.locator('#execution-cancel')).toBeVisible();
-  await expect(page.locator('#execution-cancel')).toContainText('Discard candidate');
-
-  // Discard candidate
-  await page.locator('#execution-cancel').click();
-  await expect(page.locator('#execution-controls')).toHaveCount(0);
-  await expect(page.getByTestId('status')).toContainText('Execution cancelled · prior completed evidence preserved');
-  await captureEvidence(page, '18-post-discard-1920.png', 'post Discard');
-
-  // Verify acceptTraining was NOT called, cancel command was sent, and optimizer step is unchanged
-  const a = await page.evaluate(() => (window as any).abq);
-  expect(a.commands.filter((c: any) => c.command === 'acceptTraining')).toHaveLength(0);
-  expect(a.commands[a.commands.length - 1].command).toMatch(/cancel/i);
-  expect(a.lastReady?.state.optimizer.step ?? 0).toBe(0);
+  await page.locator('#dock-inspect').click();
+  await expectPublicLesson(page, { canonicalState: 'candidate_ready', outcome: '' });
 });
 
-test('3b. Stepped training, candidate accept, live step advancement, and public reset restoration', async ({ page }) => {
-  test.setTimeout(120_000);
+test('3. current Part 2 candidate discard preserves accepted authority', async ({ page }) => {
+  test.setTimeout(180_000);
   await page.setViewportSize({ width: 1920, height: 1080 });
   await audit(page);
-  await page.goto('/?presentation=spatial&kiosk=1');
-  await page.locator('#exhibit-start').click();
-  await expect(page.getByTestId('status')).toContainText('Live prediction complete');
+  await driveCurrentPart2ToCandidateReady(page);
 
-  // Navigate to stop 5
-  for (let i = 0; i < 5; i++) {
-    await page.locator('#short-continue').click();
-  }
-  await expect(page.locator('#short-teach')).toBeVisible();
+  await expectPublicLesson(page, {
+    canonicalState: 'candidate_ready',
+    displayedState: 'candidate_ready',
+    navigationMode: 'guided',
+    outcome: '',
+  });
+  const beforeDiscard = await page.evaluate(() => (window as any).abq);
+  const acceptedOptimizerStepBefore = beforeDiscard.lastReady?.state.optimizer.step ?? 0;
 
-  // Launch stepped training from short route
-  await page.locator('#short-teach').click();
-  await expect(page.locator('#execution-controls')).toBeVisible();
-  await expect(page.locator('.spatial-shell')).toHaveAttribute('data-experience-profile', 'visitor');
+  await page.locator('#execution-cancel').click();
+  await expect(page.locator('.spatial-shell')).toHaveAttribute(
+    'data-public-canonical-state',
+    'tour_complete',
+    { timeout: 60_000 },
+  );
+  await expectPublicLesson(page, {
+    canonicalState: 'tour_complete',
+    displayedState: 'tour_complete',
+    navigationMode: 'guided',
+    outcome: 'discarded',
+  });
+  await expect(page.locator('#execution-controls')).toHaveCount(0);
+  await captureEvidence(page, '18-post-discard-1920.png', 'tour_complete discarded');
 
-  // Advance via pin to gradient contribution
-  await page.locator('#execution-pin').click();
-  await expect(page.getByTestId('execution-frontier')).toContainText('seeking pinned contribution');
+  const afterDiscard = await page.evaluate(() => (window as any).abq);
+  expect(afterDiscard.commands.filter((c: any) => c.command === 'acceptTraining')).toHaveLength(0);
+  expect(afterDiscard.commands.some((c: any) => c.command === 'cancelForward')).toBe(true);
+  expect(afterDiscard.lastReady?.state.optimizer.step ?? 0).toBe(acceptedOptimizerStepBefore);
+});
 
-  // Advance to Candidate ready
-  await page.locator('#execution-continue').click();
-  await expect(page.locator('#execution-controls')).toHaveAttribute('data-training-phase', 'ready', { timeout: 60000 });
+test('3b. current Part 2 candidate accept commits once and public reset restores baseline', async ({ page }) => {
+  test.setTimeout(180_000);
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await audit(page);
+  await driveCurrentPart2ToCandidateReady(page);
+
+  await expectPublicLesson(page, {
+    canonicalState: 'candidate_ready',
+    displayedState: 'candidate_ready',
+    navigationMode: 'guided',
+    outcome: '',
+  });
   await expect(page.locator('#execution-accept')).toBeVisible();
   await expect(page.locator('#execution-accept')).toBeEnabled();
 
-  // Accept candidate update
   await page.locator('#execution-accept').click();
+  await expect(page.locator('.spatial-shell')).toHaveAttribute(
+    'data-public-canonical-state',
+    'tour_complete',
+    { timeout: 60_000 },
+  );
+  await expectPublicLesson(page, {
+    canonicalState: 'tour_complete',
+    displayedState: 'tour_complete',
+    navigationMode: 'guided',
+    outcome: 'accepted',
+  });
   await expect(page.locator('#execution-controls')).toHaveCount(0);
 
-  // Verify exactly 1 acceptTraining command posted and trainingStep advanced to 1
-  const a = await page.evaluate(() => (window as any).abq);
-  const acceptCommands = a.commands.filter((c: any) => c.command === 'acceptTraining');
-  expect(acceptCommands).toHaveLength(1);
-  expect(a.lastResult?.trainingStep).toBe(1);
+  const afterAccept = await page.evaluate(() => (window as any).abq);
+  expect(afterAccept.commands.filter((c: any) => c.command === 'acceptTraining')).toHaveLength(1);
+  expect(afterAccept.lastResult?.trainingStep).toBe(1);
+  await captureEvidence(page, '17-post-accept-1920.png', 'tour_complete accepted');
 
-  // Subsequent operation uses accepted model (training step 1)
-  await expect(page.getByTestId('status')).toContainText('Live update complete · training step 1');
-  await captureEvidence(page, '17-post-accept-1920.png', 'post Accept');
-
-  // Public Reset restores baseline model and clears session
   await page.locator('#clear-session').click();
   await expect(page.locator('#exhibit-start')).toBeEnabled();
   await page.locator('#exhibit-start').click();
-  await expect(page.getByTestId('status')).toContainText('Live prediction complete');
-  const a2 = await page.evaluate(() => (window as any).abq);
-  expect(a2.lastReady?.state.optimizer.step).toBe(0);
+  await waitForCurrentPublicState(page, 'p1_prediction_preview');
+  const afterReset = await page.evaluate(() => (window as any).abq);
+  expect(afterReset.lastReady?.state.optimizer.step).toBe(0);
 });
 
 test('4. Facilitator panel, authoritative retention text, execution omissions, and opt-out persistence', async ({ page }) => {
