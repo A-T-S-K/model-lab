@@ -15,6 +15,8 @@ import {
 } from './public-depth.js';
 import {
   resolvePublicTrainingDepthContext,
+  type PublicArtifactInspectionTarget,
+  type PublicGradientInspectionTarget,
   type PublicTrainingDepthSelection,
   type ResolvedPublicTrainingDepthContext,
 } from './public-training-depth.js';
@@ -339,6 +341,16 @@ function publicTrainingDistribution(values: readonly number[], labels: readonly 
   return values.map((value, index) => `${esc(labels[index] ?? String(index))} ${fmt(value)}`).join(' · ');
 }
 
+function publicTrainingArtifactInspection(label: string, target: PublicArtifactInspectionTarget | undefined): string {
+  if (!target) return '';
+  return `<button data-source-run="${esc(target.sourceRunId)}" data-artifact="${esc(target.artifactId)}" data-element="${target.element}">${esc(label)}</button>`;
+}
+
+function publicTrainingGradientInspection(label: string, target: PublicGradientInspectionTarget | undefined): string {
+  if (!target) return '';
+  return `<button data-source-run="${esc(target.sourceRunId)}" data-gradient-parameter="${target.parameterIndex}">${esc(label)}</button>`;
+}
+
 function renderPublicPart2Values(opts: ContextualDockOptions, ctx: ResolvedPublicTrainingDepthContext): string {
   if (!ctx.available) return publicTrainingUnavailable(ctx, 'values');
   if (ctx.kind === 'objective') {
@@ -416,8 +428,11 @@ function renderPublicPart2Math(opts: ContextualDockOptions, ctx: ResolvedPublicT
       <h3>Cross-entropy witness · p${row?.position ?? 0}</h3>
       ${row?.derivedLoss === undefined ? '<p>DERIVED −log(Ptarget): unavailable because authentic target probability is unavailable.</p>' : `<p>DERIVED: −log(${fmt(row.probability)}) = ${fmt(row.derivedLoss)}</p>`}
       <p>Recorded loss: ${row?.recordedLoss === undefined ? 'unavailable' : fmt(row.recordedLoss)} ${row?.recordedLoss === undefined ? '[UNAVAILABLE]' : '[OBSERVED]'}</p>
+      ${publicTrainingArtifactInspection('Inspect target probability in Microscope', objective.probabilityInspection)}
+      ${publicTrainingArtifactInspection('Inspect recorded position loss in Microscope', objective.lossInspection)}
       ${objective.derivedMean === undefined ? '<p>DERIVED mean unavailable until every authentic recorded per-position loss operand is available.</p>' : `<p>DERIVED: sum(${objective.rows.length} observed per-position losses) / ${objective.rows.length} = ${fmt(objective.derivedMean)}</p>`}
       <p>Observed runtime mean: ${objective.observedMean === undefined ? 'unavailable' : fmt(objective.observedMean)} ${objective.observedMean === undefined ? '[UNAVAILABLE]' : '[OBSERVED]'}</p>
+      ${publicTrainingArtifactInspection('Inspect recorded mean objective in Microscope', objective.meanInspection)}
     </div>`;
   }
   if (ctx.kind === 'backward-trace') {
@@ -444,6 +459,7 @@ function renderPublicPart2Math(opts: ContextualDockOptions, ctx: ResolvedPublicT
       <h3>Completed backward result</h3>
       <p>Final gradient = ${ctx.finalGradient === undefined ? 'unavailable' : fmt(ctx.finalGradient)} [OBSERVED COMPLETED BACKWARD RESULT]</p>
       <p data-testid="no-retained-sum">The retained matching contribution subset is not summed or presented as complete fan-in.</p>
+      ${publicTrainingGradientInspection('Inspect final gradient ancestry', ctx.gradientInspection)}
       ${event?.child === undefined ? '' : `<button data-live-child="${event.child}" data-live-source="${esc(ctx.gradientSourceRunId ?? '')}">Inspect a retained contributing child scalar in Microscope</button>`}
       <section class="spatial-scalar" id="microscope"><h3>Scalar / source inspection</h3>${opts.scalar}</section>
     </div>`;
@@ -462,6 +478,7 @@ function renderPublicPart2Math(opts: ContextualDockOptions, ctx: ResolvedPublicT
       <p>DERIVED θ′ = θ − symbolic step quantity = ${fmt(symbolicAfter)}</p>
       <p>OBSERVED stored delta = actual representable θ′ − θ = ${fmt(u.delta)}; proposed θ′ = ${fmt(u.after)}.</p>
       <p>Starting accepted optimizer step = ${ctx.acceptedStep}; bias-correction exponent uses acceptedStep + 1 = ${(ctx.acceptedStep ?? 0) + 1}.</p>
+      ${publicTrainingGradientInspection('Inspect final gradient feeding this proposal', ctx.gradientInspection)}
       <p><strong>PROVISIONAL</strong> · ACCEPTED MODEL UNCHANGED</p>
     </div>`;
   }
@@ -472,6 +489,8 @@ function renderPublicPart2Math(opts: ContextualDockOptions, ctx: ResolvedPublicT
     ${row?.baselineDerivedLoss === undefined || row?.candidateDerivedLoss === undefined ? '<p>DERIVED per-position loss unavailable because complete authentic target probability support is unavailable.</p>' : `<p>DERIVED baseline loss = −log(${fmt(row.baselineTargetProbability)}) = ${fmt(row.baselineDerivedLoss)}</p><p>DERIVED candidate loss = −log(${fmt(row.candidateTargetProbability)}) = ${fmt(row.candidateDerivedLoss)}</p>`}
     <p>DERIVED baseline mean: ${candidate.baselineDerivedMean === undefined ? 'unavailable' : fmt(candidate.baselineDerivedMean)}</p>
     <p>DERIVED candidate mean: ${candidate.candidateDerivedMean === undefined ? 'unavailable' : fmt(candidate.candidateDerivedMean)}</p>
+    ${publicTrainingArtifactInspection('Inspect candidate target probability in Microscope', candidate.candidateProbabilityInspection)}
+    <p data-testid="baseline-scalar-inspection-unavailable">Baseline distribution values are authentic recorded evidence; live baseline scalar ancestry is unavailable in this transaction context.</p>
     <p>These derived values describe this one fixed training example only; they do not establish general model quality.</p>
   </div>`;
 }

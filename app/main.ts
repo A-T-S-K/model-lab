@@ -1596,6 +1596,20 @@ function bind(): void {
       }),
     );
   document
+    .querySelectorAll<HTMLButtonElement>("[data-gradient-parameter]")
+    .forEach((button) =>
+      button.addEventListener("click", () => {
+        const sourceRunId = button.dataset.sourceRun;
+        const parameterIndex = Number(button.dataset.gradientParameter);
+        if (sourceRunId && Number.isInteger(parameterIndex) && !busy)
+          void inspect(
+            sourceRunId,
+            { kind: "gradient", parameterIndex },
+            `Final gradient ancestry · parameter ${parameterIndex}`,
+          );
+      }),
+    );
+  document
     .querySelectorAll<HTMLButtonElement>("[data-node]")
     .forEach((button) =>
       button.addEventListener("click", () => {

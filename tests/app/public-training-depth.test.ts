@@ -16,6 +16,7 @@ import { forwardReadModel } from '../../app/spatial/forward.js';
 import { resolveParameter, resolveParameterIndex, type ParameterPin } from '../../app/spatial/learning.js';
 import {
   isPublicPart2DetailRenderOnly,
+  isPublicTrainingSourceInspectable,
   resolvePublicTrainingDepthContext,
   resolvePublicTrainingParameter,
   type PublicTrainingDepthSelection,
@@ -792,4 +793,179 @@ test('PD1-2 contextual dock dispatches canonical Part 2 Values Math and Source b
   const candidateSource = await publicTrainingDock(harness, 'candidate_ready', 'source');
   assert.match(candidateSource, /Comparison compatibility: COMPATIBLE/);
   assert.match(candidateSource, /candidate not live/);
+});
+
+
+function exactPublicArtifact(run: RecordedRun, kind: string, token?: number): Artifact {
+  const artifact = run.artifacts.find(candidate =>
+    candidate.kind === kind
+    && candidate.concept.kind === kind
+    && (token === undefined ? candidate.concept.token === undefined : candidate.concept.token === token)
+    && candidate.availability === 'available'
+    && candidate.values !== null
+  );
+  assert(artifact, `authentic ${kind} artifact must exist`);
+  return artifact;
+}
+
+test('PD1-3C Objective microscope handoffs bind exact training artifacts and selected scalar elements', async () => {
+  const harness = await LiveTrainingHarness.create('pd1-3c-objective-inspection', { name: 'wte', row: 0, column: 0 });
+  await harness.objective();
+  const position = 2;
+  const resolved = context('p2_objective', harness, { objectivePosition: position });
+  assert(resolved.available);
+  const objective = resolved.objective!;
+  const row = objective.rows.find(candidate => candidate.position === position)!;
+  const sourceRunId = harness.progress.training!.gradientSourceRunId;
+  const run = harness.preview!.run;
+  const probability = exactPublicArtifact(run, 'probabilities', position);
+  const loss = exactPublicArtifact(run, 'loss', position);
+  const meanLoss = exactPublicArtifact(run, 'meanLoss');
+
+  assert.deepEqual(objective.probabilityInspection, {
+    sourceRunId,
+    artifactId: probability.id,
+    element: row.target,
+  });
+  assert.deepEqual(objective.lossInspection, {
+    sourceRunId,
+    artifactId: loss.id,
+    element: 0,
+  });
+  assert.deepEqual(objective.meanInspection, {
+    sourceRunId,
+    artifactId: meanLoss.id,
+    element: 0,
+  });
+
+  const html = await publicTrainingDock(harness, 'p2_objective', 'math', { objectivePosition: position });
+  for (const target of [objective.probabilityInspection!, objective.lossInspection!, objective.meanInspection!]) {
+    assert(html.includes(
+      `data-source-run="${target.sourceRunId}" data-artifact="${target.artifactId}" data-element="${target.element}"`,
+    ));
+  }
+});
+
+test('PD1-3C Objective omits microscope handoffs when the exact captured artifact is absent', async () => {
+  const harness = await LiveTrainingHarness.create('pd1-3c-objective-missing', { name: 'wte', row: 0, column: 0 });
+  await harness.objective();
+  const position = 2;
+  const original = harness.preview!;
+  const probability = exactPublicArtifact(original.run, 'probabilities', position);
+  const loss = exactPublicArtifact(original.run, 'loss', position);
+  const meanLoss = exactPublicArtifact(original.run, 'meanLoss');
+  const removed = new Set([probability.id, loss.id, meanLoss.id]);
+  const preview: RunResult = {
+    ...original,
+    run: { ...original.run, artifacts: original.run.artifacts.filter(artifact => !removed.has(artifact.id)) },
+  };
+  const resolved = context('p2_objective', harness, { objectivePosition: position }, harness.progress, preview);
+  assert(resolved.available);
+  assert.equal(resolved.objective?.probabilityInspection, undefined);
+  assert.equal(resolved.objective?.lossInspection, undefined);
+  assert.equal(resolved.objective?.meanInspection, undefined);
+});
+
+test('PD1-3C Contribution child handoff remains bound to the exact training source and retained child node', async () => {
+  const harness = await LiveTrainingHarness.create('pd1-3c-contribution-inspection', { name: 'wte', row: 0, column: 0 });
+  await harness.contribution();
+  const event = harness.progress.training!.contributions.at(-1)!;
+  assert.notEqual(event.child, undefined);
+  const sourceRunId = harness.progress.training!.gradientSourceRunId;
+  const html = await publicTrainingDock(harness, 'p2_gradient_contribution', 'math', { contributionOrdinal: event.ordinal });
+  assert(html.includes(`data-live-child="${event.child}" data-live-source="${sourceRunId}"`));
+});
+
+test('PD1-3C Final Gradient and Adam expose the same exact completed-gradient ancestry target only', async () => {
+  const harness = await LiveTrainingHarness.create('pd1-3c-gradient-inspection', { name: 'wte', row: 0, column: 0 });
+  await harness.finalGradient();
+  const sourceRunId = harness.progress.training!.gradientSourceRunId;
+  const expected = { sourceRunId, parameterIndex: harness.parameter.index };
+
+  const final = context('p2_final_gradient', harness);
+  assert(final.available);
+  assert.equal(final.backwardComplete, true);
+  assert.deepEqual(final.gradientInspection, expected);
+  const finalHtml = await publicTrainingDock(harness, 'p2_final_gradient', 'math');
+  assert(finalHtml.includes(`data-source-run="${sourceRunId}" data-gradient-parameter="${harness.parameter.index}"`));
+  assert.match(finalHtml, /data-testid="no-retained-sum"/);
+
+  await harness.adamProposal();
+  const adam = context('p2_adam_proposal', harness);
+  assert(adam.available);
+  assert.deepEqual(adam.gradientInspection, expected);
+  const adamHtml = await publicTrainingDock(harness, 'p2_adam_proposal', 'math');
+  assert(adamHtml.includes(`data-source-run="${sourceRunId}" data-gradient-parameter="${harness.parameter.index}"`));
+  assert.doesNotMatch(adamHtml, /data-artifact=/, 'optimizer transition fields must not become scalar artifact actions');
+  assert.equal((adamHtml.match(/data-gradient-parameter=/g) ?? []).length, 1);
+});
+
+test('PD1-3C Candidate inspection is live-source asymmetric: candidate target probability only, never baseline ancestry', async () => {
+  const harness = await LiveTrainingHarness.create('pd1-3c-candidate-inspection', { name: 'wte', row: 0, column: 0 });
+  await harness.ready();
+  const position = 2;
+  const training = harness.progress.training!;
+  const ready = training.readyOutputs!;
+  const resolved = context('candidate_ready', harness, { candidatePosition: position });
+  assert(resolved.available);
+  const candidate = resolved.candidate!;
+  const row = candidate.rows.find(item => item.position === position)!;
+  const artifact = exactPublicArtifact(ready.after, 'probabilities', position);
+
+  assert.equal(isPublicTrainingSourceInspectable(harness.progress, ready.after.manifest.runId), true);
+  assert.equal(isPublicTrainingSourceInspectable(harness.progress, ready.before.manifest.runId), false);
+  assert.deepEqual(candidate.candidateProbabilityInspection, {
+    sourceRunId: ready.after.manifest.runId,
+    artifactId: artifact.id,
+    element: row.target,
+  });
+  assert.equal('baselineProbabilityInspection' in candidate, false);
+
+  const html = await publicTrainingDock(harness, 'candidate_ready', 'math', { candidatePosition: position });
+  assert(html.includes(
+    `data-source-run="${ready.after.manifest.runId}" data-artifact="${artifact.id}" data-element="${row.target}"`,
+  ));
+  assert(!html.includes(`data-source-run="${ready.before.manifest.runId}"`));
+  assert.match(html, /live baseline scalar ancestry is unavailable/i);
+
+  const retainedOnly = resolvePublicTrainingDepthContext(
+    getPublicTourContent('candidate_ready'),
+    harness.progress,
+    harness.starting,
+    undefined,
+    { candidatePosition: position },
+  );
+  assert(retainedOnly?.available, 'retained candidate comparison evidence remains authentic without a live preview');
+  assert.equal(retainedOnly.candidate?.candidateProbabilityInspection, undefined);
+});
+
+test('PD1-3C public inspection handlers are explicit-source read-only handoffs with no execution or candidate effects', async () => {
+  const source = await readFile(new URL('../../app/main.ts', import.meta.url), 'utf8');
+
+  const artifactStart = source.indexOf('.querySelectorAll<HTMLButtonElement>("[data-artifact]")');
+  const gradientStart = source.indexOf('.querySelectorAll<HTMLButtonElement>("[data-gradient-parameter]")', artifactStart);
+  const nodeStart = source.indexOf('.querySelectorAll<HTMLButtonElement>("[data-node]")', gradientStart);
+  assert(artifactStart >= 0 && gradientStart > artifactStart && nodeStart > gradientStart);
+  const artifactHandler = source.slice(artifactStart, gradientStart);
+  const gradientHandler = source.slice(gradientStart, nodeStart);
+
+  const childStart = source.indexOf("mount.querySelectorAll<HTMLButtonElement>('[data-live-child]')");
+  const childEnd = source.indexOf("mount.querySelector('#step-learning')", childStart);
+  assert(childStart >= 0 && childEnd > childStart);
+  const childHandler = source.slice(childStart, childEnd);
+
+  assert.match(artifactHandler, /void inspect\(\s*sourceRunId,/);
+  assert.match(gradientHandler, /button\.dataset\.sourceRun/);
+  assert.match(gradientHandler, /kind:\s*"gradient",\s*parameterIndex/);
+  assert.match(gradientHandler, /void inspect\(\s*sourceRunId,/);
+  assert.match(childHandler, /void inspect\(source, \{ kind: 'node', nodeId:/);
+
+  const prohibited = /syncTrainingPin|inspectPin|forwardDriver\.(?:continue|runToContribution|runToProposal|acceptUpdate)|dispatchPublicLesson|selectRun\(|liveRunId\s*=|ACCEPT_REQUESTED|DISCARD_REQUESTED/;
+  for (const [label, handler] of [
+    ['artifact', artifactHandler],
+    ['gradient', gradientHandler],
+    ['child', childHandler],
+  ] as const) {
+    assert.doesNotMatch(handler, prohibited, label + ' inspection handler must remain read-only');
+  }
 });

@@ -1,7 +1,7 @@
 import type { ArchivedSnapshot } from '../../archive/session.js';
 import type { InspectionResult, ParameterRef } from '../../inspect/types.js';
 import type { ParameterUpdate } from '../../model/training.js';
-import type { RecordedRun } from '../../trace/types.js';
+import type { Artifact, RecordedRun } from '../../trace/types.js';
 import type { ForwardProgress, RunResult } from '../worker/protocol.js';
 import type { LiveContribution, TrainingProgress } from '../worker/training-execution.js';
 import { resolveParameterIndex } from './learning.js';
@@ -14,6 +14,17 @@ export interface PublicTrainingDepthSelection {
   objectivePosition?: number;
   contributionOrdinal?: number;
   candidatePosition?: number;
+}
+
+export interface PublicArtifactInspectionTarget {
+  readonly sourceRunId: string;
+  readonly artifactId: string;
+  readonly element: number;
+}
+
+export interface PublicGradientInspectionTarget {
+  readonly sourceRunId: string;
+  readonly parameterIndex: number;
 }
 
 export interface PublicObjectiveDepthRow {
@@ -54,6 +65,7 @@ export interface PublicCandidateDepth {
   readonly outputLabels: readonly string[];
   readonly rows: readonly PublicCandidateDepthRow[];
   readonly selectedPosition: number;
+  readonly candidateProbabilityInspection?: PublicArtifactInspectionTarget;
   readonly baselineDerivedMean?: number;
   readonly candidateDerivedMean?: number;
 }
@@ -78,6 +90,9 @@ export interface ResolvedPublicTrainingDepthContext {
     readonly selectedPosition: number;
     readonly observedMean?: number;
     readonly derivedMean?: number;
+    readonly probabilityInspection?: PublicArtifactInspectionTarget;
+    readonly lossInspection?: PublicArtifactInspectionTarget;
+    readonly meanInspection?: PublicArtifactInspectionTarget;
   };
   readonly numericAdjointsAvailable: boolean;
   readonly verifiedInspection?: InspectionResult;
@@ -86,6 +101,7 @@ export interface ResolvedPublicTrainingDepthContext {
   readonly fanInCompleteness: 'retained-subset';
   readonly finalGradient?: number;
   readonly backwardComplete: boolean;
+  readonly gradientInspection?: PublicGradientInspectionTarget;
   readonly proposal?: ParameterUpdate;
   readonly optimizer?: TrainingProgress['optimizer'];
   readonly acceptedStep?: number;
@@ -119,14 +135,30 @@ function sameJson(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function probabilityRow(run: RecordedRun, position: number): readonly number[] | undefined {
-  const artifact = run.artifacts.find(candidate =>
-    candidate.concept.kind === 'probabilities'
-    && candidate.concept.token === position
+function availableArtifact(run: RecordedRun, kind: string, token?: number): Artifact | undefined {
+  return run.artifacts.find(candidate =>
+    candidate.kind === kind
+    && candidate.concept.kind === kind
+    && (token === undefined ? candidate.concept.token === undefined : candidate.concept.token === token)
     && candidate.availability === 'available'
     && candidate.values !== null
   );
-  return artifact?.values ?? undefined;
+}
+
+function probabilityRow(run: RecordedRun, position: number): readonly number[] | undefined {
+  return availableArtifact(run, 'probabilities', position)?.values ?? undefined;
+}
+
+function artifactInspection(
+  run: RecordedRun,
+  sourceRunId: string,
+  kind: string,
+  token: number | undefined,
+  element: number,
+): PublicArtifactInspectionTarget | undefined {
+  const artifact = availableArtifact(run, kind, token);
+  if (!artifact?.values || !Number.isInteger(element) || element < 0 || element >= artifact.values.length) return undefined;
+  return { sourceRunId, artifactId: artifact.id, element };
 }
 
 function inputTokenLabel(id: number | undefined, snapshot: ArchivedSnapshot): string {
@@ -190,6 +222,17 @@ export function isPublicPart2DetailRenderOnly(
   navigationMode: string | undefined,
 ): boolean {
   return profile !== 'workbench' && content?.part === 2 && navigationMode === 'detail';
+}
+
+export function isPublicTrainingSourceInspectable(
+  progress: ForwardProgress | undefined,
+  sourceRunId: string | undefined,
+): boolean {
+  const training = progress?.training;
+  return Boolean(training && sourceRunId && (
+    sourceRunId === training.gradientSourceRunId
+    || sourceRunId === training.sourceRunId
+  ));
 }
 
 function boundBackwardInspection(
@@ -287,6 +330,9 @@ export function resolvePublicTrainingDepthContext(
     fanInCompleteness: 'retained-subset',
     finalGradient: training.final ? training.gradient : undefined,
     backwardComplete: training.final,
+    gradientInspection: training.final && isPublicTrainingSourceInspectable(progress, training.gradientSourceRunId)
+      ? { sourceRunId: training.gradientSourceRunId, parameterIndex: parameter.index }
+      : undefined,
     proposal: training.proposal,
     optimizer: training.optimizer,
     acceptedStep: training.acceptedStep,
@@ -319,6 +365,19 @@ export function resolvePublicTrainingDepthContext(
     });
     const requested = selection.objectivePosition;
     const selectedPosition = rows.some(row => row.position === requested) ? requested! : (rows.at(-1)?.position ?? 0);
+    const selectedRow = rows.find(row => row.position === selectedPosition);
+    const inspectableSource = trainingRun && isPublicTrainingSourceInspectable(progress, training.gradientSourceRunId)
+      ? training.gradientSourceRunId
+      : undefined;
+    const probabilityInspection = trainingRun && inspectableSource && selectedRow
+      ? artifactInspection(trainingRun, inspectableSource, 'probabilities', selectedPosition, selectedRow.target)
+      : undefined;
+    const lossInspection = trainingRun && inspectableSource
+      ? artifactInspection(trainingRun, inspectableSource, 'loss', selectedPosition, 0)
+      : undefined;
+    const meanInspection = trainingRun && inspectableSource
+      ? artifactInspection(trainingRun, inspectableSource, 'meanLoss', undefined, 0)
+      : undefined;
     return {
       ...base,
       objective: {
@@ -326,6 +385,9 @@ export function resolvePublicTrainingDepthContext(
         selectedPosition,
         observedMean: training.mean,
         derivedMean: completeMean(rows.map(row => row.recordedLoss)),
+        probabilityInspection,
+        lossInspection,
+        meanInspection,
       },
     };
   }
@@ -402,6 +464,12 @@ export function resolvePublicTrainingDepthContext(
     }
     const requested = selection.candidatePosition;
     const selectedPosition = rows.some(row => row.position === requested) ? requested! : (rows.at(-1)?.position ?? 0);
+    const selectedRow = rows.find(row => row.position === selectedPosition);
+    const candidateProbabilityInspection = livePreview
+      && isPublicTrainingSourceInspectable(progress, after.runId)
+      && selectedRow
+      ? artifactInspection(livePreview.run, after.runId, 'probabilities', selectedPosition, selectedRow.target)
+      : undefined;
     return {
       ...base,
       runtimeVersion: before.runtimeVersion,
@@ -419,6 +487,7 @@ export function resolvePublicTrainingDepthContext(
         outputLabels,
         rows,
         selectedPosition,
+        candidateProbabilityInspection,
         baselineDerivedMean: completeMean(rows.map(row => row.baselineDerivedLoss)),
         candidateDerivedMean: completeMean(rows.map(row => row.candidateDerivedLoss)),
       },
