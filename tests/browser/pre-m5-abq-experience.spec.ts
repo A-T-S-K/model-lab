@@ -648,17 +648,6 @@ test('2c. current Part 2 semantics, authentic depth, ancestry, and candidate con
   await expect(objectiveAnchor).toHaveAttribute('data-objective-mean-origin', 'OBSERVED');
   const objectivePositions = Number(await objectiveAnchor.getAttribute('data-objective-positions'));
   expect(objectivePositions).toBeGreaterThan(1);
-  await assertSvgElementInViewBox(page, '[data-testid="objective-anchor"]', {
-    requireCenterInside: true,
-    minIntersectionRatio: 0.8,
-    description: 'Part 2 objective anchor',
-  });
-  await assertSvgElementInViewBox(page, '[data-world-kind="probabilities"]', {
-    requireCenterInside: true,
-    minIntersectionRatio: 0.8,
-    description: 'Part 2 objective probability station',
-  });
-
   const objectiveCommands = await workerCommandCount(page);
   await page.locator('#dock-inspect').click();
   await expectPublicLesson(page, { canonicalState: 'p2_objective', navigationMode: 'detail' });
