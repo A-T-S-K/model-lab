@@ -13,6 +13,7 @@ import { PUBLIC_HOME } from "./spatial/camera.js";
 import { computeLiveTourEvidence, getPublicExecutionStatus } from "./spatial/public-tour.js";
 import { isPublicPart2DetailRenderOnly } from "./spatial/public-training-depth.js";
 import { createPublicLessonSession, getPublicLessonView, transitionPublicLesson, type PublicLessonEvent, type PublicLessonRuntimeEffect, type PublicLessonTransitionContext } from "./presentation/public-lesson-controller.js";
+import { reconcilePublicGuidedComputation, type PublicGuidedComputationBinding } from "./presentation/public-guided-computation.js";
 import { exhibitTiming, exhibitState } from "./presentation/exhibit-state.js";
 import { experienceCapabilities, resolveExperienceProfile, type ExperienceCapabilities, type ExperienceProfile } from "./presentation/experience-profile.js";
 import plexSansLicense from "@ibm/plex-sans/fonts/complete/woff2/license.txt?url";
@@ -115,6 +116,7 @@ function clearWorldSelection(){Object.assign(worldSelection,{node:'',port:'',pha
 function focusCanonicalPredict(){queueMicrotask(()=>document.querySelector<HTMLButtonElement>('#predict')?.focus({preventScroll:true}));}
 const spatialPresenter = new SpatialPresenter(spatialSelection);
 let publicLessonSession = createPublicLessonSession();
+let publicGuidedComputation: PublicGuidedComputationBinding | undefined;
 let spatialExperimentId = "";
 let spatialExperimentOffset = 0;
 let activeDataExperimentId = "";
@@ -276,7 +278,21 @@ function currentPublicLessonView() {
 function dispatchPublicLesson(event: PublicLessonEvent): boolean {
   const before = publicLessonSession;
   const transition = transitionPublicLesson(before, event, currentPublicLessonContext());
+  const computation = reconcilePublicGuidedComputation(
+    publicGuidedComputation,
+    before,
+    event,
+    transition,
+    result,
+    config.vocabulary,
+  );
+  publicGuidedComputation = computation.binding;
   publicLessonSession = transition.session;
+  if (computation.restore) {
+    result = computation.restore.result;
+    player = new TracePlayer(result.run);
+    documentText = computation.restore.capturedDocument;
+  }
   for (const effect of transition.effects) interpretPublicLessonEffect(effect);
   return transition.session !== before || transition.effects.length > 0;
 }
