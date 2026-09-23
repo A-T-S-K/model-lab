@@ -1323,6 +1323,16 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
 .world-workspace.is-public-profile .spatial-world .parameter-bank.explanation-active .parameter-focus-reticle {
   display: block;
 }
+/* Guided keeps canonical parameter evidence in the SVG, but reveals only the lesson focus. */
+.world-workspace.is-public-profile:not(.is-free-explore) .spatial-world .parameter-bank:not(.explanation-active),
+.world-workspace.is-public-profile:not(.is-free-explore) .spatial-world .parameter-edge {
+  visibility: hidden;
+  pointer-events: none;
+}
+.world-workspace.is-public-profile:not(.is-free-explore) .spatial-world .parameter-edge:has(+ .parameter-bank.explanation-active),
+.world-workspace.is-public-profile:not(.is-free-explore) .spatial-world .parameter-edge:has(+ .parameter-edge + .parameter-bank.explanation-active) {
+  visibility: visible;
+}
 .world-workspace.is-public-profile:not(.is-free-explore) .spatial-world .world-object:not(.explanation-active) > .external-reticle,
 .world-workspace.is-public-profile:not(.is-free-explore) .spatial-world .parameter-bank:not(.explanation-active) > .external-reticle,
 .world-workspace.is-public-profile:not(.is-free-explore) .spatial-world .tokens > g > .external-reticle {
