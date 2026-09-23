@@ -1490,7 +1490,16 @@ function bind(): void {
     });
   document
     .querySelector("#predict")
-    ?.addEventListener("click", () => void execute("predict"));
+    ?.addEventListener("click", async () => {
+      const wasAttract = attract && currentProfile() !== "workbench";
+      const receipt = await execute("predict");
+      if (wasAttract && receipt.status === "completed") {
+        attract = false;
+        clearExhibitBanner();
+        lastActivity = Date.now();
+        render();
+      }
+    });
   document
     .querySelector("#train")
     ?.addEventListener("click", () => void execute("train"));
@@ -2337,7 +2346,7 @@ window.addEventListener(
       !attract ||
       !ready ||
       busy ||
-      (event.target as Element).closest("#clear-session, .session-controls")
+      (event.target as Element).closest("#document, #predict, #clear-session, .session-controls")
     )
       return;
     event.preventDefault();
@@ -2354,7 +2363,7 @@ window.addEventListener(
       ready &&
       !busy &&
       ["Enter", " "].includes(event.key) &&
-      !(event.target as Element).closest(".session-controls,#clear-session")
+      !(event.target as Element).closest("#document,#predict,.session-controls,#clear-session")
     ) {
       event.preventDefault();
       event.stopImmediatePropagation();
