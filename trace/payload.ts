@@ -1,5 +1,6 @@
 import { canonicalBytes } from '../archive/snapshot.js';
 import { immutableCopy } from './types.js';
+import { sha256Id } from './sha256.js';
 
 export const MAX_PAYLOAD_SLICE_VALUES = 256;
 export const INLINE_VALUE_LIMIT = MAX_PAYLOAD_SLICE_VALUES;
@@ -83,8 +84,7 @@ async function contentIdFor(descriptor: Omit<NumericalPayloadDescriptor, 'conten
   const metadata = canonicalBytes(descriptor);
   const input = new Uint8Array(metadata.length + bytes.length);
   input.set(metadata); input.set(bytes, metadata.length);
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', input);
-  return `sha256:${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')}`;
+  return sha256Id(input);
 }
 
 function validateValue(dtype: NumericalDType, value: number): void {

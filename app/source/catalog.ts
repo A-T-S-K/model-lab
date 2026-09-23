@@ -5,13 +5,13 @@ import modelSource from '../../model/microgpt.ts?raw';
 import backwardSource from '../../model/autograd.ts?raw';
 import trainingSource from '../../model/training.ts?raw';
 import { escapeHtml } from '../views/evidence.js';
+import { sha256Hex } from '../../trace/sha256.js';
 
 export const sourceFiles = { 'app/source/stages.ts': stageSource, 'model/value.ts': valueSource, 'model/microgpt.ts': modelSource, 'model/autograd.ts': backwardSource, 'model/training.ts': trainingSource };
 const revisions = new Map<string, string>();
 export async function prepareSource(): Promise<void> {
   await Promise.all(Object.entries(sourceFiles).map(async ([file, source]) => {
-    const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(source));
-    revisions.set(file, Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join(''));
+    revisions.set(file, await sha256Hex(new TextEncoder().encode(source)));
   }));
 }
 /** Curated symbol boundaries, not fragile line numbers. The entire function remains readable. */

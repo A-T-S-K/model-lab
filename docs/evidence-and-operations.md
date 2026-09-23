@@ -79,3 +79,10 @@ Reset model restores selected/canonical state while preserving history. Cancel r
 Each run manifest includes `runtimeRevision`, a SHA-256 over deterministically ordered production source paths and their exact bytes, plus fixture and build inputs. [The generator](../scripts/runtime-identity.mjs) lists the scope and encoding. It runs before tests and typechecking/builds; `npm run dev` builds and serves immutable output, and source edits require a restart/rebuild to prevent stale identities or mixed worker implementations; neither runtime nor isolated Docker builds require `.git`. Explore and Microscope disclose the recorded revision offline.
 
 Snapshot identity identifies complete state; runtime revision identifies the implementation interpreting it. Historical reconstruction and numerical comparison refuse differing runtime revisions rather than assuming equal version labels imply compatibility. Scalar node numbers are private graph addresses within one execution and exact runtime revision; they are not portable public identities. Recursive historical operand navigation is tested against the original observed graph.
+
+All browser SHA-256 identities pass through one implementation boundary. Secure and
+potentially trustworthy origins use native `SubtleCrypto`; ordinary HTTP hostname/IP
+origins use the bundled standards-compatible SHA-256 path because browsers omit
+`SubtleCrypto` there. Both paths are checked for byte-identical lowercase identities.
+A present native digest that rejects is not silently retried through the portable path,
+so hashing failures continue to exercise the documented rollback and admission controls.

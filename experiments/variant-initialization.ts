@@ -6,6 +6,7 @@ import {
   type ModelDefinitionIdentity,
 } from '../model/definitions.js';
 import { restoreTraining, type Model } from '../model/state.js';
+import { sha256Id } from '../trace/sha256.js';
 import { immutableCopy, type JsonValue } from '../trace/types.js';
 
 export interface VariantInitializationRecord {
@@ -55,8 +56,7 @@ export async function initializeModelVariant(request: VariantInitializationReque
     numericPolicy: request.numericPolicy as VariantInitializationRecord['numericPolicy'],
     checkpointUse: 'parameter-initialization-only' as const, exactTrainingResume: false as const,
   };
-  const digest = await crypto.subtle.digest('SHA-256', canonicalBytes(body));
-  const id = `sha256:${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')}`;
+  const id = await sha256Id(canonicalBytes(body));
   return { model: restoreTraining(request.source.state).model, record: immutableCopy({ ...body, id }) };
 }
 

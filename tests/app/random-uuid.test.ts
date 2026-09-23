@@ -20,3 +20,7 @@ test('randomUuid falls back to getRandomValues on insecure origins', () => {
 
   assert.equal(randomUuid(source), '00010203-0405-4607-8809-0a0b0c0d0e0f');
 });
+
+test('randomUuid refuses to invent an ID without a cryptographically secure source', () => {
+  assert.throws(() => randomUuid({} as RandomSource), /Cryptographically secure random source unavailable/);
+});

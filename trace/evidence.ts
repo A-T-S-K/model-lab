@@ -1,5 +1,6 @@
 import { canonicalBytes } from '../archive/snapshot.js';
 import { immutableCopy } from './types.js';
+import { sha256Id } from './sha256.js';
 import { INLINE_VALUE_LIMIT, InMemoryNumericalPayloadStore, MAX_PAYLOAD_SLICE_VALUES, validatePayloadForPoint,
   type NumericalDType, type NumericalPayloadDescriptor, type NumericalPayloadStorage } from './payload.js';
 
@@ -246,6 +247,5 @@ export function parseEvidence(json:string):unknown {
 }
 
 export async function evidenceHash(value:unknown):Promise<string>{
-  const digest=await crypto.subtle.digest('SHA-256',canonicalBytes(value));
-  return 'sha256:'+Array.from(new Uint8Array(digest),n=>n.toString(16).padStart(2,'0')).join('');
+  return sha256Id(canonicalBytes(value));
 }

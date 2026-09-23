@@ -8,6 +8,7 @@ import { PRESENTATION_WORK, nextWindowOffset, presentationWindow, previousWindow
 import { availabilityPresentation } from '../presentation/availability.js';
 const esc=(x:unknown)=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const SAVED='model-lab-evidence-v1';
+const nativeOriginUnavailable=()=>!(location.protocol==='http:'&&location.hostname==='127.0.0.1'&&!!location.port);
 
 export interface SharedEvidenceTransaction {
   readonly store: EvidenceStore;
@@ -68,7 +69,7 @@ export class SharedInspector {
       if(!this.#allowOpen){this.#root.innerHTML='';return;}
       this.#root.innerHTML='<button id="open-shared-inspector">Models & saved evidence</button>';this.#root.querySelector('button')!.onclick=()=>{this.#open=true;this.render();this.#root.querySelector<HTMLElement>('#shared-model')?.focus();};return;}
     const player=this.#player,p=player?.current,run=player?.run;
-    const list=this.#store.list(),binding=this.#executors.get(this.#selected);
+    const list=this.#store.list(),binding=this.#executors.get(this.#selected),nativeUnavailable=!!binding.endpoint&&nativeOriginUnavailable();
     const selectedRunIndex=run?list.findIndex(item=>item.id===run.id):-1,runWindow=presentationWindow(list,this.#runOffset,PRESENTATION_WORK.sharedRuns);
     this.#runOffset=runWindow.offset;
     const runItems=run&&selectedRunIndex>=0&&!runWindow.items.includes(run)?[run,...runWindow.items.slice(0,PRESENTATION_WORK.sharedRuns-1)]:runWindow.items;
@@ -80,7 +81,7 @@ export class SharedInspector {
     this.#root.innerHTML=`<div class="shared-shade"><section class="shared-panel" role="dialog" aria-modal="true" aria-labelledby="shared-title"><header><div><small>MODEL LAB · SHARED EVIDENCE</small><h2 id="shared-title">Inspect a recorded computation</h2></div><button id="close-shared">Return to world</button></header>
       <div class="shared-controls"><label>Producer<select id="shared-model">${this.#executors.list().map(binding=>`<option value="${esc(binding.id)}" ${binding.id===this.#selected?'selected':''}>${esc(binding.label)}</option>`).join('')}${binding.inputLocation==='saved'?`<option selected value="${esc(binding.id)}">${esc(binding.label)} · saved only</option>`:''}</select></label>
       ${binding.inputLocation==='request'?`<label>${esc(binding.inputLabel??'Input')}<input id="native-prompt" value="${esc(this.#input)}" maxlength="2048"></label>${binding.endpoint?`<label>Local bridge endpoint<input id="native-endpoint" value="${esc(this.#endpoint)}"></label>`:''}<label>Action<select id="shared-action">${(binding.actions??['predict']).map(a=>`<option ${a===this.#action?'selected':''}>${esc(a)}</option>`).join('')}</select></label>`:binding.inputLocation==='saved'?'<p>Saved structural or numerical evidence. No registered execution action.</p>':'<p>Predict uses the canonical input in the world. Accepted state and candidate decisions remain in the canonical controls.</p>'}
-      <button id="shared-execute" ${this.#busy||!this.#canSwitch||binding.inputLocation==='saved'?'disabled':''}>Run selected producer</button><button id="shared-cancel" ${!this.#busy?'disabled':''}>Cancel request</button></div>
+      <button id="shared-execute" ${this.#busy||!this.#canSwitch||binding.inputLocation==='saved'||nativeUnavailable?'disabled':''}>Run selected producer</button><button id="shared-cancel" ${!this.#busy?'disabled':''}>Cancel request</button>${nativeUnavailable?'<p data-testid="native-origin-unavailable">Optional native execution is qualified only from an exact HTTP loopback application origin. Saved evidence remains available.</p>':''}</div>
       <div class="shared-controls"><label>Run<select id="shared-run"><option value="">Select retained evidence</option>${runItems.map(r=>`<option value="${esc(r.id)}" ${r.id===run?.id?'selected':''}>${esc(r.integration)} · ${esc(inputLabel(r.input))} · ${esc(r.id)}</option>`).join('')}</select></label><button id="shared-run-prev" ${runWindow.hasPrevious?'':'disabled'}>Previous retained runs</button><button id="shared-run-next" ${runWindow.hasNext?'':'disabled'}>Next retained runs</button><span data-testid="shared-run-window">${windowSummary(runWindow)}${run&&selectedRunIndex>=0&&!runWindow.items.includes(run)?' · selected run kept visible':''}</span><label>Exact run ID<input id="shared-run-id" value="${esc(run?.id??'')}" maxlength="2048"></label><button id="shared-run-open">Open exact run</button><button id="shared-world" ${!run||!this.#canSwitch||this.#worldAvailability?.(run.id)?'disabled':''}>Open in continuous world</button><button id="shared-save" ${!run||!this.#store.hasEnvelope(run.id)?'disabled':''}>Save selected run</button><button id="shared-load">Open saved run</button><button id="shared-export" ${!run||!this.#store.hasEnvelope(run.id)?'disabled':''}>Export JSON</button><label>Import inert recording<input id="shared-import" type="file" accept="application/json"></label></div>
       <p role="status" data-testid="shared-status">${esc(this.#message)}</p>
       ${p&&run&&pointWindow&&pointItems?`<p class="shared-provenance" data-testid="shared-provenance">${this.#replay?'SAVED REPLAY':'RETAINED EVIDENCE'} · ${esc(run.execution)} · ${esc(p.origin)} · ${esc(p.availability)} · verification: not independently certified · executor ${!this.#replay&&this.#executors.get(run.integration).connected()?'connected':'not required for inspection'}</p><div class="shared-grid"><nav aria-label="Captured points"><h3>Captured boundaries</h3><p data-testid="shared-point-window">${windowSummary(pointWindow)}${!pointWindow.items.includes(p)?' · selected point kept visible':''}</p><div class="shared-controls"><button id="shared-point-prev" ${pointWindow.hasPrevious?'':'disabled'}>Previous recorded points</button><button id="shared-point-next" ${pointWindow.hasNext?'':'disabled'}>Next recorded points</button></div>${pointItems.map(point=>{const i=run.points.indexOf(point);return `<button data-point="${i}" aria-pressed="${i===player!.index}">${esc(point.node)} / ${esc(point.port)}</button>`;}).join('')}</nav><article>
@@ -128,7 +129,8 @@ export class SharedInspector {
     const operation=++this.#operation;
     this.#busy=true;this.#message='Checking durable retention capacity…';this.render();
     try{
-      const binding=this.#executors.get(this.#selected),transaction=binding.inputLocation==='world'?undefined:await this.#retention?.begin('nativeEvidence');
+      const binding=this.#executors.get(this.#selected);check(!binding.endpoint||!nativeOriginUnavailable(),'Optional native execution requires an exact HTTP loopback application origin');
+      const transaction=binding.inputLocation==='world'?undefined:await this.#retention?.begin('nativeEvidence');
       if(operation!==this.#operation){transaction?.cancel();return;}
       this.#pendingRetention=transaction;this.#message='Executing selected producer…';this.render();
       const run=await binding.execute({action:this.#action,input:this.#input,endpoint:this.#endpoint,store:transaction?.store??this.#store!,canonical:this.#canonical});

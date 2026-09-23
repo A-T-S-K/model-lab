@@ -4,6 +4,7 @@ import { check, evidenceHash, fields, object, type EvidenceEnvelope, type Portab
 import { InMemoryNumericalPayloadStore, validatePayloadDescriptor, type NumericalPayloadDescriptor } from '../trace/payload.js';
 import { modelVariantExperiments } from '../experiments/model-variant-recipes.js';
 import type { RecordedRun } from '../trace/types.js';
+import { sha256Id } from '../trace/sha256.js';
 
 export const PORTABLE_ARCHIVE_FORMAT = 'model-lab-session-archive-v1' as const;
 export const PORTABLE_ARCHIVE_VERSION = 1 as const;
@@ -89,8 +90,7 @@ function readU16(view:DataView,offset:number):number { return view.getUint16(off
 function readU32(view:DataView,offset:number):number { return view.getUint32(offset,false); }
 
 async function sha256(bytes:Uint8Array):Promise<string>{
-  const input=new Uint8Array(bytes.length);input.set(bytes);const digest=await globalThis.crypto.subtle.digest('SHA-256',input);
-  return `sha256:${Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,'0')).join('')}`;
+  return sha256Id(bytes);
 }
 
 function canonicalJson(value:unknown):{readonly bytes:Uint8Array;readonly dataNodes:number} {

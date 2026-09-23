@@ -1,5 +1,6 @@
 import type { TrainingSnapshot } from '../model/state.js';
 import { immutableCopy } from '../trace/types.js';
+import { sha256Id } from '../trace/sha256.js';
 
 function requireState(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`Invalid snapshot: ${message}`);
@@ -102,8 +103,7 @@ export function canonicalBytes(value: unknown): Uint8Array<ArrayBuffer> {
 export async function snapshotId(snapshot: TrainingSnapshot): Promise<string> {
   validateTrainingSnapshot(snapshot);
   const bytes = canonicalBytes(snapshot);
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
-  return `sha256:${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')}`;
+  return sha256Id(bytes);
 }
 
 export interface ArchivedSnapshot { readonly id: string; readonly state: TrainingSnapshot }

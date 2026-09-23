@@ -8,7 +8,8 @@ export interface RandomSource {
  * origins. `crypto.randomUUID()` is secure-context-only, while
  * `crypto.getRandomValues()` remains available on ordinary HTTP origins.
  */
-export function randomUuid(source: RandomSource = globalThis.crypto): string {
+export function randomUuid(source: RandomSource | undefined = globalThis.crypto): string {
+  if (!source || typeof source.getRandomValues !== 'function') throw new Error('Cryptographically secure random source unavailable');
   if (typeof source.randomUUID === 'function') return source.randomUUID.call(source);
 
   const bytes = source.getRandomValues(new Uint8Array(16));

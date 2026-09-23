@@ -12,6 +12,7 @@ import {
 } from '../model/definitions.js';
 import { restoreTraining, type CompositeVariantModel, type ParameterData } from '../model/state.js';
 import { Value } from '../model/value.js';
+import { sha256Id } from '../trace/sha256.js';
 import { immutableCopy } from '../trace/types.js';
 
 export const VARIANT_NUMERIC_POLICY = 'ECMAScript binary64; ordered scalar reductions' as const;
@@ -94,8 +95,7 @@ const bytesEqual = (a: unknown, b: unknown): boolean => {
   return aa.length === bb.length && aa.every((value, index) => value === bb[index]);
 };
 async function digest(value: unknown): Promise<string> {
-  const hash = await crypto.subtle.digest('SHA-256', canonicalBytes(value));
-  return `sha256:${Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('')}`;
+  return sha256Id(canonicalBytes(value));
 }
 const matrixData = (rows: number, columns: number, algorithm: VariantParameterSchema['initialization']['algorithm']): number[][] =>
   Array.from({ length: rows }, (_, row) => Array.from({ length: columns }, (_, column) =>

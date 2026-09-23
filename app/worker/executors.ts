@@ -1,6 +1,7 @@
 import { check, validateNumericInput, type EvidenceRun, type EvidenceStore } from '../../trace/evidence.js';
 import { NONCANONICAL } from '../../trace/noncanonical.js';
 import { NativeClient } from './native-client.js';
+import { randomUuid } from './random-uuid.js';
 export type CanonicalReceipt = { status: 'completed'; runId: string } | { status: 'refused' | 'failed'; reason: string };
 export interface ExecutorContext { input:string; action?:string; endpoint:string; store:EvidenceStore; canonical:()=>Promise<CanonicalReceipt> }
 export interface ExecutorBinding {
@@ -25,7 +26,7 @@ export class ExecutorRegistry {
       execute:({input,action,endpoint,store})=>this.native.executeRequest({version:2,integration:'mlp-native-v1',profile:'mlp-f32-sgd-v1',action:action??'predict',input:validateNumericInput(JSON.parse(input)),state:null},endpoint,store)});
     this.register({id:NONCANONICAL,label:'MicroGPT · 2 layers / 3 heads / width 6',inputLocation:'request',inputLabel:'Characters: w x y z ! (maximum five)',defaultInput:'wxyz!',actions:['predict'],connected:()=>true,
       execute:async({input,store})=>{
-        const epoch=this.#epoch,request={version:1 as const,integration:NONCANONICAL,profile:'microgpt-multilayer-f64-v1',sessionId:crypto.randomUUID(),requestId:'predict',epoch,action:'predict',input};
+        const epoch=this.#epoch,request={version:1 as const,integration:NONCANONICAL,profile:'microgpt-multilayer-f64-v1',sessionId:randomUuid(),requestId:'predict',epoch,action:'predict',input};
         const worker=new Worker(new URL('./noncanonical-worker.ts',import.meta.url),{type:'module'});this.#localWorker=worker;
         try {const envelope=await new Promise<unknown>((resolve,reject)=>{this.#localReject=reject;worker.onmessage=e=>e.data.error?reject(Error(e.data.error)):resolve(e.data.envelope);worker.onerror=e=>reject(Error(e.message));worker.postMessage(request);});
           return await store.admit(envelope,request,()=>epoch===this.#epoch);

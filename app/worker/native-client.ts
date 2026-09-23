@@ -1,9 +1,10 @@
 import { check, MAX_RECORD_BYTES, validateRequest, type ExecutionRequest, EvidenceStore, type EvidenceRun } from '../../trace/evidence.js';
 import profile from '../../research/pythia/profile-generation.json';
+import { randomUuid } from './random-uuid.js';
 
 /** One outstanding read-only native request; model switches invalidate admission, not just display. */
 export class NativeClient {
-  readonly sessionId=crypto.randomUUID();
+  readonly sessionId=randomUuid();
   #epoch=0; #sequence=0; #abort?:AbortController;
   connected=false;
   cancel(){this.#epoch++;this.#abort?.abort();this.#abort=undefined;this.connected=false;}

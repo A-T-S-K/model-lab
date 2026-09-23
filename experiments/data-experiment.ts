@@ -1,6 +1,7 @@
 import type { ArchivedSnapshot } from '../archive/snapshot.js';
 import { canonicalBytes } from '../archive/snapshot.js';
 import type { LearningExperiment } from '../archive/experiment.js';
+import { sha256Id } from '../trace/sha256.js';
 import type { RecordedRun } from '../trace/types.js';
 
 export type DataExperimentArm = 'clean' | 'treatment' | 'defended';
@@ -182,8 +183,7 @@ export function dataRecipeKey(identity: DataExperimentRecipeIdentity): string {
 }
 
 export async function immutableRecordId(value: unknown): Promise<string> {
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', canonicalBytes(value));
-  return `sha256:${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')}`;
+  return sha256Id(canonicalBytes(value));
 }
 
 export function policyRecordPayload(record: ExternalDataPolicyRecord): DataExperimentStepIdentity {

@@ -36,6 +36,11 @@ npm run dev
 
 Open the localhost URL printed by Vite. `npm run dev` builds and serves fixed local assets. After editing source, stop and restart it to rebuild; automatic source hot-reloading is disabled so running workers and their recorded runtime revision stay aligned. Guided follows **Predict → Teach → See What Changed**. Its canonical example follows the prefix `abc` and target `a`, using 10 real updates selected from a [fixed deterministic measurement](docs/guided-measurement.md). The numbers shown come from your actual run.
 
+For an explicitly network-reachable HTTP preview, use `npm run dev:network` and open
+the printed machine IP. The ordinary browser-local workflow supports such
+insecure HTTP origins; the separately installed native Python bridge remains restricted
+to its qualified exact-loopback application origin.
+
 Enter up to seven characters from `a`, `b`, and `c`. The START / END marker is added automatically; the same marker is called BOS in the technical views. Edited input makes old evidence visibly stale until Predict runs again. Explore opens positions, stages, attention, one-step Learn, and history. Microscope follows individual arithmetic operations, gradients, and Adam (the optimizer that calculates parameter updates).
 
 Reset model restores the selected or canonical state and preserves history. Cancel restores the last completed live state. Clear session clears both workers and the session history; opt-in Exhibit mode does this after five minutes without activity.
@@ -45,6 +50,8 @@ Live model arithmetic runs in its owning Web Worker. A separate inspector worker
 ## Prepared exhibit
 
 From this repository root, `npm run prepare:abq` builds once and creates a read-only kit in `test-results/abq-overnight/release/`. With Node 24+ already installed, run `node serve.mjs` inside the kit and open `http://127.0.0.1:4173/?presentation=spatial&kiosk=1`. No source checkout, node_modules or network install is needed at startup. The ordinary `/` and `/?presentation=spatial` entries remain available.
+The generated launcher keeps loopback as its default; `MODEL_LAB_HOST=0.0.0.0 node serve.mjs`
+is the explicit network-bind form.
 
 Start makes a fresh prediction. The short route offers an explicit `abca` q3/head0/key0 selection and Q/K → softmax → mixture → residual explanations. This is teacher-forced next-token prediction, not generative continuation. Public Reset restores the canonical visitor baseline, history and navigation. The initial idle policy is 300 seconds with a 20-second warning; **Show operator controls → Disable idle reset · facilitated session** opts out. See the [operator runbook](docs/abq-operator-runbook.md) for preparation, recovery and qualification limits.
 
@@ -57,6 +64,7 @@ npm run example         # model-only predict, teach, predict
 npm run build           # strict TypeScript and production assets
 npx playwright install chromium
 npm run test:browser     # real browser Predict, arithmetic, Learn, reset
+npm run test:http        # same browser-local system through an insecure HTTP host
 ```
 
 Or run `npm run acceptance` after installing Chromium. Browser tests use the production build on port 4173. `test:reference` always means portable Python validation (`1e-30 + 1e-12 * abs(canonical)`); `npm run test:reference:canonical` is a separate byte-verification command tied to the [documented environment](reference/PROVENANCE.md#canonical-byte-exact-regeneration). TypeScript full-precision fixture values are compared using `abs(error) <= 1e-10 + 1e-9 * abs(expected)`; UI decimal formatting does not change canonical evidence. See [fixtures](fixtures/README.md), [provenance](reference/PROVENANCE.md), and [Read the Code](READ_THE_CODE.md).
@@ -79,6 +87,8 @@ docker run --rm -p 127.0.0.1:8080:80 model-lab:acceptance
 ```
 
 The container serves static assets only. The browser executes the scalar model. The repository is standalone; no sibling workshop source is required.
+For an explicitly network-reachable container, publish with `-p 8080:80` and open the
+host's HTTP name or address; retain the loopback mapping when network access is unwanted.
 
 ## Scope
 

@@ -15,3 +15,11 @@ test('prepared launcher serves local assets, rejects traversal/methods and fails
   other=spawn(process.execPath,[join(dir,'serve.mjs')],{env:{...process.env,PORT:String(port)}});let errors='';other.stderr.on('data',d=>errors+=d);const exit=await new Promise(res=>other.on('exit',res));assert.equal(exit,1);assert.match(errors,/EADDRINUSE/);assert.equal((await get(port,'/')).status,200);
  }finally{child?.kill();other?.kill();await rm(dir,{recursive:true,force:true});}
 });
+test('prepared launcher supports an explicit network bind without changing its default',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'abq-network-launcher-'));await mkdir(join(dir,'dist'));await writeFile(join(dir,'dist/index.html'),'<h1>network launcher fixture</h1>');await copyFile('scripts/abq-serve.mjs',join(dir,'serve.mjs'));
+ const port=14374;let child;
+ try{
+  child=spawn(process.execPath,[join(dir,'serve.mjs')],{env:{...process.env,PORT:String(port),MODEL_LAB_HOST:'0.0.0.0'}});let log='';await new Promise((res,rej)=>{child.stdout.on('data',d=>{log+=d;if(log.includes('prepared exhibit'))res();});child.on('exit',c=>rej(Error(`Launcher exited ${c}`)));});
+  assert.match(log,/http:\/\/0\.0\.0\.0:14374/);assert.equal((await get(port,'/')).status,200);
+ }finally{child?.kill();await rm(dir,{recursive:true,force:true});}
+});
