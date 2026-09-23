@@ -1,0 +1,102 @@
+name: Publish Model Lab container
+
+on:
+  push:
+    tags:
+      - 'bsides-abq-2026'
+      - 'bsides-abq-2026-dev*'
+      - 'bsides-abq-2026-rc*'
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE_REPOSITORY: ghcr.io/a-t-s-k/model-lab
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate event tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$GITHUB_REF_NAME" =~ ^bsides-abq-2026(-(dev|rc)[0-9]+)?$ ]]; then
+            echo "Refusing unsupported publish tag: $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+
+      - name: Install smoke-test dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Build linux/amd64 image
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="${IMAGE_REPOSITORY}:${GITHUB_REF_NAME}"
+          docker build \
+            --platform linux/amd64 \
+            --label "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            --label "org.opencontainers.image.version=${GITHUB_REF_NAME}" \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --tag "$image" \
+            .
+
+      - name: Smoke-test exact image without application WAN access
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="${IMAGE_REPOSITORY}:${GITHUB_REF_NAME}"
+          container="model-lab-publish-smoke"
+
+          cleanup() {
+            docker rm --force "$container" > /dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker run --detach --rm \
+            --name "$container" \
+            -p 127.0.0.1:4188:80 \
+            "$image"
+
+          ready=0
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4188/ > /dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+
+          if [[ "$ready" -ne 1 ]]; then
+            docker logs "$container" >&2 || true
+            exit 1
+          fi
+
+          node --import tsx scripts/smoke-container.ts \
+            http://127.0.0.1:4188
+
+      - name: Authenticate to GHCR
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io \
+            --username "$GITHUB_ACTOR" \
+            --password-stdin
+
+      - name: Publish exact event tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="${IMAGE_REPOSITORY}:${GITHUB_REF_NAME}"
+          docker push "$image"
