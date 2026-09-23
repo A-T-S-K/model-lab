@@ -7,11 +7,13 @@
     "dev": "npm run build && vite preview --host 127.0.0.1",
     "dev:network": "npm run build && vite preview --host 0.0.0.0",
     "typecheck": "tsc --noEmit",
+    "typecheck:container": "tsc --project tsconfig.container.json --noEmit",
     "test": "node --import tsx --test tests/model/*.test.ts tests/trace/*.test.ts tests/integration/*.test.ts tests/app/*.test.ts tests/integration/*.test.mjs",
     "test:reference": "npm run test:reference:portable",
     "test:browser": "playwright test",
     "test:http": "playwright test --config playwright.http.config.ts",
     "build": "npm run typecheck && vite build",
+    "build:container": "npm run runtime:identity && npm run typecheck:container && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "preview:network": "vite preview --host 0.0.0.0",
     "acceptance": "npm run test:reference && npm test && npm run example && npm run build && npm run test:browser && npm run test:http",
@@ -34,13 +36,13 @@
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
-    "@types/node": "24.10.1",
-    "tsx": "4.23.13",
-    "typescript": "7.0.2",
-    "vite": "8.2.2"
+    "tsx": "4.23.13"
   },
   "dependencies": {
     "@ibm/plex-mono": "2.5.0",
-    "@ibm/plex-sans": "1.1.0"
+    "@ibm/plex-sans": "1.1.0",
+    "@types/node": "24.10.1",
+    "typescript": "7.0.2",
+    "vite": "8.2.2"
   }
 }

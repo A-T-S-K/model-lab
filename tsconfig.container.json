@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "model",
+    "trace",
+    "inspect",
+    "archive",
+    "experiments",
+    "app",
+    "runtime"
+  ]
+}

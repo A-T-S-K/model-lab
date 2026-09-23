@@ -87,6 +87,7 @@ docker run --rm -p 127.0.0.1:8080:80 model-lab:acceptance
 ```
 
 The container serves static assets only. The browser executes the scalar model. The repository is standalone; no sibling workshop source is required.
+The Docker builder installs only the locked compiler, bundler, fonts and production dependencies. Playwright remains a host/CI qualification dependency and is neither installed in the builder nor copied into the runtime image.
 For an explicitly network-reachable container, publish with `-p 8080:80` and open the
 host's HTTP name or address; retain the loopback mapping when network access is unwanted.
 
