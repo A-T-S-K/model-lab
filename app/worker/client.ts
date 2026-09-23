@@ -1,4 +1,5 @@
 import { canonicalIntent } from './execution-intent.js';
+import { randomUuid } from './random-uuid.js';
 import type { WorkerRequest, WorkerResponse } from './protocol.js';
 import type { ArchivedSnapshot } from '../../archive/session.js';
 type Command = WorkerRequest extends infer R ? R extends WorkerRequest ? Omit<R, 'sessionId' | 'runId' | 'generationId'> : never : never;
@@ -7,7 +8,7 @@ type Command = WorkerRequest extends infer R ? R extends WorkerRequest ? Omit<R,
 export class ModelWorkerClient {
   onFailure?: (error: Error) => void;
   private failure?: Error;
-  readonly sessionId = crypto.randomUUID();
+  readonly sessionId = randomUuid();
   private generationId = 0;
   private sequence = 0;
   private worker: Worker;

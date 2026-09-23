@@ -1,3 +1,4 @@
+import { randomUuid } from './random-uuid.js';
 import type { HistoricalRequest, AblationRequest, ActivationPatchRequest, ActivationVariantRequest, CompositeVariantRequest, DataExperimentRequest, WorkerResponse } from './protocol.js';
 import type { InspectionResult } from '../../inspect/types.js';
 import type { HeadAblationExperiment } from '../../experiments/ablation.js';
@@ -13,7 +14,7 @@ export class InspectorWorkerClient {
   private worker?: Worker;
   private generation = 0;
   private sequence = 0;
-  private sessionId = crypto.randomUUID();
+  private sessionId = randomUuid();
   private pending = new Map<string, {resolve(value: WorkerResponse): void; reject(error: Error): void}>();
   async inspect(request: Omit<HistoricalRequest, 'command' | 'sessionId' | 'generationId' | 'runId'>): Promise<InspectionResult> {
     const response = await this.request({ ...request, command: 'inspect' });
