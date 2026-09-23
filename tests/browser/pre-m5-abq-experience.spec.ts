@@ -1291,12 +1291,30 @@ test('7. current Guided route fits 1280x720 and reduced motion', async ({ page }
   const dockOverflow: string[] = [];
   const numericalSupport = new Set(['distribution', 'components', 'qkv', 'projection', 'scores', 'score', 'weights', 'softmax', 'mixture', 'terms', 'combined', 'stages', 'logits', 'probabilities', 'loss', 'positions', 'accumulation', 'adam', 'candidate']);
   const assertCompactDock = async (state: string) => {
+    if (await page.locator('button[data-support-action]').count()) {
+      await expect(page.getByTestId('contextual-dock')).toHaveAttribute('data-active-support', 'default');
+      await expect(page.getByTestId('dock-context-support')).toHaveAttribute('data-support-action', 'default');
+      expect((await page.getByTestId('dock-context-support').textContent())?.trim().length ?? 0).toBeGreaterThan(20);
+    }
     const measure = async (label: string) => {
       const heights = await page.evaluate(() => {
       const body = document.querySelector<HTMLElement>('[data-testid="dock-body"]')!;
-      return { body: body.clientHeight, content: body.scrollHeight, page: document.documentElement.scrollHeight };
+      const required = ['[data-testid="route-purpose"]', '.dock-meaning-text', '.reverse-truth-cue', '[data-testid="dock-context-support"]', '.dock-slot-primary'];
+      const clipped: string[] = [];
+      for (const selector of required) for (const element of document.querySelectorAll<HTMLElement>(`.contextual-dock ${selector}`)) {
+        const rect = element.getBoundingClientRect();
+        let visible = rect.top >= 0 && rect.bottom <= innerHeight + 1 && rect.left >= 0 && rect.right <= innerWidth + 1;
+        for (let parent = element.parentElement; parent && visible; parent = parent.parentElement) {
+          const style = getComputedStyle(parent);
+          if (!['hidden', 'clip', 'auto', 'scroll'].includes(style.overflowY)) continue;
+          const bounds = parent.getBoundingClientRect();
+          visible = rect.top >= bounds.top - 1 && rect.bottom <= bounds.bottom + 1;
+        }
+        if (!visible) clipped.push(selector);
+      }
+      return { body: body.clientHeight, content: body.scrollHeight, page: document.documentElement.scrollHeight, viewport: innerHeight, clipped };
       });
-      if (heights.page > 720 || heights.content > heights.body + 1) dockOverflow.push(`${label}: page ${heights.page}px; Guided body ${heights.content}px / ${heights.body}px`);
+      if (heights.page > heights.viewport || heights.content > heights.body + 1 || heights.clipped.length) dockOverflow.push(`${label}: page ${heights.page}px; Guided body ${heights.content}px / ${heights.body}px; clipped ${heights.clipped.join(', ')}`);
     };
     await measure(state);
     const actions = await page.locator('button[data-support-action]').evaluateAll(buttons => buttons.map(button => (button as HTMLElement).dataset.supportAction!));
@@ -1331,6 +1349,7 @@ test('7. current Guided route fits 1280x720 and reduced motion', async ({ page }
     await page.locator('#short-continue').click();
     await waitForCurrentPublicState(page, state);
     await assertCompactDock(state);
+    if (state === 'p1_transform') await captureEvidence(page, 'p1-transform-1280.png', state);
   }
   await expect(page.locator('#short-teach')).toBeVisible();
   await captureEvidence(page, '24-part1-complete-1280.png', 'p1_complete');
@@ -1344,6 +1363,9 @@ test('7. current Guided route fits 1280x720 and reduced motion', async ({ page }
   for (const state of ['p2_backward_trace', 'p2_gradient_contribution', 'p2_final_gradient']) {
     await advanceCurrentPart2(page, state);
     await assertCompactDock(state);
+    if (state === 'p2_backward_trace' || state === 'p2_gradient_contribution') {
+      await captureEvidence(page, `${state}-1280.png`, state);
+    }
   }
   await captureEvidence(page, '26-gradient-1280.png', 'p2_final_gradient', '.parameter-learning-overlay');
   await advanceCurrentPart2(page, 'p2_adam_proposal');
@@ -1372,6 +1394,25 @@ test('7. current Guided route fits 1280x720 and reduced motion', async ({ page }
   await captureEvidence(page, '30-reduced-motion-1280.png', 'p1_represent');
   await assertCompactDock('p1_represent/reduced-motion');
   expect(dockOverflow, '1280×720 Guided core must fit at every lesson beat').toEqual([]);
+
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.locator('#clear-session').click();
+  await page.locator('#exhibit-start').click();
+  await waitForCurrentPublicState(page, 'p1_prediction_preview');
+  await assertCompactDock('1920/p1_prediction_preview');
+  for (const state of ['p1_represent', 'p1_qkv', 'p1_attention_compare', 'p1_attention_weights', 'p1_value_mixture', 'p1_attention_integration', 'p1_transform', 'p1_score', 'p1_probabilities', 'p1_complete']) {
+    await page.locator('#short-continue').click();
+    await waitForCurrentPublicState(page, state);
+    await assertCompactDock(`1920/${state}`);
+  }
+  await page.locator('#short-teach').click();
+  await waitForCurrentPublicState(page, 'p2_objective');
+  await assertCompactDock('1920/p2_objective');
+  for (const state of ['p2_backward_trace', 'p2_gradient_contribution', 'p2_final_gradient', 'p2_adam_proposal', 'candidate_ready']) {
+    await advanceCurrentPart2(page, state);
+    await assertCompactDock(`1920/${state}`);
+  }
+  expect(dockOverflow, 'Guided core must fit at every lesson beat at both qualified viewports').toEqual([]);
 });
 
 test('IA1 contextual support preserves Guided computation and bounded 720p layout', async ({ page }) => {
@@ -1391,7 +1432,9 @@ test('IA1 contextual support preserves Guided computation and bounded 720p layou
   await expect(page.getByTestId('dock-explain')).toContainText('same normalized input');
   await expect(page.getByTestId('dock-explain')).toContainText('operational numerical roles');
   await expect(page.locator('button[data-support-action="qkv"]')).toBeVisible();
-  await expect(page.getByTestId('dock-context-support')).toHaveCount(0);
+  await expect(page.getByTestId('dock-context-support')).toHaveAttribute('data-support-action', 'default');
+  await expect(page.getByTestId('contextual-dock')).toHaveAttribute('data-active-support', 'default');
+  await expect(page.getByTestId('dock-context-support')).toHaveAttribute('aria-label', 'Step overview');
 
   await page.locator('button[data-support-action="qkv"]').click();
   await expectPublicLesson(page, { canonicalState: 'p1_qkv' });
@@ -1403,6 +1446,10 @@ test('IA1 contextual support preserves Guided computation and bounded 720p layou
   for (const evidence of await page.getByTestId('dock-context-support').locator('[data-member]').all()) {
     await expect(evidence).toHaveAttribute('data-artifact-id', /.+/);
   }
+  await expectDisplayedComputation(page, run, input, commands);
+  await page.locator('button[data-support-action="default"]').click();
+  await expect(page.getByTestId('dock-context-support')).toHaveAttribute('data-support-action', 'default');
+  await expect(page.getByTestId('contextual-dock')).toHaveAttribute('data-active-support', 'default');
   await expectDisplayedComputation(page, run, input, commands);
   await expect(page.getByTestId('dock-explain')).toBeVisible();
 

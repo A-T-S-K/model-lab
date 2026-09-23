@@ -159,10 +159,34 @@ function renderPublicSupport(opts: ContextualDockOptions, action: PublicSupportA
     const values = raw && member.availability === 'available' ? (member.slice ? raw.slice(member.slice.start, member.slice.end) : raw) : undefined;
     return `<div class="support-observation" data-member="${esc(member.memberId)}" data-artifact-id="${esc(member.artifactId ?? '')}"><strong>${esc(member.role)} · ${values ? 'observed' : esc(member.availability)}</strong><span>${values ? values.slice(0, 2).map(fmt).join(' · ') : 'Numerical values unavailable'}${values && values.length > 2 ? ` · … (${values.length} total)` : ''}</span></div>`;
   }).join('');
-  return `<aside class="dock-context-support" data-testid="dock-context-support" data-support-action="${esc(action.id)}" data-run-id="${esc(opts.model?.source.sourceRunId ?? '')}" data-source-run-id="${esc(training?.sourceRunId ?? context?.canonical.run ?? '')}" aria-label="${esc(action.label)}">
+  return `<aside id="dock-context-support" class="dock-context-support" data-testid="dock-context-support" data-support-action="${esc(action.id)}" data-run-id="${esc(opts.model?.source.sourceRunId ?? '')}" data-source-run-id="${esc(training?.sourceRunId ?? context?.canonical.run ?? '')}" aria-label="${esc(action.label)}">
     <strong>${esc(action.label)}</strong>
     ${calculation || observed || `<p>${esc(action.explanation ?? opts.tourContent?.whyHere ?? '')}</p>`}
   </aside>`;
+}
+
+const defaultSupport: Partial<Record<PublicTourContent['state'], string>> = {
+  p1_prediction_preview: 'The visible distribution is this run’s prediction at the selected position. The lesson follows the computation that produced it.',
+  p1_represent: 'The combined embedding passes through two distinct normalizations before attention projections. The earlier normalized stream remains available for residual addition.',
+  p1_qkv: 'Q and K meet in the score calculation. V takes a different path: its components enter the mixture only after scores become weights.',
+  p1_attention_compare: 'Current Q × each eligible K → raw scores. Future positions are unavailable to this causal comparison.',
+  p1_attention_weights: 'Raw attention scores → softmax over eligible positions → normalized mixing weights.',
+  p1_value_mixture: 'Each eligible position supplies one weight for its whole Value vector. The head output adds those weighted vectors component by component.',
+  p1_attention_integration: 'Head outputs → concatenate → WO projection → add the saved residual. Concatenation joins channels; addition combines values.',
+  p1_transform: 'The 8 → 32 expansion creates feature channels. ReLU gates them before the 32 → 8 contraction; the saved residual joins after that contraction.',
+  p1_score: 'The vocabulary projection produces raw signed scores. Output softmax converts those scores to probabilities in the next step.',
+  p1_probabilities: 'Raw signed scores → output softmax → probabilities over possible next tokens.',
+  p2_objective: 'Each target position contributes a loss. Their mean is the training objective used for this example.',
+  p2_backward_trace: 'The highlighted path shows which earlier computation can influence the loss. Backward explanation follows dependency and sensitivity; it is not reverse runtime execution.',
+  p2_gradient_contribution: 'Incoming sensitivity × local derivative = this contribution. It joins the running partial gradient for the selected parameter.',
+  p2_final_gradient: 'Partial contributions accumulate into the final gradient. A gradient is not yet a parameter update.',
+  p2_adam_proposal: 'Final gradient + saved optimizer state → proposed parameter value. The accepted value remains in force until acceptance.',
+  candidate_ready: 'Mean loss summarizes this training example; target probability tracks one selected position. One-example improvement does not establish general model improvement.',
+};
+
+function renderDefaultSupport(opts: ContextualDockOptions): string {
+  const content = defaultSupport[opts.tourContent!.state];
+  return `<aside id="dock-context-support" class="dock-context-support" data-testid="dock-context-support" data-support-action="default" data-run-id="${esc(opts.model?.source.sourceRunId ?? '')}" aria-label="Step overview"><strong>Step overview</strong><p>${esc(content ?? '')}</p></aside>`;
 }
 
 function renderExplain(opts: ContextualDockOptions): string {
@@ -185,7 +209,7 @@ function renderExplain(opts: ContextualDockOptions): string {
       // Cold represents unstarted tour
     } else if (tc.part === 1) {
       const c = operationConstruction(m, a, element, executionProgress);
-      if (c.plainResult) {
+      if (c.plainResult && ['p1_prediction_preview', 'p1_score', 'p1_probabilities'].includes(tc.state)) {
         stageResult = `<div class="dock-stage-result"><div class="teaching-step"><small class="stage-result-label">OBSERVED RESULT</small><p>${c.plainResult}</p></div></div>`;
       }
     } else if (tc.state === 'p2_objective') {
@@ -1186,7 +1210,7 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
   const supportActions = opts.tourContent && !isExpanded ? publicSupportActions(opts.tourContent) : [];
   const activeSupport = supportActions.find(action => action.id === opts.supportAction);
   const hasCoreResult = supportActions.length > 0 && bodyContent.includes('class="dock-stage-result"');
-  if (supportActions.length) bodyContent = `<div class="dock-guided-core">${bodyContent}</div><div class="dock-support-column"><nav class="dock-support-actions" aria-label="Contextual support">${supportActions.map(action => `<button type="button" data-support-action="${esc(action.id)}" aria-pressed="${activeSupport?.id === action.id}" aria-controls="dock-body">${esc(action.label)}</button>`).join('')}</nav>${activeSupport ? renderPublicSupport(opts, activeSupport) : `<p class="dock-support-hint">Choose a focused explanation or inspect the current run.</p>`}</div>`;
+  if (supportActions.length) bodyContent = `<div class="dock-guided-core">${bodyContent}</div><div class="dock-support-column"><span class="dock-support-heading">EXPLORE THIS STEP</span>${activeSupport ? renderPublicSupport(opts, activeSupport) : renderDefaultSupport(opts)}<nav class="dock-support-actions" aria-label="Contextual support">${activeSupport ? '<button type="button" data-support-action="default" aria-pressed="false" aria-controls="dock-context-support">Overview</button>' : ''}${supportActions.map(action => `<button type="button" data-support-action="${esc(action.id)}" aria-pressed="${activeSupport?.id === action.id}" aria-controls="dock-context-support">${esc(action.label)}</button>`).join('')}</nav></div>`;
 
   if (opts.attract) {
     return `<section class="contextual-dock short-guide" data-testid="contextual-dock" data-active-depth="explain" aria-label="Contextual explanation dock">
@@ -1213,7 +1237,7 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
     ? `<button id="dock-inspect" class="secondary-action dock-tab dock-tab-close" data-dock-depth="explain">← Return to Guided</button>`
     : `<button id="dock-inspect" class="secondary-action dock-tab" data-dock-depth="values">${isPublic ? 'Deep inspection' : 'Inspect evidence ▾'}</button>`;
 
-  return `<section class="contextual-dock short-guide ${isExpanded ? 'is-expanded' : ''} ${supportActions.length ? 'has-support-actions' : ''} ${hasCoreResult ? 'has-core-result' : ''}" data-testid="contextual-dock" data-tour-state="${esc(opts.tourContent?.state ?? '')}" data-active-depth="${effectiveDepth}" data-active-support="${esc(activeSupport?.id ?? '')}" aria-label="Contextual explanation dock">
+  return `<section class="contextual-dock short-guide ${isExpanded ? 'is-expanded' : ''} ${supportActions.length ? 'has-support-actions' : ''} ${hasCoreResult ? 'has-core-result' : ''}" data-testid="contextual-dock" data-tour-state="${esc(opts.tourContent?.state ?? '')}" data-active-depth="${effectiveDepth}" data-active-support="${supportActions.length ? esc(activeSupport?.id ?? 'default') : ''}" aria-label="Contextual explanation dock">
     <div class="dock-header" data-testid="dock-header">
       <div class="dock-route-info dock-slot-context">
         ${opts.tourContent ? `<span class="lesson-progress lesson-macro-progress" data-testid="lesson-progress" aria-label="${esc(opts.tourContent.part === 1 ? 'Part 1 active; Part 2 upcoming' : opts.tourContent.state === 'tour_complete' ? 'Part 1 and Part 2 complete' : 'Part 1 complete; Part 2 active')}"><span class="${opts.tourContent.part === 1 ? 'active' : 'complete'}">1 · MAKE A PREDICTION</span><span aria-hidden="true">→</span><span class="${opts.tourContent.part === 1 ? 'upcoming' : opts.tourContent.state === 'tour_complete' ? 'complete' : 'active'}">2 · LEARN FROM ERROR</span><small>${esc(lessonProgress)}</small></span>` : lessonProgress ? `<span class="lesson-progress" data-testid="lesson-progress">${esc(lessonProgress)}</span>` : ''}
