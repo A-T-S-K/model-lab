@@ -855,18 +855,23 @@ test('2c. current Part 2 semantics, authentic depth, ancestry, and candidate con
   await expect(page.locator('#execution-accept')).toBeVisible();
   await expect(page.locator('#execution-cancel')).toBeVisible();
   await expect(page.locator('#execution-cancel')).toContainText('Discard candidate');
-  await expect(page.locator('button[data-dock-depth="compare"]')).toBeVisible();
+  await expect(page.locator('button[data-support-action="candidate"]')).toBeVisible();
   await expect(page.locator('.decision-summary')).toHaveCount(0);
   await expect(page.locator('.learning-stations')).toHaveCount(0);
   await expect(page.locator('[data-learning-stage]')).toHaveCount(0);
   await captureEvidence(page, '15-candidate-ready-1920.png', 'candidate_ready', '[data-world-kind="probabilities"]');
 
+  // Contextual comparison stays in Guided; the full table requires deliberate deep inspection.
+  await page.locator('button[data-support-action="candidate"]').click();
+  await expectPublicLesson(page, { canonicalState: 'candidate_ready', navigationMode: 'guided', outcome: '' });
+  await expect(page.getByTestId('dock-context-support')).toHaveAttribute('data-support-action', 'candidate');
   // Compare is a read-only detail detour and must not move the public camera or decision state.
   const cameraBeforeCompare = await page.evaluate(() => {
     const vb = (document.querySelector('#spatial-world') as any).viewBox.baseVal;
     return { x: vb.x, y: vb.y, width: vb.width, height: vb.height };
   });
   const commandsBeforeCompare = await workerCommandCount(page);
+  await page.locator('#dock-inspect').click();
   await page.locator('button[data-dock-depth="compare"]').click();
   await expectPublicLesson(page, { canonicalState: 'candidate_ready', navigationMode: 'detail', outcome: '' });
   await expect(page.getByTestId('contextual-dock')).toHaveAttribute('data-active-depth', 'compare');
@@ -891,7 +896,7 @@ test('2c. current Part 2 semantics, authentic depth, ancestry, and candidate con
   await page.locator('#dock-inspect').click();
   await expectPublicLesson(page, { canonicalState: 'candidate_ready', outcome: '' });
 
-  // Candidate Details expose only candidate-side live scalar ancestry.
+  // Candidate deep inspection exposes only candidate-side live scalar ancestry.
   const candidateDetailCommands = await workerCommandCount(page);
   await page.locator('#dock-inspect').click();
   await expectPublicLesson(page, { canonicalState: 'candidate_ready', navigationMode: 'detail', outcome: '' });
@@ -1217,6 +1222,7 @@ test('6. 44px minimum touch targets and keyboard accessibility across qualified 
   await assertMin44('#execution-accept', 'Accept candidate button');
   await assertMin44('#execution-cancel', 'Discard candidate button');
   await expect(page.locator('.output-comparison')).toHaveCount(0);
+  await page.locator('#dock-inspect').click();
   await page.locator('button[data-dock-depth="compare"]').click();
   await expect(page.locator('.contextual-dock .output-comparison')).toHaveCount(1);
   await assertMin44('.dock-tab-close', 'Candidate comparison Return button');
@@ -1261,6 +1267,7 @@ test('6. 44px minimum touch targets and keyboard accessibility across qualified 
   await assertMin44('#execution-accept', '720p Accept candidate button');
   await assertMin44('#execution-cancel', '720p Discard candidate button');
   await expect(page.locator('.output-comparison')).toHaveCount(0);
+  await page.locator('#dock-inspect').click();
   await page.locator('button[data-dock-depth="compare"]').click();
   await expect(page.getByTestId('dock-compare')).toContainText('Current / Candidate');
   await expect(page.locator('.contextual-dock .output-comparison')).toHaveCount(1);
@@ -1281,14 +1288,39 @@ test('7. current Guided route fits 1280x720 and reduced motion', async ({ page }
   await captureEvidence(page, '20-attract-1280.png', 'attract');
   await page.locator('#exhibit-start').click();
   await waitForCurrentPublicState(page, 'p1_prediction_preview');
+  const dockOverflow: string[] = [];
+  const numericalSupport = new Set(['distribution', 'components', 'qkv', 'projection', 'scores', 'score', 'weights', 'softmax', 'mixture', 'terms', 'combined', 'stages', 'logits', 'probabilities', 'loss', 'positions', 'accumulation', 'adam', 'candidate']);
+  const assertCompactDock = async (state: string) => {
+    const measure = async (label: string) => {
+      const heights = await page.evaluate(() => {
+      const body = document.querySelector<HTMLElement>('[data-testid="dock-body"]')!;
+      return { body: body.clientHeight, content: body.scrollHeight, page: document.documentElement.scrollHeight };
+      });
+      if (heights.page > 720 || heights.content > heights.body + 1) dockOverflow.push(`${label}: page ${heights.page}px; Guided body ${heights.content}px / ${heights.body}px`);
+    };
+    await measure(state);
+    const actions = await page.locator('button[data-support-action]').evaluateAll(buttons => buttons.map(button => (button as HTMLElement).dataset.supportAction!));
+    for (const action of actions) {
+      await page.locator(`button[data-support-action="${action}"]`).click();
+      if (numericalSupport.has(action)) {
+        const support = page.getByTestId('dock-context-support');
+        await expect(support.locator('[data-testid="support-calculation"], [data-member]')).not.toHaveCount(0);
+      }
+      await measure(`${state} / ${action}`);
+      await page.locator(`button[data-support-action="${action}"]`).click();
+    }
+  };
+  await assertCompactDock('p1_prediction_preview');
   await expect(page.locator('#short-continue')).toBeVisible();
   await captureEvidence(page, '21-prediction-1280.png', 'prediction', '[data-world-kind="probabilities"]');
   await page.locator('#short-continue').click();
   await waitForCurrentPublicState(page, 'p1_represent');
+  await assertCompactDock('p1_represent');
   await expect(page.getByTestId('lesson-progress')).toContainText('MAKE A PREDICTION');
   await captureEvidence(page, '22-represent-1280.png', 'represent', '[data-world-kind="preAttentionNorm"]');
   await page.locator('#short-continue').click();
   await waitForCurrentPublicState(page, 'p1_qkv');
+  await assertCompactDock('p1_qkv');
   for (const kind of ['q', 'k', 'v']) {
     await assertSvgElementInViewBox(page, `[data-world-kind="${kind}"][data-world-head="0"]`, {
       requireCenterInside: true, minIntersectionRatio: 0.5, description: `720p ${kind} teaching target`,
@@ -1298,22 +1330,27 @@ test('7. current Guided route fits 1280x720 and reduced motion', async ({ page }
   for (const state of ['p1_attention_compare', 'p1_attention_weights', 'p1_value_mixture', 'p1_attention_integration', 'p1_transform', 'p1_score', 'p1_probabilities', 'p1_complete']) {
     await page.locator('#short-continue').click();
     await waitForCurrentPublicState(page, state);
+    await assertCompactDock(state);
   }
   await expect(page.locator('#short-teach')).toBeVisible();
   await captureEvidence(page, '24-part1-complete-1280.png', 'p1_complete');
   await page.locator('#short-teach').click();
   await waitForCurrentPublicState(page, 'p2_objective');
+  await assertCompactDock('p2_objective');
   await expect(page.getByTestId('lesson-progress')).toContainText('LEARN FROM ERROR');
   await expect(page.locator('#reverse-continue')).toBeEnabled({ timeout: 60_000 });
   await expect(page.getByTestId('objective-anchor')).toHaveAttribute('data-objective-availability', 'available');
   await captureEvidence(page, '25-objective-1280.png', 'p2_objective', '[data-testid="objective-anchor"]');
   for (const state of ['p2_backward_trace', 'p2_gradient_contribution', 'p2_final_gradient']) {
     await advanceCurrentPart2(page, state);
+    await assertCompactDock(state);
   }
   await captureEvidence(page, '26-gradient-1280.png', 'p2_final_gradient', '.parameter-learning-overlay');
   await advanceCurrentPart2(page, 'p2_adam_proposal');
+  await assertCompactDock('p2_adam_proposal');
   await captureEvidence(page, '27-adam-1280.png', 'p2_adam_proposal', '[data-testid="adam-learning-overlay"]');
   await advanceCurrentPart2(page, 'candidate_ready');
+  await assertCompactDock('candidate_ready');
   await expect(page.locator('#execution-accept')).toBeVisible();
   await expect(page.locator('#execution-cancel')).toBeVisible();
   await captureEvidence(page, '28-candidate-1280.png', 'candidate_ready', '[data-world-kind="probabilities"]');
@@ -1333,6 +1370,69 @@ test('7. current Guided route fits 1280x720 and reduced motion', async ({ page }
     requireCenterInside: true, minIntersectionRatio: 0.5, description: 'reduced-motion representation target',
   });
   await captureEvidence(page, '30-reduced-motion-1280.png', 'p1_represent');
+  await assertCompactDock('p1_represent/reduced-motion');
+  expect(dockOverflow, '1280×720 Guided core must fit at every lesson beat').toEqual([]);
+});
+
+test('IA1 contextual support preserves Guided computation and bounded 720p layout', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await audit(page);
+  await page.goto('/?presentation=spatial&kiosk=1');
+  await page.locator('#exhibit-start').click();
+  await waitForCurrentPublicState(page, 'p1_prediction_preview');
+  await page.locator('#short-continue').click();
+  await waitForCurrentPublicState(page, 'p1_represent');
+  await page.locator('#short-continue').click();
+  await waitForCurrentPublicState(page, 'p1_qkv');
+
+  const run = await displayedRunId(page);
+  const input = await displayedCapturedInput(page);
+  const commands = await workerCommandCount(page);
+  await expect(page.getByTestId('dock-explain')).toContainText('same normalized input');
+  await expect(page.getByTestId('dock-explain')).toContainText('operational numerical roles');
+  await expect(page.locator('button[data-support-action="qkv"]')).toBeVisible();
+  await expect(page.getByTestId('dock-context-support')).toHaveCount(0);
+
+  await page.locator('button[data-support-action="qkv"]').click();
+  await expectPublicLesson(page, { canonicalState: 'p1_qkv' });
+  await expect(page.getByTestId('contextual-dock')).toHaveAttribute('data-active-support', 'qkv');
+  await expect(page.locator('button[data-support-action="qkv"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('dock-context-support')).toHaveAttribute('data-run-id', run);
+  await expect(page.getByTestId('dock-context-support')).toHaveAttribute('data-source-run-id', run);
+  await expect(page.getByTestId('dock-context-support').locator('[data-member]')).toHaveCount(3);
+  for (const evidence of await page.getByTestId('dock-context-support').locator('[data-member]').all()) {
+    await expect(evidence).toHaveAttribute('data-artifact-id', /.+/);
+  }
+  await expectDisplayedComputation(page, run, input, commands);
+  await expect(page.getByTestId('dock-explain')).toBeVisible();
+
+  for (const action of await page.locator('button[data-support-action]').all()) {
+    const box = await action.boundingBox();
+    expect(box?.width).toBeGreaterThanOrEqual(44);
+    expect(box?.height).toBeGreaterThanOrEqual(44);
+  }
+  await page.locator('button[data-support-action="projection"]').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('button[data-support-action="projection"]')).toBeFocused();
+  await expect(page.getByTestId('contextual-dock')).toHaveAttribute('data-active-support', 'projection');
+  await expect(page.getByTestId('dock-context-support')).toHaveCount(1);
+  await expect(page.locator('button[data-support-action="qkv"]')).toHaveAttribute('aria-pressed', 'false');
+  await expectDisplayedComputation(page, run, input, commands);
+  const fit = await page.evaluate(() => {
+    const body = document.querySelector<HTMLElement>('[data-testid="dock-body"]')!;
+    return { page: document.documentElement.scrollHeight <= innerHeight, body: body.scrollHeight <= body.clientHeight + 1, bodyHeight: body.clientHeight, contentHeight: body.scrollHeight };
+  });
+  expect(fit.page).toBe(true);
+  expect(fit.body, `dock body ${fit.contentHeight}px content / ${fit.bodyHeight}px viewport`).toBe(true);
+  await captureEvidence(page, 'ia1-qkv-support-1280.png', 'IA1 contextual support');
+
+  await page.locator('#dock-inspect').click();
+  await expectPublicLesson(page, { canonicalState: 'p1_qkv', navigationMode: 'detail' });
+  await expect(page.getByTestId('dock-values')).toHaveAttribute('data-public-depth-kind', 'qkv');
+  await page.locator('#dock-inspect').click();
+  await expectPublicLesson(page, { canonicalState: 'p1_qkv' });
+  await expect(page.getByTestId('contextual-dock')).toHaveAttribute('data-active-support', 'projection');
+  await expectDisplayedComputation(page, run, input, commands);
 });
 
 test('8. P0-E2 Unified contextual dock, depth switching, world dominant floor, and 40vh bound', async ({ page }) => {

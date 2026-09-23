@@ -291,7 +291,7 @@ test('Guided dock keeps one beat title and explains the plotted values', async (
   assert.doesNotMatch(represent, /class="construction-header"/);
   assert.match(represent, /1 · MAKE A PREDICTION/);
   assert.match(represent, /2 · LEARN FROM ERROR/);
-  assert.match(represent, /Panels may use different scales/);
+  assert.match(represent, /each panel may use a different scale/);
 
   const weights = await publicDock(model, 'p1_attention_weights', 'explain');
   assert.match(weights, /normalized mixing weights across allowed positions/);

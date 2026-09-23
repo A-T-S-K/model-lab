@@ -146,6 +146,36 @@ export interface PublicTourContent {
   readonly truthGuardrail?: string;
 }
 
+/** Presentation choices only; the member IDs refer to the existing beat-owned evidence. */
+export interface PublicSupportAction {
+  readonly id: string;
+  readonly label: string;
+  readonly member?: string;
+  readonly explanation?: string;
+}
+
+export function publicSupportActions(content: PublicTourContent): readonly PublicSupportAction[] {
+  switch (content.state) {
+    case 'cold': case 'p1_complete': case 'tour_complete': return [];
+    case 'p1_prediction_preview': return [{ id: 'distribution', label: 'Inspect probabilities', member: 'probabilities' }];
+    case 'p1_represent': return [{ id: 'components', label: 'Inspect components', member: 'tokenEmbedding' }, { id: 'normalization', label: 'Why normalize?', explanation: 'The summed embedding is normalized. Attention then receives a separately normalized input, while the earlier normalized stream is saved for residual addition.' }];
+    case 'p1_qkv': return [{ id: 'qkv', label: 'Inspect Q/K/V', member: 'q' }, { id: 'projection', label: 'Show one projection', explanation: 'Each role is a separate learned projection of the same normalized input. Exact operands and arithmetic are available in Deep inspection.' }];
+    case 'p1_attention_compare': return [{ id: 'scores', label: 'Compare positions', member: 'scores' }, { id: 'score', label: 'See score calculation', explanation: 'The selected Query is compared with each eligible Key; future Keys are outside this causal comparison. Exact arithmetic is available in Deep inspection.' }];
+    case 'p1_attention_weights': return [{ id: 'weights', label: 'Inspect weights', member: 'weights' }, { id: 'softmax', label: 'Show softmax', explanation: 'Softmax normalizes the observed score row over eligible positions. It does not normalize vocabulary scores here.' }];
+    case 'p1_value_mixture': return [{ id: 'mixture', label: 'Inspect head output', member: 'headOutput' }, { id: 'terms', label: 'Show weighted sum', explanation: 'Each eligible weight multiplies its corresponding Value vector; the terms sum component by component into the head output.' }];
+    case 'p1_attention_integration': return [{ id: 'combined', label: 'Inspect combine path', member: 'attentionOutput' }];
+    case 'p1_transform': return [{ id: 'stages', label: 'See transform stages', member: 'mlpRelu' }];
+    case 'p1_score': return [{ id: 'logits', label: 'Inspect raw scores', member: 'logits' }];
+    case 'p1_probabilities': return [{ id: 'probabilities', label: 'Inspect output probabilities', member: 'probabilities' }];
+    case 'p2_objective': return [{ id: 'loss', label: 'See one loss', explanation: 'Each target position contributes −log of its observed target probability; their mean is the training objective.' }, { id: 'positions', label: 'See all positions', explanation: 'The objective combines target losses across all positions. Open Deep inspection for the complete observed position table.' }];
+    case 'p2_backward_trace': return [{ id: 'dependency', label: 'Follow one dependency', explanation: 'The highlighted path traces how the objective depends on earlier operations. Its direction explains sensitivity, not runtime timing.' }];
+    case 'p2_gradient_contribution': return [{ id: 'origin', label: 'Where did sensitivity come from?', explanation: 'The incoming sensitivity comes through the backward dependency path from the objective.' }, { id: 'running', label: 'Inspect running gradient', explanation: 'This observed contribution is added to the previous running total shown in Guided. The result remains partial.' }];
+    case 'p2_final_gradient': return [{ id: 'accumulation', label: 'See accumulated contributions', explanation: 'The completed gradient accumulates contributions from the parameter’s uses. Deep inspection retains the full provenance.' }];
+    case 'p2_adam_proposal': return [{ id: 'adam', label: 'How did Adam get this value?', explanation: 'Adam combines the final gradient with persistent first and second moment state, applies bias correction, then proposes a new value. The exact recorded calculation is in Deep inspection.' }];
+    case 'candidate_ready': return [{ id: 'measurements', label: 'Why do these measurements matter?', explanation: 'Mean loss summarizes this training example; target probability shows one selected position. Neither establishes general improvement.' }, { id: 'candidate', label: 'Compare candidate', explanation: 'The candidate and accepted run used the same example. Deep inspection has the full position comparison.' }];
+  }
+}
+
 const REVERSE_TRUTH_GUARDRAIL = 'The purple backward path explains dependency and sensitivity through the same computation. It is not measured runtime timing, text flowing backward, or execution being undone.';
 const PART_1_TOKEN = 3;
 const PART_1_HEAD = 0;
@@ -229,7 +259,7 @@ export function getPublicTourContent(
         routePurpose: 'Start from the authentic output before tracing how it was produced.',
         learnerQuestion: 'What does this model predict comes next?',
         whyHere: 'The completed prediction is the phenomenon the rest of Part 1 explains.',
-        plainMeaning: 'This run produced actual probabilities for the next character. These are authentic model results, not decorative bars.',
+        plainMeaning: 'This run produced an authentic next-character probability distribution. Prediction used the accepted parameters; no parameter update happened.',
         resultConcept: { label: 'Observed next-token distribution' },
         selectionIntent: { kind: 'probabilities', token: PART_1_TOKEN, key: PART_1_KEY },
         depthSpec: {
@@ -258,7 +288,7 @@ export function getPublicTourContent(
         routePurpose: 'Build the numerical representation used by the rest of the model.',
         learnerQuestion: 'How can the model calculate with a character and its position?',
         whyHere: 'Later vector operations need learned numerical features for token identity and position.',
-        plainMeaning: 'The character and its position become a list of numbers called a vector. These bars show real components of that representation from this run; the model prepares it for attention while saving an earlier version for later.',
+        plainMeaning: 'Token embedding + position embedding → representation → normalization → attention input. The model also saves the earlier residual stream for addition after attention. The bars show actual vector components from this run.',
         resultConcept: { label: 'Attention-ready representation' },
         selectionIntent: { kind: 'preAttentionNorm', token: PART_1_TOKEN, key: PART_1_KEY, layer: 0 },
         depthSpec: {
@@ -302,7 +332,7 @@ export function getPublicTourContent(
         routePurpose: 'Prepare separate numerical roles for comparison and information carrying.',
         learnerQuestion: 'Why create three different vectors from the same representation?',
         whyHere: 'Attention needs comparison-side numbers and separate numbers containing information that may be mixed.',
-        plainMeaning: 'The same representation is projected three ways. Query (Q) and Key (K) are compared to make attention scores. Value (V) carries the information those weights will mix.',
+        plainMeaning: 'The same normalized input at position 3, head 0 produces three distinct vectors: Query (Q) participates in comparisons, Key (K) is compared against, and Value (V) carries information to mix.',
         resultConcept: { label: 'Query / Key / Value vectors' },
         selectionIntent: { kind: 'q', token: PART_1_TOKEN, key: PART_1_KEY, layer: 0, head: PART_1_HEAD },
         depthSpec: {
@@ -342,7 +372,7 @@ export function getPublicTourContent(
         routePurpose: 'Compare the selected Query with causally available Keys to produce raw attention scores.',
         learnerQuestion: 'Which earlier or current positions can this position compare against, and what does the comparison produce?',
         whyHere: 'The model needs a compatibility score for each causally available Key before it can form mixing coefficients.',
-        plainMeaning: 'This position’s Query is compared with Keys from allowed earlier and current positions. Each comparison produces a real raw attention score. A score is not yet a weight or probability.',
+        plainMeaning: 'Query × each eligible earlier or current Key → raw attention scores for this position. These scores are not yet mixing weights or probabilities.',
         resultConcept: { label: 'Causal attention score row' },
         selectionIntent: { kind: 'attentionLogits', token: PART_1_TOKEN, key: PART_1_KEY, layer: 0, head: PART_1_HEAD },
         depthSpec: {
@@ -379,7 +409,7 @@ export function getPublicTourContent(
         routePurpose: 'Normalize raw attention scores into mixing coefficients over the allowed positions.',
         learnerQuestion: 'How do raw comparison scores become usable mixing coefficients?',
         whyHere: 'The Value mixture needs normalized coefficients over exactly the causally available contributors.',
-        plainMeaning: 'Softmax normalizes the score row across allowed positions. The resulting attention weights are coefficients for mixing Value vectors, not automatic measures of importance or relevance.',
+        plainMeaning: 'Raw attention scores → softmax over eligible positions → normalized mixing weights for Values. This softmax is separate from the later output softmax over vocabulary items.',
         resultConcept: { label: 'Normalized attention weights' },
         selectionIntent: { kind: 'attentionProbabilities', token: PART_1_TOKEN, key: PART_1_KEY, layer: 0, head: PART_1_HEAD },
         depthSpec: {
@@ -411,7 +441,7 @@ export function getPublicTourContent(
         routePurpose: 'Use the attention weights to mix authentic Value vectors into one head output.',
         learnerQuestion: 'What do the attention weights actually multiply?',
         whyHere: 'The normalized coefficients only become a context-carrying result when they weight the corresponding Value vectors.',
-        plainMeaning: 'Each available Value vector is multiplied by its attention weight, and those weighted Values are summed to produce this head output.',
+        plainMeaning: 'At each eligible position, attention weight × Value vector gives a weighted term. Sum those terms component by component → this head output.',
         resultConcept: { label: 'Weighted Value mixture' },
         selectionIntent: { kind: 'headOutput', token: PART_1_TOKEN, key: PART_1_KEY, layer: 0, head: PART_1_HEAD },
         depthSpec: {
@@ -448,7 +478,7 @@ export function getPublicTourContent(
         routePurpose: 'Join both head results, project them, and add the saved residual stream.',
         learnerQuestion: 'How do separate head results return to one model representation without losing the earlier stream?',
         whyHere: 'The two head slices must be concatenated, projected back through WO, and integrated with the saved representation.',
-        plainMeaning: 'Both head outputs are concatenated into one attention output, projected through WO, then added to the saved residual bypass to produce the attention residual.',
+        plainMeaning: 'Heads → concatenate → combined head output → project through WO → projected attention output + saved residual → residual result.',
         resultConcept: { label: 'Context-enriched residual stream' },
         selectionIntent: { kind: 'attentionResidual', token: PART_1_TOKEN, key: PART_1_KEY, layer: 0 },
         depthSpec: {
@@ -493,7 +523,7 @@ export function getPublicTourContent(
         routePurpose: 'Apply the complete per-position MLP and preserve its residual stream.',
         learnerQuestion: 'What happens after attention has mixed context?',
         whyHere: 'The model applies a separate nonlinear per-position transformation before vocabulary scoring.',
-        plainMeaning: 'A separate per-position network transforms the representation after attention, then adds the saved input back. This network is called an MLP; its exact 8 → 32 → 8 steps and ReLU are in Details.',
+        plainMeaning: 'After attention, the per-position MLP normalizes its input, expands 8 → 32, applies ReLU, contracts 32 → 8, then adds the saved residual input.',
         resultConcept: { label: 'Transformed residual stream' },
         selectionIntent: { kind: 'mlpResidual', token: PART_1_TOKEN, key: PART_1_KEY, layer: 0 },
         depthSpec: {
@@ -540,7 +570,7 @@ export function getPublicTourContent(
         routePurpose: 'Project the transformed representation into one raw score per vocabulary item.',
         learnerQuestion: 'How does the final representation become scores for possible next tokens?',
         whyHere: 'The model needs one raw vocabulary score for each candidate before it can form an output distribution.',
-        plainMeaning: 'The output projection maps the transformed residual into raw signed vocabulary scores called logits. They are not normalized probabilities.',
+        plainMeaning: 'Transformed representation → output projection → one raw signed score per vocabulary item. These logits are not probabilities; output softmax follows.',
         resultConcept: { label: 'Raw vocabulary logits' },
         selectionIntent: { kind: 'logits', token: PART_1_TOKEN, key: PART_1_KEY },
         depthSpec: {
@@ -624,7 +654,7 @@ export function getPublicTourContent(
         routePurpose: 'Measure one authentic training objective across all teacher-forced target positions.',
         learnerQuestion: 'What counts as error for this training example?',
         whyHere: 'Backward needs one scalar objective tied to known targets before sensitivity can be traced.',
-        plainMeaning: 'The correct next character is known at each training position. Each prediction contributes an error measure called loss; these losses combine into the training objective.',
+        plainMeaning: 'Each training position has a known target and a per-position loss. The mean of those position losses is the single training objective used by backward sensitivity.',
         truthGuardrail: 'The objective uses multiple target positions, not only the single prediction followed in Part 1.',
         resultConcept: { label: 'Mean training objective' },
         selectionIntent: { kind: 'probabilities', token: 3 },
@@ -642,7 +672,7 @@ export function getPublicTourContent(
         routePurpose: 'Follow how the loss depends on earlier values and parameter uses through the same computation world.',
         learnerQuestion: 'How can earlier computations affect this loss?',
         whyHere: 'The dependency idea comes before inspecting one scalar gradient contribution.',
-        plainMeaning: 'Backpropagation follows calculation dependencies backward and measures sensitivity: how a change in an earlier value would affect the error. This is an explanation of dependencies, not runtime going backward in time.',
+        plainMeaning: 'Backpropagation follows calculation dependencies backward and measures sensitivity: how a change in an earlier value would affect the error. This is a dependency explanation, not reverse runtime execution or a parameter update.',
         truthGuardrail: REVERSE_TRUTH_GUARDRAIL,
         resultConcept: { label: 'Backward dependency and sensitivity' },
         selectionIntent: { kind: 'probabilities', token: 3, derivedReverseStop: 0 },
@@ -678,7 +708,7 @@ export function getPublicTourContent(
         routePurpose: 'Complete accumulation for the same selected parameter.',
         learnerQuestion: 'What is this parameter’s total sensitivity to this training objective?',
         whyHere: 'Adam requires the completed parameter gradient, not one illustrative contribution.',
-        plainMeaning: 'All real contributions have joined the final gradient: this parameter’s completed sensitivity to the training error. It is not an update; the parameter has not changed.',
+        plainMeaning: 'Partial contributions accumulate into this completed parameter gradient: its sensitivity to the training objective. Gradient ≠ parameter update; the parameter has not changed.',
         truthGuardrail: 'The final gradient measures sensitivity. It is not the parameter update and not the new parameter value.',
         resultConcept: { label: 'Final parameter gradient' },
         selectionIntent: { kind: 'tokenEmbedding', parameter: 'wte', token: 3, derivedReverseStop: 5 },
@@ -696,7 +726,7 @@ export function getPublicTourContent(
         routePurpose: 'Combine the final gradient with stored optimizer state to create a provisional parameter proposal.',
         learnerQuestion: 'How can the gradient become a proposed parameter change?',
         whyHere: 'Optimization is separate from backpropagation and uses persistent state in addition to the gradient.',
-        plainMeaning: 'An optimizer turns gradients into proposed parameter changes. This model uses an optimizer called Adam, which also keeps state from earlier updates. This proposal is provisional; the accepted model has not changed.',
+        plainMeaning: 'Final gradient + persistent optimizer history/state → Adam → proposed parameter value. This proposal is provisional; the accepted model has not changed.',
         truthGuardrail: 'Adam is not backward; gradient is not update; proposal is not acceptance.',
         resultConcept: { label: 'Provisional parameter proposal' },
         selectionIntent: { kind: 'wte', parameter: 'wte', token: 3, derivedReverseStop: 6 },
@@ -737,8 +767,8 @@ export function getPublicTourContent(
           ? 'The candidate update was committed into the live accepted model.'
           : 'The candidate update was discarded. The live model remains in its prior accepted state.',
         plainMeaning: isAccepted
-          ? 'The proposed update was applied. New parameters and optimizer state are accepted; subsequent predictions use them.'
-          : 'The Guided learning cycle is complete. The proposal was not applied; the accepted model remains unchanged.',
+          ? 'Prediction → Loss → Gradient → Adam proposal → Candidate evaluated → ACCEPTED. The candidate parameters and optimizer state are now accepted; subsequent predictions use them.'
+          : 'Prediction → Loss → Gradient → Adam proposal → Candidate evaluated → DISCARDED. The previously accepted parameters remain authoritative.',
         resultConcept: { label: isAccepted ? 'Committed update' : 'Preserved baseline' },
         selectionIntent: { kind: 'probabilities', token: 3, derivedShortStop: 0 },
         primaryAction: { id: 'tour-restart', label: 'Start Over', role: 'primary' },
@@ -966,4 +996,3 @@ export function getPublicExecutionStatus(opts: PublicStatusOptions): string {
       return 'Working...';
   }
 }
-

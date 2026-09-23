@@ -6,7 +6,7 @@ import type { ArchivedSnapshot } from '../../archive/session.js';
 import type { InspectionResult } from '../../inspect/types.js';
 import type { TrainingProgress } from '../worker/training-execution.js';
 import type { LearningModel, LearningStage, ParameterPin } from './learning.js';
-import type { PublicTourContent } from './public-tour.js';
+import { publicSupportActions, type PublicTourContent, type PublicSupportAction } from './public-tour.js';
 import {
   resolvePublicDepthContext,
   type PublicDepthSelection,
@@ -60,6 +60,7 @@ export interface ContextualDockOptions {
   readonly pin: ParameterPin;
   readonly scalar: string;
   readonly depth: DockDepth;
+  readonly supportAction?: string;
   readonly profile: ExperienceProfile;
   readonly freeExplore: boolean;
   readonly attract?: boolean;
@@ -87,6 +88,81 @@ export interface ContextualDockOptions {
   readonly trainingStartingSnapshot?: ArchivedSnapshot;
   readonly trainingPreview?: RunResult;
   readonly trainingInspection?: InspectionResult;
+}
+
+function renderPublicSupport(opts: ContextualDockOptions, action: PublicSupportAction): string {
+  const context = resolvedPart1Depth(opts);
+  const training = resolvedPart2Depth(opts);
+  const member = (id: string) => context?.members.find(candidate => candidate.memberId === id);
+  const vector = (id: string) => {
+    const selected = member(id);
+    const raw = selected && selected.availability === 'available' ? opts.model?.forward.values(selected.address) : undefined;
+    return raw && selected?.slice ? raw.slice(selected.slice.start, selected.slice.end) : raw;
+  };
+  const firstComponent = (id: string, label: string) => `<div class="support-observation support-short-row" title="${esc(member(id)?.role ?? label)}"><strong>${esc(label)}</strong><span>[0] ${vector(id)?.[0] === undefined ? 'unavailable' : `${fmt(vector(id)![0])} observed`}</span></div>`;
+  let calculation = '';
+  if (action.id === 'components') {
+    if (context) calculation = `<div data-testid="support-calculation">${firstComponent('tokenEmbedding', 'Token')}${firstComponent('positionEmbedding', 'Position')}${firstComponent('embeddingSum', 'Sum')}</div>`;
+  } else if (action.id === 'projection') {
+    const q = member('q');
+    const witness = q && opts.model?.forward.explain(q.address, q.slice?.start ?? 0);
+    if (witness?.terms && witness.observed !== undefined) calculation = `<p data-testid="support-calculation">Q[0]: derived Σ(${witness.terms.length} input × weight terms) = ${fmt(witness.terms.reduce((sum, term) => sum + term.product, 0))}; observed ${fmt(witness.observed)}.</p>`;
+  } else if (action.id === 'score') {
+    const q = vector('query');
+    const key = context?.selectedKey ?? 0;
+    const kMember = context?.members.find(candidate => candidate.memberId === 'keys' && candidate.key === key);
+    const raw = kMember && kMember.availability === 'available' ? opts.model?.forward.values(kMember.address) : undefined;
+    const k = raw && kMember?.slice ? raw.slice(kMember.slice.start, kMember.slice.end) : raw;
+    const score = vector('scores')?.[key];
+    if (q && k && q.length === k.length && score !== undefined) calculation = `<p data-testid="support-calculation">p${context?.canonical.position} Q · p${key} K / √${q.length}: derived ${fmt(q.reduce((sum, value, index) => sum + value * k[index]!, 0) / Math.sqrt(q.length))}; observed score ${fmt(score)}.</p>`;
+  } else if (action.id === 'softmax') {
+    const weights = member('weights');
+    const key = context?.selectedKey ?? 0;
+    const witness = weights && opts.model?.forward.explain(weights.address, key);
+    if (witness?.exponentials?.[key] !== undefined && witness.denominator !== undefined && witness.observed !== undefined) calculation = `<p data-testid="support-calculation">p${key}: derived exp(score − max) / shared sum = ${fmt(witness.exponentials[key]!)} / ${fmt(witness.denominator)} ≈ ${fmt(witness.exponentials[key]! / witness.denominator)}; observed weight ${fmt(witness.observed)}.</p>`;
+  } else if (action.id === 'terms') {
+    const output = member('headOutput');
+    const witness = output && opts.model?.forward.explain(output.address, 0);
+    if (context?.completeSupport && witness?.probabilities && witness.points && witness.observed !== undefined) calculation = `<p data-testid="support-calculation">Head output[0]: derived Σ(${witness.points.length} eligible weight × Value[0] terms) = ${fmt(witness.points.reduce((sum, point, index) => sum + witness.probabilities![index]! * point![0]!, 0))}; observed ${fmt(witness.observed)}.</p>`;
+  } else if (action.id === 'loss') {
+    const row = training?.objective?.rows.find(candidate => candidate.position === training.objective?.selectedPosition) ?? training?.objective?.rows[0];
+    if (row?.derivedLoss !== undefined && row.recordedLoss !== undefined) calculation = `<p data-testid="support-calculation">p${row.position}: derived −log(${fmt(row.probability)}) = ${fmt(row.derivedLoss)}; observed loss ${fmt(row.recordedLoss)}.</p>`;
+  } else if (action.id === 'positions') {
+    if (training?.objective?.rows.length && training.objective.observedMean !== undefined) calculation = `<div data-testid="support-calculation">${training.objective.rows.map(row => `<div class="support-observation support-short-row"><strong>p${row.position} · ${esc(row.targetLabel)}</strong><span>${row.recordedLoss === undefined ? 'unavailable' : `${fmt(row.recordedLoss)} observed`}</span></div>`).join('')}<div class="support-observation support-short-row"><strong>Mean</strong><span>${fmt(training.objective.observedMean)} observed</span></div></div>`;
+  } else if (action.id === 'candidate') {
+    const candidate = training?.candidate;
+    if (candidate) calculation = `<div data-testid="support-calculation" data-baseline-run-id="${esc(candidate.baselineRunId)}" data-candidate-run-id="${esc(candidate.candidateRunId)}">${candidate.outputLabels.map((label, index) => {
+      const row = candidate.rows.find(item => item.position === candidate.selectedPosition) ?? candidate.rows[0];
+      return `<div class="support-observation support-short-row"><strong>${esc(label)}</strong><span>${fmt(row?.baselineDistribution[index])} → ${fmt(row?.candidateDistribution[index])}</span></div>`;
+    }).join('')}<small>Selected p${candidate.selectedPosition}; accepted → provisional candidate, same example.</small></div>`;
+  } else if (action.id === 'stages') {
+    const stages = ['preMlpNorm', 'mlpUp', 'mlpRelu', 'mlpDown'];
+    if (context?.completeSupport) calculation = `<div data-testid="support-calculation">${stages.map((id, index) => firstComponent(id, ['Normalize · 8', 'Expand · 32', 'ReLU · 32', 'Contract · 8'][index]!)).join('')}</div>`;
+  } else if (action.id === 'accumulation') {
+    if (training?.backwardComplete && training.finalGradient !== undefined) calculation = `<p data-testid="support-calculation">${training.retainedContributions.length} matching contribution rows are retained as a subset. Completed observed gradient: ${fmt(training.finalGradient)}. The retained subset is not claimed as the full sum.</p>`;
+  } else if (action.id === 'adam') {
+    const proposal = training?.proposal;
+    if (proposal) calculation = `<div data-testid="support-calculation"><div class="support-observation">Observed g ${fmt(proposal.gradient)} · m ${fmt(proposal.mBefore)} → ${fmt(proposal.mAfter)}</div><div class="support-observation">Observed v ${fmt(proposal.vBefore)} → ${fmt(proposal.vAfter)} · corrected m̂/v̂ ${fmt(proposal.mHat)} / ${fmt(proposal.vHat)}</div><div class="support-observation">Stored Δ ${fmt(proposal.delta)} · θ ${fmt(proposal.before)} → ${fmt(proposal.after)} provisional</div></div>`;
+  } else if (action.id === 'combined') {
+    const stages = ['attentionOutput', 'attentionProjection', 'savedResidual', 'attentionResidual'];
+    if (context?.completeSupport) calculation = `<div data-testid="support-calculation">${stages.map((id, index) => firstComponent(id, ['Concat', 'WO', 'Saved residual', 'Result'][index]!)).join('')}</div>`;
+  } else if (action.id === 'scores' || action.id === 'weights') {
+    const values = vector(action.id);
+    if (context?.completeSupport && values) calculation = `<div data-testid="support-calculation">${context.eligibleKeys.map(key => `<div class="support-observation">p${key}: ${values[key] === undefined ? 'unavailable' : `${fmt(values[key])} observed`}</div>`).join('')}</div>`;
+  } else if (action.id === 'distribution') {
+    const values = vector('probabilities');
+    if (context?.completeSupport && values) calculation = `<div data-testid="support-calculation">${values.map((value, index) => `<div class="support-observation">${esc(outputTokenName(index, opts.model?.forward.vocabulary ?? []))}: ${fmt(value)} observed</div>`).join('')}</div>`;
+  }
+  const memberIds = action.id === 'qkv' ? ['q', 'k', 'v'] : action.id === 'components' ? ['tokenEmbedding', 'positionEmbedding', 'embeddingSum'] : action.member ? [action.member] : [];
+  const observed = memberIds.flatMap(id => context?.members.filter(member => member.memberId === id).slice(0, 1) ?? []).map(member => {
+    const raw = opts.model?.forward.values(member.address);
+    const values = raw && member.availability === 'available' ? (member.slice ? raw.slice(member.slice.start, member.slice.end) : raw) : undefined;
+    return `<div class="support-observation" data-member="${esc(member.memberId)}" data-artifact-id="${esc(member.artifactId ?? '')}"><strong>${esc(member.role)} · ${values ? 'observed' : esc(member.availability)}</strong><span>${values ? values.slice(0, 2).map(fmt).join(' · ') : 'Numerical values unavailable'}${values && values.length > 2 ? ` · … (${values.length} total)` : ''}</span></div>`;
+  }).join('');
+  return `<aside class="dock-context-support" data-testid="dock-context-support" data-support-action="${esc(action.id)}" data-run-id="${esc(opts.model?.source.sourceRunId ?? '')}" data-source-run-id="${esc(training?.sourceRunId ?? context?.canonical.run ?? '')}" aria-label="${esc(action.label)}">
+    <strong>${esc(action.label)}</strong>
+    ${calculation || observed || `<p>${esc(action.explanation ?? opts.tourContent?.whyHere ?? '')}</p>`}
+  </aside>`;
 }
 
 function renderExplain(opts: ContextualDockOptions): string {
@@ -133,7 +209,6 @@ function renderExplain(opts: ContextualDockOptions): string {
             <div class="dock-pin-info"><span data-testid="pin-owner">${esc(pinLabel)} → ${esc(pinOwnerTitle)}</span></div>
             <p class="contribution-math">Incoming sensitivity <strong>${fmt(event.childAdjoint)}</strong> × local derivative <strong>${fmt(event.localDerivative)}</strong> = contribution <span data-testid="live-contribution" data-value="${event.contribution}">${fmt(event.contribution)}</span></p>
             ${beforeVal !== undefined && afterVal !== undefined ? `<p class="accumulator-math">Previous running total <strong>${fmt(beforeVal)}</strong> + this contribution <strong>${fmt(event.contribution)}</strong> = new partial gradient <span data-testid="live-accumulator" data-value="${afterVal}">${fmt(afterVal)}</span></p>` : ''}
-            <p class="learning-partial-note">This is one contribution to ${esc(pinLabel)}. The running total is still partial; backward pass is not finished.</p>
           </div>
         </div>`;
       }
@@ -146,7 +221,6 @@ function renderExplain(opts: ContextualDockOptions): string {
             <small class="stage-result-label">MEASURED GRADIENT</small>
             <div class="dock-pin-info"><span data-testid="pin-owner">${esc(pinLabel)} → ${esc(pinOwnerTitle)}</span></div>
             <p class="learning-gradient-summary">All contributions finished. Final gradient: <span data-testid="live-gradient" data-value="${gradient}">${fmt(gradient)}</span></p>
-            <p class="learning-gradient-note">The gradient measures loss sensitivity for this training objective. The gradient is NOT the optimizer update.</p>
           </div>
         </div>`;
       }
@@ -177,9 +251,8 @@ function renderExplain(opts: ContextualDockOptions): string {
         stageResult = `<div class="dock-stage-result">
           <div class="teaching-step">
             <small class="stage-result-label">PROVISIONAL CANDIDATE OUTCOME</small>
-            <p class="candidate-outcome-summary">Mean loss on this training example, derived from observed target probabilities: <span data-testid="before-mean" data-value="${ma.mean}">${fmt(ma.mean)}</span> → <span data-testid="after-mean" data-value="${mb.mean}">${fmt(mb.mean)}</span></p>
-            <p class="candidate-prediction-change">Target-token probability for '${esc(targetTokenLabel)}' at position ${targetPos}: accepted ${fmt(probBefore)} → provisional candidate ${fmt(probAfter)}</p>
-            <p class="candidate-generalization-note">A changed result or lower loss on this training example is not proof of general model improvement.</p>
+            <p class="candidate-outcome-summary">Mean loss on this example (derived from observed target probabilities): <span data-testid="before-mean" data-value="${ma.mean}">${fmt(ma.mean)}</span> → <span data-testid="after-mean" data-value="${mb.mean}">${fmt(mb.mean)}</span></p>
+            <p class="candidate-prediction-change">Target '${esc(targetTokenLabel)}' at p${targetPos}: accepted ${fmt(probBefore)} → provisional candidate ${fmt(probAfter)}</p>
           </div>
         </div>`;
       }
@@ -195,7 +268,7 @@ function renderExplain(opts: ContextualDockOptions): string {
               ? `<p class="dock-route-purpose" data-testid="route-purpose">${esc(tc.routePurpose)}</p>`
               : ''}
           <p class="dock-meaning-text">${esc(tc.plainMeaning)}</p>
-          ${tc.state === 'p1_represent' || tc.state === 'p1_qkv' || tc.state === 'p1_transform' ? '<p class="construction-purpose">These bars are real vector values from this run. Above or below the center line shows sign; bar height shows magnitude within this vector. Panels may use different scales.</p>' : ''}
+          ${tc.state === 'p1_represent' || tc.state === 'p1_qkv' || tc.state === 'p1_transform' ? '<p class="construction-purpose">Bars show signed, authentic vector components; each panel may use a different scale.</p>' : ''}
           ${tc.state === 'p1_prediction_preview' || tc.state === 'p1_probabilities' ? '<p class="construction-purpose">These are real normalized output probabilities from this run.</p>' : ''}
           ${tc.state === 'p1_attention_weights' ? '<p class="construction-purpose">These are real normalized mixing weights across allowed positions, not output probabilities.</p>' : ''}
           ${tc.state === 'p2_gradient_contribution' || tc.state === 'p2_final_gradient' || tc.state === 'p2_adam_proposal' ? '<p class="construction-purpose">This grid contains model parameters: stored numbers used in the calculation. They change only when an update is accepted.</p>' : ''}
@@ -1110,6 +1183,10 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
   const publicTrainingDepthContext = resolvedPart2Depth(opts);
   const dockAddress = publicDepthContext?.canonical.anchor ?? opts.address;
   const dockLabel = publicDepthContext || publicTrainingDepthContext ? (opts.tourContent?.headline ?? addressLabel(dockAddress)) : (opts.selectedLabel ?? addressLabel(opts.address));
+  const supportActions = opts.tourContent && !isExpanded ? publicSupportActions(opts.tourContent) : [];
+  const activeSupport = supportActions.find(action => action.id === opts.supportAction);
+  const hasCoreResult = supportActions.length > 0 && bodyContent.includes('class="dock-stage-result"');
+  if (supportActions.length) bodyContent = `<div class="dock-guided-core">${bodyContent}</div><div class="dock-support-column"><nav class="dock-support-actions" aria-label="Contextual support">${supportActions.map(action => `<button type="button" data-support-action="${esc(action.id)}" aria-pressed="${activeSupport?.id === action.id}" aria-controls="dock-body">${esc(action.label)}</button>`).join('')}</nav>${activeSupport ? renderPublicSupport(opts, activeSupport) : `<p class="dock-support-hint">Choose a focused explanation or inspect the current run.</p>`}</div>`;
 
   if (opts.attract) {
     return `<section class="contextual-dock short-guide" data-testid="contextual-dock" data-active-depth="explain" aria-label="Contextual explanation dock">
@@ -1133,10 +1210,10 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
 
   const candidateDecisionDisabled = !opts.trainingState?.ready || Boolean(opts.trainingState.disabled);
   const inspectAction = isExpanded
-    ? `<button id="dock-inspect" class="secondary-action dock-tab dock-tab-close" data-dock-depth="explain">← Return to overview</button>`
-    : `<button id="dock-inspect" class="secondary-action dock-tab" data-dock-depth="values">${isPublic ? 'Details (optional)' : 'Inspect evidence ▾'}</button>`;
+    ? `<button id="dock-inspect" class="secondary-action dock-tab dock-tab-close" data-dock-depth="explain">← Return to Guided</button>`
+    : `<button id="dock-inspect" class="secondary-action dock-tab" data-dock-depth="values">${isPublic ? 'Deep inspection' : 'Inspect evidence ▾'}</button>`;
 
-  return `<section class="contextual-dock short-guide ${isExpanded ? 'is-expanded' : ''}" data-testid="contextual-dock" data-active-depth="${effectiveDepth}" aria-label="Contextual explanation dock">
+  return `<section class="contextual-dock short-guide ${isExpanded ? 'is-expanded' : ''} ${supportActions.length ? 'has-support-actions' : ''} ${hasCoreResult ? 'has-core-result' : ''}" data-testid="contextual-dock" data-tour-state="${esc(opts.tourContent?.state ?? '')}" data-active-depth="${effectiveDepth}" data-active-support="${esc(activeSupport?.id ?? '')}" aria-label="Contextual explanation dock">
     <div class="dock-header" data-testid="dock-header">
       <div class="dock-route-info dock-slot-context">
         ${opts.tourContent ? `<span class="lesson-progress lesson-macro-progress" data-testid="lesson-progress" aria-label="${esc(opts.tourContent.part === 1 ? 'Part 1 active; Part 2 upcoming' : opts.tourContent.state === 'tour_complete' ? 'Part 1 and Part 2 complete' : 'Part 1 complete; Part 2 active')}"><span class="${opts.tourContent.part === 1 ? 'active' : 'complete'}">1 · MAKE A PREDICTION</span><span aria-hidden="true">→</span><span class="${opts.tourContent.part === 1 ? 'upcoming' : opts.tourContent.state === 'tour_complete' ? 'complete' : 'active'}">2 · LEARN FROM ERROR</span><small>${esc(lessonProgress)}</small></span>` : lessonProgress ? `<span class="lesson-progress" data-testid="lesson-progress">${esc(lessonProgress)}</span>` : ''}
@@ -1151,9 +1228,7 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
             opts.tourContent.state === 'candidate_ready' ? (
               shortDetour ? `
                 <button id="short-resume" class="secondary-action">Resume route</button>
-              ` : `
-                ${hasComparison ? `<button class="secondary-action dock-tab" data-dock-depth="compare">Compare candidate</button>` : ''}
-              `
+              ` : ''
             ) : opts.tourContent.state === 'tour_complete' ? `
               ${!isFacilitator && !opts.attract ? `<button id="visitor-explore-toggle" class="secondary-action">${freeExplore ? 'Close exploration' : 'Explore the Model'}</button>` : ''}
               ${isFacilitator ? `<button id="operator-controls" class="secondary-action">${operatorControls ? 'Hide operator controls' : 'Show operator controls'}</button>` : ''}
@@ -1208,7 +1283,7 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
       ${hasComparison ? `<button class="dock-tab ${effectiveDepth === 'compare' ? 'active' : ''}" data-dock-depth="compare" ${effectiveDepth === 'compare' ? 'aria-pressed="true"' : ''}>Compare</button>` : ''}
     </nav>
     ` : ''}
-    <div class="dock-body" data-testid="dock-body">
+    <div class="dock-body" id="dock-body" data-testid="dock-body">
       ${bodyContent}
     </div>
   </section>`;

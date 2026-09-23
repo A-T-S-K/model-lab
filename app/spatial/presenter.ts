@@ -122,6 +122,8 @@ export interface PresentationState {profile?:ExperienceProfile;idleResetEnabled?
 export class SpatialPresenter {
   profile?: ExperienceProfile;
   dockDepth: DockDepth = 'explain';
+  private supportAction?: string;
+  private supportState?: string;
   construction=false;
   operatorControls=false;
   freeExplore=false;
@@ -557,6 +559,11 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
     this.element=address.kind==="attentionLogits"?this.selection.key:["q","k","v"].includes(address.kind)?this.selection.head*this.headWidth+this.selection.feature:0;this.lens=true;this.construction=false;this.detour=this.guided&&!guided;this.frame();
   }
   render(m:AnySpatialReadModel|undefined,state:PresentationState) {
+    const currentSupportState = state.publicLesson?.currentState;
+    if (currentSupportState !== this.supportState) {
+      this.supportAction = undefined;
+      this.supportState = currentSupportState;
+    }
     if(m&&isRegisteredWorld(m))return m.presentation.render({status:state.status,error:state.error,replay:Boolean(state.evidenceWorld?.replay)});
     this.model=m;this.state=state;if(state.profile)this.profile=state.profile;
     if(state.publicLesson&&this.isPublicProfile())this.applyPublicLessonView(state.publicLesson);
@@ -751,6 +758,7 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
         pin: effectivePublicPin,
         scalar: state.scalar,
         depth: this.dockDepth,
+        supportAction: this.supportAction,
         profile,
         freeExplore: this.freeExplore,
         attract: Boolean(state.attract && isPublicProfile),
@@ -955,6 +963,16 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
           }
           this.dockDepth=nextDepth; render();
         }
+      });
+    });
+    root.querySelectorAll<HTMLElement>('button[data-support-action]').forEach(el=>{
+      el.addEventListener('click',event=>{
+        event.stopPropagation();
+        const action=el.dataset.supportAction;
+        this.supportAction=this.supportAction===action?undefined:action;
+        this.dockDepth='explain';
+        render();
+        document.querySelector<HTMLButtonElement>(`button[data-support-action="${action}"]`)?.focus({preventScroll:true});
       });
     });
     root.querySelectorAll<HTMLElement>('[data-depth-member],[data-depth-key],[data-depth-head],[data-depth-element],[data-depth-hidden-feature],[data-depth-output-feature]').forEach(el=>{

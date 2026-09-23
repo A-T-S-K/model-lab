@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   PUBLIC_TOUR_STATES,
   getPublicTourContent,
+  publicSupportActions,
   advanceTour,
   canAdvanceTour,
   computeLiveTourEvidence,
@@ -14,6 +15,17 @@ import {
   type PublicTourState,
   type TourEvidence,
 } from '../../app/spatial/public-tour.js';
+
+test('IA1 support actions follow the current mechanism and leave completion uncluttered', () => {
+  const qkv = publicSupportActions(getPublicTourContent('p1_qkv'));
+  const objective = publicSupportActions(getPublicTourContent('p2_objective'));
+  const candidate = publicSupportActions(getPublicTourContent('candidate_ready'));
+  assert.deepEqual(qkv.map(action => action.label), ['Inspect Q/K/V', 'Show one projection']);
+  assert.deepEqual(objective.map(action => action.label), ['See one loss', 'See all positions']);
+  assert.deepEqual(candidate.map(action => action.label), ['Why do these measurements matter?', 'Compare candidate']);
+  assert.equal(publicSupportActions(getPublicTourContent('tour_complete', 'accepted')).length, 0);
+  assert(qkv.every(action => !['Values', 'Exact Math', 'Source', 'Compare'].includes(action.label)));
+});
 import { sceneSvg } from '../../app/spatial/scene.js';
 
 test('PUBLIC_TOUR_STATES is a complete current UI representation without freezing a curriculum state count', () => {
@@ -156,13 +168,12 @@ test('One authentic contribution is distinct from final gradient', () => {
 
   const finalGrad = getPublicTourContent('p2_final_gradient');
   assert.match(finalGrad.headline, /THE PARAMETER’S FINAL GRADIENT/);
-  assert(finalGrad.plainMeaning.includes('completed sensitivity'));
+  assert(finalGrad.plainMeaning.includes('completed parameter gradient'));
   assert.match(finalGrad.truthGuardrail ?? '', /measures sensitivity/i);
   assert.match(finalGrad.truthGuardrail ?? '', /not the parameter update/i);
 
   const adam = getPublicTourContent('p2_adam_proposal');
-  assert(adam.plainMeaning.includes('An optimizer turns gradients'));
-  assert(adam.plainMeaning.includes('optimizer called Adam'));
+  assert(adam.plainMeaning.includes('Final gradient + persistent optimizer history/state → Adam'));
   assert(adam.plainMeaning.includes('provisional'));
   assert(adam.plainMeaning.includes('accepted model has not changed'));
 
@@ -207,7 +218,7 @@ test('Candidate Ready: peer decision actions, probabilities@q selection, and aut
   const discarded = getPublicTourContent('tour_complete', 'discarded');
   assert.equal(discarded.progress, 'Tour Complete');
   assert.equal(discarded.headline, 'MODEL LAB COMPLETE · UPDATE DISCARDED');
-  assert.match(discarded.plainMeaning, /accepted model remains unchanged/);
+  assert.match(discarded.plainMeaning, /previously accepted parameters remain authoritative/);
   assert.match(discarded.routePurpose, /remains in its prior accepted state/);
   assert.equal(discarded.primaryAction?.id, 'tour-restart');
 });

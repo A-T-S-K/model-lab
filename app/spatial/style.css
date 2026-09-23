@@ -813,6 +813,70 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   box-sizing: border-box;
 }
 
+.contextual-dock .dock-support-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: center;
+  gap: 8px;
+  padding: 0 0 8px;
+  background: #121b22;
+}
+.contextual-dock .dock-support-actions button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 4px 12px;
+  color: #c4dce8;
+  background: #1a2a34;
+  border: 1px solid #456275;
+  border-radius: 5px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.15;
+  white-space: normal;
+}
+.contextual-dock .dock-support-actions button[aria-pressed="true"] {
+  color: #fff;
+  border-color: #62c7e8;
+  background: #234457;
+}
+.contextual-dock .dock-support-actions button:focus-visible {
+  outline: 3px solid #ffd166;
+  outline-offset: 2px;
+}
+.contextual-dock.has-support-actions .dock-body {
+  display: grid !important;
+  grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr);
+  gap: 18px;
+}
+.contextual-dock .dock-guided-core { min-width: 0; }
+.contextual-dock .dock-guided-core .dock-overview { gap: 12px; }
+.contextual-dock .dock-support-column { min-width: 0; }
+.contextual-dock .dock-support-hint { color: #9db1bd; font-size: 13px; margin: 3px 0; }
+.contextual-dock .dock-context-support {
+  min-width: 0;
+  padding: 9px 12px;
+  border: 1px solid #456275;
+  border-radius: 5px;
+  background: #16232d;
+  color: #e6edf2;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.contextual-dock .dock-context-support > strong { color: #8fd8ee; }
+.contextual-dock .dock-context-support p { margin: 6px 0 0; }
+.contextual-dock .support-observation { display: flex; flex-wrap: wrap; gap: 2px 6px; margin-top: 4px; font-size: 12px; line-height: 1.2; }
+.contextual-dock .support-observation span { font-family: PlexMono, monospace; }
+.contextual-dock .support-short-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px;
+  font-size: 11px;
+  line-height: 1.15;
+  white-space: nowrap;
+  margin-top: 0;
+}
+
 /* Default Explain state: compact essential view, world dominant >= 55% */
 .contextual-dock:not(.is-expanded) {
   flex: 0 0 auto;
@@ -1273,6 +1337,43 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
 }
 
 @media (max-height: 800px) {
+  .world-workspace.is-public-profile .contextual-dock .dock-context-support { padding: 6px 10px; }
+  .world-workspace.is-public-profile .contextual-dock[data-tour-state="p2_gradient_contribution"] .dock-stage-result .teaching-step {
+    padding: 5px 8px;
+    gap: 2px;
+  }
+  .world-workspace.is-public-profile .contextual-dock[data-tour-state="p2_gradient_contribution"] .dock-stage-result p {
+    font-size: 12px;
+    line-height: 1.2;
+  }
+  .world-workspace.is-public-profile .contextual-dock.has-core-result .dock-body {
+    grid-template-columns: minmax(0, 1.45fr) minmax(230px, 1fr) minmax(245px, .9fr);
+    gap: 12px;
+  }
+  .world-workspace.is-public-profile .contextual-dock.has-core-result .dock-guided-core,
+  .world-workspace.is-public-profile .contextual-dock.has-core-result .dock-explain-content,
+  .world-workspace.is-public-profile .contextual-dock.has-core-result .dock-overview {
+    display: contents;
+  }
+  .world-workspace.is-public-profile .contextual-dock.has-core-result .dock-stage-meaning { grid-column: 1; }
+  .world-workspace.is-public-profile .contextual-dock.has-core-result .dock-stage-result {
+    grid-column: 2;
+    min-width: 0;
+    max-width: none;
+  }
+  .world-workspace.is-public-profile .contextual-dock.has-core-result .dock-support-column { grid-column: 3; }
+  .world-workspace.is-public-profile .contextual-dock .dock-header {
+    min-height: 60px;
+  }
+  .world-workspace.is-public-profile .contextual-dock .dock-support-actions {
+    padding: 0 0 6px;
+  }
+  .world-workspace.is-public-profile .contextual-dock .dock-support-actions button {
+    min-height: 44px;
+  }
+  .world-workspace.is-public-profile .contextual-dock .dock-body {
+    padding: 8px 20px;
+  }
   .contextual-dock .dock-header {
     padding: 3px 10px;
     gap: 4px 8px;
@@ -1548,6 +1649,26 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   background: #16222A;
   border-color: #2B3942;
   color: #6B7780;
+}
+
+@media (max-height: 800px) {
+  .world-workspace.is-public-profile .contextual-dock .dock-route-purpose {
+    font-size: 16px;
+    line-height: 1.25;
+    margin: 0;
+  }
+  .world-workspace.is-public-profile .contextual-dock .dock-meaning-text,
+  .world-workspace.is-public-profile .contextual-dock .dock-stage-result p,
+  .world-workspace.is-public-profile .contextual-dock .learning-gradient-summary {
+    font-size: 14px;
+    line-height: 1.3;
+  }
+  .world-workspace.is-public-profile .contextual-dock .reverse-truth-cue,
+  .world-workspace.is-public-profile .contextual-dock .construction-purpose {
+    font-size: 12px;
+    line-height: 1.25;
+    margin: 0;
+  }
 }
 
 /* Constrained height sheds low-priority chrome before required teaching copy. */
