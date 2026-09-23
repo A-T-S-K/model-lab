@@ -1,3 +1,11 @@
+import {
+  padPublicCameraBounds,
+  publicLessonCameraPlan,
+  unionPublicCameraBounds,
+  type PublicCameraBounds,
+} from './public-camera.js';
+import type { PublicTourState } from './public-tour.js';
+
 export interface CameraBox { x:number; y:number; width:number; height:number }
 export const HOME:CameraBox={x:0,y:0,width:4500,height:1700};
 export const PUBLIC_HOME:CameraBox={x:0,y:0,width:4500,height:1300};
@@ -35,6 +43,23 @@ export function responsivePublicFrame(
   };
 }
 
+export function responsiveSemanticFrame(
+  containerWidth:number,
+  containerHeight:number,
+  bounds:CameraBox,
+  domain:CameraBox=PUBLIC_HOME,
+):CameraBox {
+  const frame=responsivePublicFrame(containerWidth,containerHeight,bounds);
+  let x=frame.x,y=frame.y;
+  if(frame.width<=domain.width)x=Math.min(domain.x+domain.width-frame.width,Math.max(domain.x,x));
+  if(frame.height<=domain.height)y=Math.min(domain.y+domain.height-frame.height,Math.max(domain.y,y));
+  return {...frame,x:Math.round(x),y:Math.round(y)};
+}
+
+function sameBox(a:CameraBox,b:CameraBox){
+  return a.x===b.x&&a.y===b.y&&a.width===b.width&&a.height===b.height;
+}
+
 export class SpatialCamera {
   box:CameraBox={...HOME};
   private svg?:SVGSVGElement;
@@ -55,13 +80,58 @@ export class SpatialCamera {
     this.svg?.style.setProperty("--world-bank-size",`${bankBase/scale}px`);
     this.changed?.();
   }
+  private elementBox(element:Element|null):CameraBox|undefined {
+    if(!element)return undefined;
+    const graphics=element as SVGGraphicsElement;
+    if(typeof graphics.getBBox!=="function")return undefined;
+    try{
+      const box=graphics.getBBox();
+      if(![box.x,box.y,box.width,box.height].every(Number.isFinite)||(box.width<=0&&box.height<=0))return undefined;
+      return {x:box.x,y:box.y,width:box.width,height:box.height};
+    }catch{return undefined;}
+  }
+  private boxes(selector:string):CameraBox[]{
+    return this.svg
+      ? Array.from(this.svg.querySelectorAll(selector)).map(el=>this.elementBox(el)).filter((box):box is CameraBox=>Boolean(box))
+      : [];
+  }
+  private publicSemanticFrame():CameraBox|undefined {
+    const svg=this.svg;
+    if(!svg)return undefined;
+    const shell=svg.closest<HTMLElement>('.spatial-shell');
+    const profile=shell?.dataset.experienceProfile;
+    const mode=shell?.dataset.publicNavigationMode;
+    if((profile!=='visitor'&&profile!=='facilitator')||(mode!=='guided'&&mode!=='detail'))return undefined;
+    const pane=svg.closest<HTMLElement>('.world-pane');
+    const width=pane?.clientWidth??0,height=pane?.clientHeight??0;
+    if(width<=0||height<=0)return undefined;
+    const state=(shell?.dataset.publicDisplayedState??shell?.dataset.publicCanonicalState??'cold') as PublicTourState;
+    const plan=publicLessonCameraPlan(state);
+    if(plan.mode==='overview')return responsivePublicFrame(width,height,PUBLIC_CONTENT_BOUNDS);
+    if(plan.mode==='hold')return {...this.box};
+
+    const boxes:PublicCameraBounds[]=[];
+    if(plan.includeFocus)boxes.push(...this.boxes('.explanation-input,.explanation-active'));
+    if(plan.includeSelected)boxes.push(...this.boxes('[aria-pressed="true"][data-world-kind]'));
+    if(plan.kinds?.length)boxes.push(...this.boxes(plan.kinds.map(kind=>`[data-world-kind="${kind}"]`).join(',')));
+    if(plan.headKinds?.length){
+      const head=svg.querySelector<SVGElement>('.explanation-active[data-world-head],.explanation-input[data-world-head],[aria-pressed="true"][data-world-head]')?.dataset.worldHead??'0';
+      boxes.push(...this.boxes(plan.headKinds.map(kind=>`[data-world-kind="${kind}"][data-world-head="${head}"]`).join(',')));
+    }
+    for(const selector of plan.overlays??[])boxes.push(...this.boxes(selector));
+    const semantic=unionPublicCameraBounds(boxes);
+    if(!semantic)return undefined;
+    const padded=padPublicCameraBounds(semantic,plan,PUBLIC_HOME);
+    return responsiveSemanticFrame(width,height,padded,PUBLIC_HOME);
+  }
   stop() { cancelAnimationFrame(this.frame); this.frame=0; }
   move(box:CameraBox, animate=true) {
     this.stop();
-    if (!animate || matchMedia("(prefers-reduced-motion: reduce)").matches) {this.box={...box};this.apply();return;}
+    const target=this.publicSemanticFrame()??box;
+    if (!animate || matchMedia("(prefers-reduced-motion: reduce)").matches) {this.box={...target};this.apply();return;}
     const start={...this.box},time=performance.now();
     const tick=(now:number)=>{const t=Math.min(1,(now-time)/260),s=t*t*(3-2*t);
-      this.box={x:start.x+(box.x-start.x)*s,y:start.y+(box.y-start.y)*s,width:start.width+(box.width-start.width)*s,height:start.height+(box.height-start.height)*s};
+      this.box={x:start.x+(target.x-start.x)*s,y:start.y+(target.y-start.y)*s,width:start.width+(target.width-start.width)*s,height:start.height+(target.height-start.height)*s};
       this.apply();if(t<1)this.frame=requestAnimationFrame(tick);else this.frame=0;};
     this.frame=requestAnimationFrame(tick);
   }
@@ -74,6 +144,8 @@ export class SpatialCamera {
   attach(svg:SVGSVGElement, changed:()=>void, gesture:()=>void) {
     this.abort?.abort();this.stop();this.svg=svg;this.changed=changed;this.gesture=gesture;this.abort=new AbortController();
     const signal=this.abort.signal;this.apply();
+    const semantic=this.publicSemanticFrame();
+    if(semantic&&!sameBox(this.box,semantic))this.move(semantic,true);
     let drag:{x:number;y:number;id:number;moved:boolean}|undefined;
     svg.addEventListener("wheel",event=>{
       event.preventDefault();this.gesture?.();const matrix=svg.getScreenCTM();
