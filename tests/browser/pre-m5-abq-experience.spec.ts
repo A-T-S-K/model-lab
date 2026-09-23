@@ -359,6 +359,8 @@ test('1. Visitor profile DOM omissions hide unneeded workbench controls', async 
   await expect(page.locator('.context-tether')).toHaveCount(0);
 
   // Permitted visitor controls are present
+  await expect(page.locator('#document')).toBeVisible();
+  await expect(page.locator('#predict')).toBeVisible();
   await expect(page.locator('#clear-session')).toContainText('Public Reset');
   await expect(page.locator('#spatial-home')).toBeVisible();
   await expect(page.getByTestId('lesson-progress')).toBeVisible();
