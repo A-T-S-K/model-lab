@@ -8,7 +8,8 @@ import type { PublicTourState } from './public-tour.js';
 
 export interface CameraBox { x:number; y:number; width:number; height:number }
 export const HOME:CameraBox={x:0,y:0,width:4500,height:1700};
-export const PUBLIC_HOME:CameraBox={x:0,y:0,width:4500,height:1300};
+// Learning annotations extend just beyond the canonical station bounds.
+export const PUBLIC_HOME:CameraBox={x:0,y:0,width:4600,height:1360};
 export const PUBLIC_CONTENT_BOUNDS:CameraBox={x:0,y:0,width:4480,height:1280};
 
 export function responsivePublicFrame(

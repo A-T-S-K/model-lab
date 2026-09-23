@@ -188,6 +188,7 @@ function renderExplain(opts: ContextualDockOptions): string {
     return `<div class="dock-explain-content" data-testid="dock-explain">
       <div class="dock-overview" data-testid="scene-construction" data-run="${esc(m.source.sourceRunId)}">
         <div class="dock-stage-meaning">
+          ${tc.state === 'tour_complete' ? `<p class="dock-completion-headline" data-testid="tour-completion-headline">${esc(tc.headline)}</p>` : ''}
           ${tc.learnerQuestion
             ? `<p class="dock-route-purpose" data-testid="route-purpose">${esc(tc.learnerQuestion)}</p>`
             : tc.routePurpose

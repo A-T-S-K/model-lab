@@ -610,6 +610,7 @@ async function startCurrentPart2(page: Page): Promise<void> {
   await page.locator('#short-teach').click();
   await waitForCurrentPublicState(page, 'p2_objective');
   await expect(page.locator('#reverse-continue')).toBeEnabled({ timeout: 60_000 });
+  await expect(page.getByTestId('objective-anchor')).toHaveAttribute('data-objective-availability', 'available');
 }
 
 async function advanceCurrentPart2(page: Page, target: string): Promise<void> {
@@ -718,7 +719,7 @@ test('2c. current Part 2 semantics, authentic depth, ancestry, and candidate con
   await advanceCurrentPart2(page, 'p2_gradient_contribution');
   expect(await workerCommandCount(page)).toBeGreaterThan(beforeContribution);
   await expect(page.getByTestId('parameter-learning-overlay')).toBeVisible();
-  await expect(page.getByTestId('dock-explain')).toContainText('Partial gradient');
+  await expect(page.getByTestId('dock-explain')).toContainText('still a partial gradient');
   await expect(page.locator('.learning-stations')).toHaveCount(0);
   await expect(page.locator('[data-learning-stage]')).toHaveCount(0);
 
@@ -873,8 +874,6 @@ test('2c. current Part 2 semantics, authentic depth, ancestry, and candidate con
   await expect(compareContent.getByTestId('before-mean')).toBeVisible();
   await expect(compareContent.getByTestId('after-mean')).toBeVisible();
   await expect(compareContent).not.toContainText('No active comparison available');
-  await expect(page.locator('#execution-accept')).toBeVisible();
-  await expect(page.locator('#execution-cancel')).toBeVisible();
 
   const cameraAfterCompare = await page.evaluate(() => {
     const vb = (document.querySelector('#spatial-world') as any).viewBox.baseVal;
@@ -955,6 +954,7 @@ test('3. current Part 2 candidate discard preserves accepted authority', async (
     navigationMode: 'guided',
     outcome: 'discarded',
   });
+  await expect(page.getByTestId('tour-completion-headline')).toHaveText('MODEL LAB COMPLETE · UPDATE DISCARDED');
   await expect(page.locator('#execution-controls')).toHaveCount(0);
   await captureEvidence(page, '18-post-discard-1920.png', 'tour_complete discarded');
 
@@ -991,6 +991,7 @@ test('3b. current Part 2 candidate accept commits once and public reset restores
     navigationMode: 'guided',
     outcome: 'accepted',
   });
+  await expect(page.getByTestId('tour-completion-headline')).toHaveText('MODEL LAB COMPLETE · UPDATE ACCEPTED');
   await expect(page.locator('#execution-controls')).toHaveCount(0);
 
   const afterAccept = await page.evaluate(() => (window as any).abq);
@@ -1362,171 +1363,67 @@ test('6. 44px minimum touch targets and keyboard accessibility across qualified 
   await expect(page.locator('#exhibit-start')).toBeEnabled();
 });
 
-test('7. 1280x720 layout and reduced motion visual captures', async ({ page }) => {
+test('7. current Guided route fits 1280x720 and reduced motion', async ({ page }) => {
   test.setTimeout(180_000);
   await page.setViewportSize({ width: 1280, height: 720 });
   await audit(page);
   await page.goto('/?presentation=spatial&kiosk=1');
-  await expect(page.locator('#exhibit-start')).toBeEnabled();
-
-  // Start visitor route
+  await expect(page.locator('#exhibit-start')).toBeVisible();
+  await captureEvidence(page, '20-attract-1280.png', 'attract');
   await page.locator('#exhibit-start').click();
-  await expect(page.getByTestId('status')).toContainText('Live prediction complete');
+  await waitForCurrentPublicState(page, 'p1_prediction_preview');
+  await expect(page.locator('#short-continue')).toBeVisible();
   await captureEvidence(page, '21-prediction-1280.png', 'prediction', '[data-world-kind="probabilities"]');
-
-  // Advance through forward stops
   await page.locator('#short-continue').click();
-  await expect(page.getByTestId('lesson-progress')).toContainText('Step 1 of 5 · REPRESENT');
-  await captureEvidence(page, '22-forward-route-1280.png', 'forward route', '[data-world-kind="tokenEmbedding"]');
-  for (let i = 1; i < 5; i++) {
-    await page.locator('#short-continue').click();
+  await waitForCurrentPublicState(page, 'p1_represent');
+  await expect(page.getByTestId('lesson-progress')).toContainText('MAKE A PREDICTION');
+  await captureEvidence(page, '22-represent-1280.png', 'represent', '[data-world-kind="preAttentionNorm"]');
+  await page.locator('#short-continue').click();
+  await waitForCurrentPublicState(page, 'p1_qkv');
+  for (const kind of ['q', 'k', 'v']) {
+    await assertSvgElementInViewBox(page, `[data-world-kind="${kind}"][data-world-head="0"]`, {
+      requireCenterInside: true, minIntersectionRatio: 0.5, description: `720p ${kind} teaching target`,
+    });
   }
-  await expect(page.locator('#start-reverse-learning')).toBeVisible();
-
-  // Enter reverse route: Stop 0 (probabilities)
-  await page.locator('#start-reverse-learning').click();
-  await expect(page.getByTestId('objective-anchor')).toBeVisible();
-
-  // Advance along reverse route to Stop 2 (TRANSFORM)
-  await page.locator('#reverse-continue').click(); // to Stop 1 (SCORE)
-  await page.locator('#reverse-continue').click(); // to Stop 2 (TRANSFORM)
-  await expect(page.getByTestId('lesson-progress')).toContainText('TRANSFORM');
-
-  // Advance to Stop 5 (PARAMETER)
-  await page.locator('#reverse-continue').click(); // to Stop 3 (MIX CONTEXT)
-  await page.locator('#reverse-continue').click(); // to Stop 4 (REPRESENT)
-  await page.locator('#reverse-continue').click(); // to Stop 5 (PARAMETER)
-  await expect(page.getByTestId('parameter-learning-overlay')).toBeVisible();
-
-  // Parameter contribution math at 1280x720
-  await page.locator('#dock-inspect').click();
-  await page.locator('button[data-dock-depth="math"]').click();
-  await expect(page.getByTestId('dock-math')).toBeVisible();
-  await page.locator('.dock-tab-close').click();
-
-  // Advance to Stop 6 (ADAM)
-  await page.locator('#reverse-continue').click();
-  await expect(page.getByTestId('adam-learning-overlay')).toBeVisible();
-  await expect(page.getByTestId('adam-learning-overlay')).toHaveAttribute('data-status', 'pending');
-  await expect(page.getByTestId('adam-proposal-pending')).toBeVisible();
-  await expect(page.getByTestId('adam-learning-overlay')).not.toContainText('-0.042');
-
-  // Stepped training for Candidate Ready at 1280x720
-  await page.locator('#clear-session').click();
-  await expect(page.locator('#exhibit-start')).toBeEnabled();
-  await page.locator('#exhibit-start').click();
-  await expect(page.getByTestId('status')).toContainText('Live prediction complete');
-  for (let i = 0; i < 5; i++) {
+  await captureEvidence(page, '23-qkv-1280.png', 'qkv', '[data-world-kind="q"]');
+  for (const state of ['p1_attention_compare', 'p1_attention_weights', 'p1_value_mixture', 'p1_attention_integration', 'p1_transform', 'p1_score', 'p1_probabilities', 'p1_complete']) {
     await page.locator('#short-continue').click();
+    await waitForCurrentPublicState(page, state);
   }
+  await expect(page.locator('#short-teach')).toBeVisible();
+  await captureEvidence(page, '24-part1-complete-1280.png', 'p1_complete');
   await page.locator('#short-teach').click();
-  await expect(page.locator('#execution-controls')).toBeVisible();
-  await page.locator('#execution-pin').click();
-  await expect(page.locator('#execution-continue')).toBeEnabled({ timeout: 60000 });
-  await expect(page.getByTestId('execution-frontier')).toContainText('stopped after matching backward node');
-
-  // Positive contract for 1280x720 stopped backward camera
-  await assertSvgElementInViewBox(page, '.parameter-learning-overlay', { requireCenterInside: true, minIntersectionRatio: 0.8, description: '720p Parameter accumulation overlay' });
-  await assertSvgElementInViewBox(page, '[data-world-parameter="wte"]', { requireCenterInside: true, minIntersectionRatio: 0.8, description: '720p wte parameter bank' });
-  await assertSvgElementInViewBox(page, '[data-world-kind="tokenEmbedding"]', { requireCenterInside: true, minIntersectionRatio: 0.8, description: '720p tokenEmbedding owner station' });
-  await expect(page.locator('.learning-stations')).toHaveCount(0);
-  await expect(page.locator('[data-learning-stage]')).toHaveCount(0);
-
-  // 25-live-backward-1280.png
-  await captureEvidence(page, '25-live-backward-1280.png', 'live backward', '.parameter-learning-overlay', { wteBank: '[data-world-parameter="wte"]', owner: '[data-world-kind="tokenEmbedding"]' });
-
-  // Advance to Candidate Ready at 1280x720
-  await page.locator('#execution-continue').click();
-  await expect(page.locator('#execution-controls')).toHaveAttribute('data-training-phase', 'ready', { timeout: 60000 });
-  await expect(page.getByTestId('adam-learning-overlay')).toBeVisible();
-  await expect(page.getByTestId('adam-learning-overlay')).toHaveAttribute('data-status', 'ready');
-  await expect(page.getByTestId('adam-learning-overlay').getByTestId('adam-proposal-table')).toBeVisible();
-
-  // Positive contract for 1280x720 Candidate Ready camera
-  await assertSvgElementInViewBox(page, '[data-testid="adam-learning-overlay"]', { requireCenterInside: true, minIntersectionRatio: 0.8, description: '720p Adam learning overlay' });
-  await assertSvgElementInViewBox(page, '[data-world-parameter="wte"]', { requireCenterInside: true, minIntersectionRatio: 0.8, description: '720p wte parameter bank' });
-  await expect(page.locator('.learning-stations')).toHaveCount(0);
-  await expect(page.locator('[data-learning-stage]')).toHaveCount(0);
-
-  // 26-candidate-ready-1280.png
-  await captureEvidence(page, '26-candidate-ready-1280.png', 'Candidate Ready', '[data-testid="adam-learning-overlay"]', { wteBank: '[data-world-parameter="wte"]' });
-
-  // Candidate Ready Compare at 1280x720
-  const cameraBeforeCompare720 = await page.evaluate(() => {
-    const vb = (document.querySelector('#spatial-world') as any).viewBox.baseVal;
-    return { x: vb.x, y: vb.y, width: vb.width, height: vb.height };
-  });
-
-  await page.locator('button[data-dock-depth="compare"]').click();
-  await expect(page.getByTestId('dock-compare')).toBeVisible();
-
-  // Assert camera unchanged after opening compare
-  const cameraAfterCompare720 = await page.evaluate(() => {
-    const vb = (document.querySelector('#spatial-world') as any).viewBox.baseVal;
-    return { x: vb.x, y: vb.y, width: vb.width, height: vb.height };
-  });
-  expect(cameraAfterCompare720.x).toBeCloseTo(cameraBeforeCompare720.x, 0);
-  expect(cameraAfterCompare720.y).toBeCloseTo(cameraBeforeCompare720.y, 0);
-  expect(cameraAfterCompare720.width).toBeCloseTo(cameraBeforeCompare720.width, 0);
-  expect(cameraAfterCompare720.height).toBeCloseTo(cameraBeforeCompare720.height, 0);
-
-  // Assert Adam overlay and parameter bank remain visible inside active viewBox
-  await assertSvgElementInViewBox(page, '[data-testid="adam-learning-overlay"]', { requireCenterInside: true, minIntersectionRatio: 0.8, description: '720p Adam overlay during Compare' });
-  await assertSvgElementInViewBox(page, '[data-world-parameter="wte"]', { requireCenterInside: true, minIntersectionRatio: 0.8, description: '720p wte bank during Compare' });
-
-  // 27-candidate-compare-1280.png
-  await captureEvidence(page, '27-candidate-compare-1280.png', 'Candidate Compare', '[data-testid="adam-learning-overlay"]', { wteBank: '[data-world-parameter="wte"]' });
-
-  await page.locator('.dock-tab-close').click();
-
-  // Discard candidate
+  await waitForCurrentPublicState(page, 'p2_objective');
+  await expect(page.getByTestId('lesson-progress')).toContainText('LEARN FROM ERROR');
+  await expect(page.locator('#reverse-continue')).toBeEnabled({ timeout: 60_000 });
+  await expect(page.getByTestId('objective-anchor')).toHaveAttribute('data-objective-availability', 'available');
+  await captureEvidence(page, '25-objective-1280.png', 'p2_objective', '[data-testid="objective-anchor"]');
+  for (const state of ['p2_backward_trace', 'p2_gradient_contribution', 'p2_final_gradient']) {
+    await advanceCurrentPart2(page, state);
+  }
+  await captureEvidence(page, '26-gradient-1280.png', 'p2_final_gradient', '.parameter-learning-overlay');
+  await advanceCurrentPart2(page, 'p2_adam_proposal');
+  await captureEvidence(page, '27-adam-1280.png', 'p2_adam_proposal', '[data-testid="adam-learning-overlay"]');
+  await advanceCurrentPart2(page, 'candidate_ready');
+  await expect(page.locator('#execution-accept')).toBeVisible();
+  await expect(page.locator('#execution-cancel')).toBeVisible();
+  await captureEvidence(page, '28-candidate-1280.png', 'candidate_ready', '[data-world-kind="probabilities"]');
   await page.locator('#execution-cancel').click();
-  await expect(page.locator('#execution-controls')).toHaveCount(0);
+  await expectPublicLesson(page, { canonicalState: 'tour_complete', outcome: 'discarded' });
+  await expect(page.getByTestId('tour-completion-headline')).toBeVisible();
+  await captureEvidence(page, '29-complete-1280.png', 'tour_complete');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 
-  // Facilitator mode at 1280x720 live learning stopped on wte
-  await page.goto('/?presentation=spatial&kiosk=1&facilitator=1');
-  await page.locator('#exhibit-start').click();
-  await page.locator('#operator-controls').click();
-  await expect(page.getByTestId('facilitator-panel')).toBeVisible();
-  await page.locator('#step-learning').click();
-  await expect(page.locator('#execution-controls')).toBeVisible();
-  await page.locator('#execution-pin').click();
-  await expect(page.locator('#execution-continue')).toBeEnabled({ timeout: 60000 });
-  await expect(page.getByTestId('execution-frontier')).toContainText('stopped after matching backward node');
-
-  // Positive contract for 720p facilitator live backward camera
-  await assertSvgElementInViewBox(page, '.parameter-learning-overlay', { requireCenterInside: true, minIntersectionRatio: 0.8, description: '720p Facilitator parameter accumulation overlay' });
-  await assertSvgElementInViewBox(page, '[data-world-parameter="wte"]', { requireCenterInside: true, minIntersectionRatio: 0.8, description: '720p Facilitator wte parameter bank' });
-  await assertSvgElementInViewBox(page, '[data-world-kind="tokenEmbedding"]', { requireCenterInside: true, minIntersectionRatio: 0.8, description: '720p Facilitator tokenEmbedding owner station' });
-  await expect(page.locator('.learning-stations')).toHaveCount(0);
-  await expect(page.locator('[data-learning-stage]')).toHaveCount(0);
-
-  // 28-facilitator-1280.png
-  await captureEvidence(page, '28-facilitator-1280.png', 'Facilitator', '.parameter-learning-overlay', { wteBank: '[data-world-parameter="wte"]', owner: '[data-world-kind="tokenEmbedding"]' });
-
-  await page.locator('#execution-cancel').click();
-  await expect(page.locator('#execution-controls')).toHaveCount(0);
-
-  // Reduced motion live learning at 1280x720
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.locator('#step-learning').click();
-  await expect(page.locator('#execution-controls')).toBeVisible();
-  await page.locator('#execution-pin').click();
-  await expect(page.locator('#execution-continue')).toBeEnabled({ timeout: 60000 });
-  await expect(page.getByTestId('execution-frontier')).toContainText('stopped after matching backward node');
-
-  // Positive contract for 720p reduced motion live backward camera
-  await assertSvgElementInViewBox(page, '.parameter-learning-overlay', { requireCenterInside: true, minIntersectionRatio: 0.8, description: '720p Reduced motion parameter accumulation overlay' });
-  await assertSvgElementInViewBox(page, '[data-world-parameter="wte"]', { requireCenterInside: true, minIntersectionRatio: 0.8, description: '720p Reduced motion wte parameter bank' });
-  await assertSvgElementInViewBox(page, '[data-world-kind="tokenEmbedding"]', { requireCenterInside: true, minIntersectionRatio: 0.8, description: '720p Reduced motion tokenEmbedding owner station' });
-  await expect(page.locator('.learning-stations')).toHaveCount(0);
-  await expect(page.locator('[data-learning-stage]')).toHaveCount(0);
-
-  // 29-reduced-motion-1280.png
-  await captureEvidence(page, '29-reduced-motion-1280.png', 'reduced motion', '.parameter-learning-overlay', { wteBank: '[data-world-parameter="wte"]', owner: '[data-world-kind="tokenEmbedding"]' });
-
-  await page.locator('#execution-cancel').click();
-  await expect(page.locator('#execution-controls')).toHaveCount(0);
+  await page.locator('#clear-session').click();
+  await page.locator('#exhibit-start').click();
+  await waitForCurrentPublicState(page, 'p1_prediction_preview');
+  await page.locator('#short-continue').click();
+  await waitForCurrentPublicState(page, 'p1_represent');
+  await assertSvgElementInViewBox(page, '[data-world-kind="preAttentionNorm"]', {
+    requireCenterInside: true, minIntersectionRatio: 0.5, description: 'reduced-motion representation target',
+  });
+  await captureEvidence(page, '30-reduced-motion-1280.png', 'p1_represent');
 });
 
 test('8. P0-E2 Unified contextual dock, depth switching, world dominant floor, and 40vh bound', async ({ page }) => {

@@ -139,9 +139,9 @@ export function publicLearningCameraBox(
   pin: ParameterPin,
   options?: PublicCameraBoxOptions
 ): WorldRect {
-  // Public canonical-world clamping bounds are strictly 4500 x 1300
-  const worldWidth = options?.worldWidth ?? 4500;
-  const worldHeight = options?.worldHeight ?? 1300;
+  // Include the learning annotations adjacent to edge stations.
+  const worldWidth = options?.worldWidth ?? 4600;
+  const worldHeight = options?.worldHeight ?? 1360;
   const padX = options?.padX ?? 60;
   const padY = options?.padY ?? (phase === 'adam' ? 40 : 60);
   const minWidth = options?.minWidth ?? 960;
@@ -272,7 +272,7 @@ function renderObjectiveAnchor(
   const hiddenCount = Math.max(0, rows.length - visibleRows.length);
   const { x, y, width, height } = objectiveLearningBounds(rows.length);
   const probStation = stationFor('probabilities');
-  const rowsTop = y + 82;
+  const rowsTop = y + 100;
   const rowHeight = 28;
   const meanY = y + height - 42;
   const originY = y + height - 18;
@@ -280,7 +280,7 @@ function renderObjectiveAnchor(
   const rowMarkup = visibleRows.map((row, index) => {
     const rowY = rowsTop + index * rowHeight;
     return `<g class="objective-row" data-testid="objective-row" data-objective-position="${row.position}" data-objective-target="${row.target}" data-objective-loss="${row.loss ?? ''}" data-objective-origin="${row.origin}">
-      <text class="objective-row-main" x="${x + 18}" y="${rowY}">position ${row.position} → target '${esc(row.targetLabel)}' → loss ${row.loss === undefined ? 'pending' : n(row.loss)}</text>
+      <text class="objective-row-main" x="${x + 18}" y="${rowY}">p${row.position} · '${esc(row.targetLabel)}' · ${row.loss === undefined ? 'pending' : n(row.loss)}</text>
       <text class="objective-row-origin" x="${x + width - 18}" y="${rowY}" text-anchor="end">${row.origin}</text>
     </g>`;
   }).join('');
@@ -294,7 +294,7 @@ function renderObjectiveAnchor(
     <path class="objective-tether" d="M${probStation.x + probStation.width} ${probStation.y + probStation.height / 2} H${x}"/>
     <rect class="objective-box" x="${x}" y="${y}" width="${width}" height="${height}" rx="6"/>
     <text class="objective-title" x="${x + 18}" y="${y + 30}">TRAINING OBJECTIVE</text>
-    <text class="objective-scope" x="${x + 18}" y="${y + 56}">POSITION → KNOWN TARGET → LOSS</text>
+    <text class="objective-scope" x="${x + 18}" y="${y + 70}">POSITION · TARGET · LOSS</text>
     ${rowMarkup}
     ${hiddenMarkup}
     <text class="objective-mean" x="${x + 18}" y="${meanY}">Mean loss: ${mean === undefined ? 'pending' : n(mean)}</text>
@@ -568,12 +568,13 @@ function renderAdamLearningOverlay(
       <title>Adam provisional proposal for ${esc(pinLabel)} from the completed gradient and stored optimizer state.</title>
       <path class="adam-learning-tether" d="M${bank.x + bank.width} ${bank.y + 80} H${x}"/>
       <rect class="adam-overlay-box" x="${x}" y="${y}" width="${width}" height="${height}" rx="6"/>
-      <text class="adam-overlay-tag" x="${x + 18}" y="${y + 30}">OPTIMIZER PROPOSAL · ADAM</text>
-      <text class="adam-overlay-title" x="${x + 18}" y="${y + 64}">SELECTED PARAMETER · PROVISIONAL</text>
-      <text class="adam-overlay-inputs" data-testid="adam-guided-inputs" x="${x + 18}" y="${y + 96}">FINAL GRADIENT ${n(u.gradient)}</text>
-      <text class="adam-overlay-inputs" x="${x + 18}" y="${y + 120}">SAVED OPTIMIZER STATE ${n(u.mBefore)} / ${n(u.vBefore)}</text>
-      <text class="adam-overlay-value" data-testid="adam-proposal-value" x="${x + 18}" y="${y + 142}">CURRENT ${n(u.before)} → PROPOSED ${n(u.after)}</text>
-      <text class="adam-overlay-status" x="${x + 18}" y="${y + 188}">ACCEPTED MODEL UNCHANGED</text>
+      <text class="adam-overlay-tag" x="${x + 18}" y="${y + 28}">ADAM PROPOSAL</text>
+      <text class="adam-overlay-title" x="${x + 18}" y="${y + 57}">PROVISIONAL CHANGE</text>
+      <text class="adam-overlay-inputs" data-testid="adam-guided-inputs" x="${x + 18}" y="${y + 86}">FINAL GRADIENT ${n(u.gradient)}</text>
+      <text class="adam-overlay-inputs" x="${x + 18}" y="${y + 115}">STORED m / v ${n(u.mBefore)} / ${n(u.vBefore)}</text>
+      <text class="adam-overlay-value" data-testid="adam-proposal-value" x="${x + 18}" y="${y + 144}">CURRENT ${n(u.before)}</text>
+      <text class="adam-overlay-value" x="${x + 18}" y="${y + 173}">PROPOSED ${n(u.after)}</text>
+      <text class="adam-overlay-status" x="${x + 18}" y="${y + 207}">ACCEPTED MODEL UNCHANGED</text>
     </g>`;
   }
 

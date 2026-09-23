@@ -113,7 +113,7 @@ test('publicLearningScene keeps reverse dependencies truthful and admits only co
 
   assert(objectiveSvg.includes('data-testid="objective-anchor"'));
   assert(objectiveSvg.includes('TRAINING OBJECTIVE'));
-  assert(objectiveSvg.includes('POSITION → KNOWN TARGET → LOSS'));
+  assert(objectiveSvg.includes('POSITION · TARGET · LOSS'));
   assert.equal((objectiveSvg.match(/data-testid="objective-row"/g) ?? []).length, f.targets.length);
   for (let position = 0; position < f.targets.length; position++) {
     assert(objectiveSvg.includes(`data-objective-position="${position}"`));
@@ -283,11 +283,12 @@ test('publicLearningScene keeps reverse dependencies truthful and admits only co
     tourState: 'p2_adam_proposal',
   });
   assert(readyAdamSvg.includes('data-status="ready"'));
-  assert(readyAdamSvg.includes('SELECTED PARAMETER · PROVISIONAL'));
+  assert(readyAdamSvg.includes('PROVISIONAL CHANGE'));
   assert(readyAdamSvg.includes('Adam provisional proposal for wte[0,0]'));
   assert(readyAdamSvg.includes('FINAL GRADIENT -0.055'));
-  assert(readyAdamSvg.includes('SAVED OPTIMIZER STATE 0.01 / 0.002'));
-  assert(readyAdamSvg.includes('CURRENT 0.1234 → PROPOSED 0.1259'));
+  assert(readyAdamSvg.includes('STORED m / v 0.01 / 0.002'));
+  assert(readyAdamSvg.includes('CURRENT 0.1234'));
+  assert(readyAdamSvg.includes('PROPOSED 0.1259'));
   assert(readyAdamSvg.includes('ACCEPTED MODEL UNCHANGED'));
   assert(!readyAdamSvg.includes('adam-proposal-table'));
   assert(!readyAdamSvg.includes('m′'));
