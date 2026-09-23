@@ -236,7 +236,7 @@ test('publicLearningScene keeps reverse dependencies truthful and admits only co
   });
   assert(pendingAdamSvg.includes('data-status="pending"'));
   assert(pendingAdamSvg.includes('data-testid="adam-proposal-pending"'));
-  assert(pendingAdamSvg.includes('ADAM PROPOSAL'));
+  assert(pendingAdamSvg.includes('OPTIMIZER PROPOSAL · ADAM'));
   assert(pendingAdamSvg.includes('mlp.fc[1,2]'));
   assert(pendingAdamSvg.includes('>PENDING<'));
   assert(pendingAdamSvg.includes('ACCEPTED MODEL UNCHANGED'));
@@ -283,9 +283,11 @@ test('publicLearningScene keeps reverse dependencies truthful and admits only co
     tourState: 'p2_adam_proposal',
   });
   assert(readyAdamSvg.includes('data-status="ready"'));
-  assert(readyAdamSvg.includes('wte[0,0] · PROVISIONAL'));
-  assert(readyAdamSvg.includes('g -0.055 · stored m 0.01 · stored v 0.002'));
-  assert(readyAdamSvg.includes('ADAM → θ 0.1234 → θ′ 0.1259'));
+  assert(readyAdamSvg.includes('SELECTED PARAMETER · PROVISIONAL'));
+  assert(readyAdamSvg.includes('Adam provisional proposal for wte[0,0]'));
+  assert(readyAdamSvg.includes('FINAL GRADIENT -0.055'));
+  assert(readyAdamSvg.includes('SAVED OPTIMIZER STATE 0.01 / 0.002'));
+  assert(readyAdamSvg.includes('CURRENT 0.1234 → PROPOSED 0.1259'));
   assert(readyAdamSvg.includes('ACCEPTED MODEL UNCHANGED'));
   assert(!readyAdamSvg.includes('adam-proposal-table'));
   assert(!readyAdamSvg.includes('m′'));

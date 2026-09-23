@@ -283,6 +283,21 @@ async function publicDock(
   });
 }
 
+test('Guided dock keeps one beat title and explains the plotted values', async () => {
+  const model = await part1Model();
+  const represent = await publicDock(model, 'p1_represent', 'explain');
+  const title = getPublicTourContent('p1_represent').headline;
+  assert.equal(represent.split(title).length - 1, 1);
+  assert.doesNotMatch(represent, /class="construction-header"/);
+  assert.match(represent, /1 · MAKE A PREDICTION/);
+  assert.match(represent, /2 · LEARN FROM ERROR/);
+  assert.match(represent, /Panels may use different scales/);
+
+  const weights = await publicDock(model, 'p1_attention_weights', 'explain');
+  assert.match(weights, /normalized mixing weights across allowed positions/);
+  assert.match(weights, /not output probabilities/);
+});
+
 test('PD1 contextual dock routes Part 1 grouped Values and Source before generic endpoint rendering', async () => {
   const model = await part1Model();
   const representation = await publicDock(model, 'p1_represent', 'values');

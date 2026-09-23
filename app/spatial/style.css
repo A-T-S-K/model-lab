@@ -484,6 +484,26 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   flex-shrink: 0;
 }
 
+.contextual-dock .lesson-macro-progress {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 7px;
+  max-width: 360px;
+  white-space: normal;
+  font-size: 11px;
+  line-height: 1.2;
+}
+.contextual-dock .lesson-macro-progress .active { color: #f0d395; }
+.contextual-dock .lesson-macro-progress .complete { color: #a9d8b5; }
+.contextual-dock .lesson-macro-progress .upcoming { color: #8b969e; }
+.contextual-dock .lesson-macro-progress small {
+  flex-basis: 100%;
+  color: #c2cad0;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
 .contextual-dock .dock-selected-object {
   display: inline-flex;
   align-items: center;
@@ -496,6 +516,11 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   font-weight: 600;
   letter-spacing: 0.02em;
   flex-shrink: 0;
+}
+.world-workspace.is-public-profile .contextual-dock .dock-selected-object {
+  max-width: min(35vw, 510px);
+  white-space: normal;
+  line-height: 1.25;
 }
 
 .contextual-dock .dock-detour-badge {
@@ -1539,9 +1564,8 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   }
   .world-workspace.is-public-profile .contextual-dock .dock-selected-object,
   .world-workspace.is-public-profile .contextual-dock .execution-frontier-tag {
-    max-width: min(28vw, 300px);
+    max-width: min(35vw, 510px);
     overflow: hidden;
-    text-overflow: ellipsis;
   }
   .contextual-dock .candidate-decision-pair {
     gap: 6px;

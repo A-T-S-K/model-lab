@@ -20,7 +20,7 @@ import {
   type PublicTrainingDepthSelection,
   type ResolvedPublicTrainingDepthContext,
 } from './public-training-depth.js';
-import { formatAdamGlanceNote, formatCandidateOutcomeMeanLoss, formatCandidateTargetTokenProbability } from './public-tour.js';
+import { formatCandidateOutcomeMeanLoss, formatCandidateTargetTokenProbability } from './public-tour.js';
 import { outputTokenName, outputSummary, outputMetrics, componentComparison, type OutputPair } from './comparison.js';
 import { geometry, projection } from './view.js';
 import { probabilityColor } from './geometry.js';
@@ -110,7 +110,7 @@ function renderExplain(opts: ContextualDockOptions): string {
     } else if (tc.part === 1) {
       const c = operationConstruction(m, a, element, executionProgress);
       if (c.plainResult) {
-        stageResult = `<div class="dock-stage-result"><div class="teaching-step"><small class="stage-result-label">${esc(tc.resultConcept?.label?.toUpperCase() ?? 'OBSERVED RESULT')}</small><p>${c.plainResult}</p></div></div>`;
+        stageResult = `<div class="dock-stage-result"><div class="teaching-step"><small class="stage-result-label">OBSERVED RESULT</small><p>${c.plainResult}</p></div></div>`;
       }
     } else if (tc.state === 'p2_objective') {
       const meanVal = trainingProgress?.mean;
@@ -129,11 +129,11 @@ function renderExplain(opts: ContextualDockOptions): string {
         const afterVal = 'after' in event ? (event as any).after as number : undefined;
         stageResult = `<div class="dock-stage-result">
           <div class="teaching-step">
-            <small class="stage-result-label">ONE GRADIENT CONTRIBUTION · PARTIAL ACCUMULATOR</small>
+            <small class="stage-result-label">MEASURED CONTRIBUTION · RUNNING TOTAL</small>
             <div class="dock-pin-info"><span data-testid="pin-owner">${esc(pinLabel)} → ${esc(pinOwnerTitle)}</span></div>
-            <p class="contribution-math">Child adjoint <strong>${fmt(event.childAdjoint)}</strong> × local derivative <strong>${fmt(event.localDerivative)}</strong> = contribution <span data-testid="live-contribution" data-value="${event.contribution}">${fmt(event.contribution)}</span></p>
-            ${beforeVal !== undefined && afterVal !== undefined ? `<p class="accumulator-math">Previous accumulator <strong>${fmt(beforeVal)}</strong> + this contribution <strong>${fmt(event.contribution)}</strong> = new partial gradient <span data-testid="live-accumulator" data-value="${afterVal}">${fmt(afterVal)}</span></p>` : ''}
-            <p class="learning-partial-note">This is ONE contribution to ${esc(pinLabel)}. The accumulator is still partial; backward pass is not finished.</p>
+            <p class="contribution-math">Incoming sensitivity <strong>${fmt(event.childAdjoint)}</strong> × local derivative <strong>${fmt(event.localDerivative)}</strong> = contribution <span data-testid="live-contribution" data-value="${event.contribution}">${fmt(event.contribution)}</span></p>
+            ${beforeVal !== undefined && afterVal !== undefined ? `<p class="accumulator-math">Previous running total <strong>${fmt(beforeVal)}</strong> + this contribution <strong>${fmt(event.contribution)}</strong> = new partial gradient <span data-testid="live-accumulator" data-value="${afterVal}">${fmt(afterVal)}</span></p>` : ''}
+            <p class="learning-partial-note">This is one contribution to ${esc(pinLabel)}. The running total is still partial; backward pass is not finished.</p>
           </div>
         </div>`;
       }
@@ -143,7 +143,7 @@ function renderExplain(opts: ContextualDockOptions): string {
       if (gradient !== undefined && isFinal) {
         stageResult = `<div class="dock-stage-result">
           <div class="teaching-step">
-            <small class="stage-result-label">FINAL PARAMETER GRADIENT</small>
+            <small class="stage-result-label">MEASURED GRADIENT</small>
             <div class="dock-pin-info"><span data-testid="pin-owner">${esc(pinLabel)} → ${esc(pinOwnerTitle)}</span></div>
             <p class="learning-gradient-summary">All contributions finished. Final gradient: <span data-testid="live-gradient" data-value="${gradient}">${fmt(gradient)}</span></p>
             <p class="learning-gradient-note">The gradient measures loss sensitivity for this training objective. The gradient is NOT the optimizer update.</p>
@@ -155,10 +155,10 @@ function renderExplain(opts: ContextualDockOptions): string {
       if (u) {
         stageResult = `<div class="dock-stage-result">
           <div class="teaching-step">
-            <small class="stage-result-label">PROVISIONAL ADAM PROPOSAL</small>
+            <small class="stage-result-label">CURRENT VALUE → PROPOSED VALUE</small>
             <div class="dock-pin-info"><span data-testid="pin-owner">${esc(pinLabel)}</span></div>
-            <p class="learning-provisional">Candidate proposal: θ ${fmt(u.before)} → provisional θ′ <span data-testid="live-proposal" data-value="${u.after}">${fmt(u.after)}</span></p>
-            <p class="learning-adam-note">${esc(formatAdamGlanceNote({ ...u, fmt }))}</p>
+            <p class="learning-provisional">Current ${fmt(u.before)} → proposed <span data-testid="live-proposal" data-value="${u.after}">${fmt(u.after)}</span></p>
+            <p class="learning-adam-note">Adam uses the final gradient ${fmt(u.gradient)} and saved optimizer state to calculate this proposal. Accepted model unchanged.</p>
           </div>
         </div>`;
       }
@@ -188,14 +188,16 @@ function renderExplain(opts: ContextualDockOptions): string {
     return `<div class="dock-explain-content" data-testid="dock-explain">
       <div class="dock-overview" data-testid="scene-construction" data-run="${esc(m.source.sourceRunId)}">
         <div class="dock-stage-meaning">
-          ${tc.headline ? `<header class="construction-header"><strong>${esc(tc.headline)}</strong></header>` : ''}
           ${tc.learnerQuestion
             ? `<p class="dock-route-purpose" data-testid="route-purpose">${esc(tc.learnerQuestion)}</p>`
             : tc.routePurpose
               ? `<p class="dock-route-purpose" data-testid="route-purpose">${esc(tc.routePurpose)}</p>`
               : ''}
           <p class="dock-meaning-text">${esc(tc.plainMeaning)}</p>
-          ${tc.whyHere ? `<p class="construction-purpose">${esc(tc.whyHere)}</p>` : ''}
+          ${tc.state === 'p1_represent' || tc.state === 'p1_qkv' || tc.state === 'p1_transform' ? '<p class="construction-purpose">These bars are real vector values from this run. Above or below the center line shows sign; bar height shows magnitude within this vector. Panels may use different scales.</p>' : ''}
+          ${tc.state === 'p1_prediction_preview' || tc.state === 'p1_probabilities' ? '<p class="construction-purpose">These are real normalized output probabilities from this run.</p>' : ''}
+          ${tc.state === 'p1_attention_weights' ? '<p class="construction-purpose">These are real normalized mixing weights across allowed positions, not output probabilities.</p>' : ''}
+          ${tc.state === 'p2_gradient_contribution' || tc.state === 'p2_final_gradient' || tc.state === 'p2_adam_proposal' ? '<p class="construction-purpose">This grid contains model parameters: stored numbers used in the calculation. They change only when an update is accepted.</p>' : ''}
           ${truthCue}
         </div>
         ${stageResult}
@@ -1113,7 +1115,7 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
     <div class="dock-header" data-testid="dock-header">
       <div class="dock-route-info dock-slot-context">
         <strong class="dock-brand">MODEL LAB</strong>
-        <span class="dock-status-message">Explore how a tiny language model predicts what comes next</span>
+        <span class="dock-status-message">${esc(opts.tourContent?.headline ?? 'See a tiny language model predict and learn')}</span>
       </div>
       <div class="dock-route-actions dock-slot-actions">
         <div class="dock-slot-secondary"></div>
@@ -1136,7 +1138,7 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
   return `<section class="contextual-dock short-guide ${isExpanded ? 'is-expanded' : ''}" data-testid="contextual-dock" data-active-depth="${effectiveDepth}" aria-label="Contextual explanation dock">
     <div class="dock-header" data-testid="dock-header">
       <div class="dock-route-info dock-slot-context">
-        ${lessonProgress ? `<span class="lesson-progress" data-testid="lesson-progress">${esc(lessonProgress)}</span>` : ''}
+        ${opts.tourContent ? `<span class="lesson-progress lesson-macro-progress" data-testid="lesson-progress" aria-label="${esc(opts.tourContent.part === 1 ? 'Part 1 active; Part 2 upcoming' : opts.tourContent.state === 'tour_complete' ? 'Part 1 and Part 2 complete' : 'Part 1 complete; Part 2 active')}"><span class="${opts.tourContent.part === 1 ? 'active' : 'complete'}">1 · MAKE A PREDICTION</span><span aria-hidden="true">→</span><span class="${opts.tourContent.part === 1 ? 'upcoming' : opts.tourContent.state === 'tour_complete' ? 'complete' : 'active'}">2 · LEARN FROM ERROR</span><small>${esc(lessonProgress)}</small></span>` : lessonProgress ? `<span class="lesson-progress" data-testid="lesson-progress">${esc(lessonProgress)}</span>` : ''}
         <span class="dock-selected-object" data-testid="selected-world-object" data-semantic-anchor="${dockAddress.kind}" data-position="${dockAddress.token}" data-layer="${dockAddress.layer ?? ''}" data-run-id="${esc(opts.model?.source.sourceRunId ?? '')}">${esc(dockLabel)}</span>
         ${opts.trainingState && opts.trainingState.frontierText ? `<span data-testid="execution-frontier" class="execution-frontier-tag">${esc(opts.trainingState.frontierText)}</span>` : ''}
         ${shortDetour ? `<span class="dock-detour-badge">Detour</span>` : ''}
@@ -1152,7 +1154,7 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
                 ${hasComparison ? `<button class="secondary-action dock-tab" data-dock-depth="compare">Compare candidate</button>` : ''}
               `
             ) : opts.tourContent.state === 'tour_complete' ? `
-              ${!isFacilitator && !opts.attract ? `<button id="visitor-explore-toggle" class="secondary-action">${freeExplore ? 'Close free exploration' : 'Explore freely'}</button>` : ''}
+              ${!isFacilitator && !opts.attract ? `<button id="visitor-explore-toggle" class="secondary-action">${freeExplore ? 'Close exploration' : 'Explore the Model'}</button>` : ''}
               ${isFacilitator ? `<button id="operator-controls" class="secondary-action">${operatorControls ? 'Hide operator controls' : 'Show operator controls'}</button>` : ''}
             ` : `
               ${attentionAction}

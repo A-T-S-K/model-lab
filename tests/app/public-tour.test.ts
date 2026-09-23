@@ -33,8 +33,8 @@ test('PUBLIC_TOUR_STATES is a complete current UI representation without freezin
 
 test('Part 1 current UI sequence follows the LS0 chapter spine without a global state counter', () => {
   const expected = [
-    { state: 'p1_prediction_preview', next: 'p1_represent', progress: 'Part 1 · Make a Prediction · Opening', anchor: 'probabilities', action: 'See how it got there', guardrail: /authentic prediction/ },
-    { state: 'p1_represent', next: 'p1_qkv', progress: 'Part 1 · Represent · Representation', anchor: 'preAttentionNorm', action: 'Continue: Q / K / V', guardrail: /learned numerical features/ },
+    { state: 'p1_prediction_preview', next: 'p1_represent', progress: 'Part 1 · Make a Prediction · Opening', anchor: 'probabilities', action: 'See how it made the prediction', guardrail: /authentic prediction/ },
+    { state: 'p1_represent', next: 'p1_qkv', progress: 'Part 1 · Represent · Representation', anchor: 'preAttentionNorm', action: 'Continue: Prepare attention', guardrail: /learned numerical features/ },
     { state: 'p1_qkv', next: 'p1_attention_compare', progress: 'Part 1 · Attend · Q / K / V', anchor: 'q', action: 'Continue: Compare positions', guardrail: /not literal human questions/ },
     { state: 'p1_attention_compare', next: 'p1_attention_weights', progress: 'Part 1 · Attend · Compare positions', anchor: 'attentionLogits', action: 'Continue: Attention weights', guardrail: /unavailable/ },
     { state: 'p1_attention_weights', next: 'p1_value_mixture', progress: 'Part 1 · Attend · Attention weights', anchor: 'attentionProbabilities', action: 'Continue: Mix Values', guardrail: /mixing coefficient/ },
@@ -63,10 +63,10 @@ test('Part 1 current UI sequence follows the LS0 chapter spine without a global 
 
   const complete = getPublicTourContent('p1_complete');
   assert.equal(complete.progress, 'Part 1 · Forward integration');
-  assert.equal(complete.headline, 'PART 1 OF 2 COMPLETE');
+  assert.equal(complete.headline, 'PART 1 COMPLETE · NOW SEE HOW IT LEARNS');
   assert.match(complete.truthGuardrail ?? '', /did not update them/);
   assert.equal(complete.primaryAction?.id, 'short-teach');
-  assert.equal(complete.primaryAction?.label, 'Next: Learn from error');
+  assert.equal(complete.primaryAction?.label, 'Part 2 · learn from an example');
   assert.equal(advanceTour('p1_complete'), 'p1_complete');
 });
 
@@ -149,21 +149,22 @@ test('canonical scene emits the three-way pre-attention input branch for both he
 
 test('One authentic contribution is distinct from final gradient', () => {
   const contrib = getPublicTourContent('p2_gradient_contribution');
-  assert.match(contrib.headline, /ONE GRADIENT CONTRIBUTION/);
-  assert(contrib.plainMeaning.includes('accumulator, which may still be partial'));
+  assert.match(contrib.headline, /ONE PIECE OF A PARAMETER’S GRADIENT/);
+  assert(contrib.plainMeaning.includes('running total, still a partial gradient'));
   assert.match(contrib.truthGuardrail ?? '', /not the final parameter gradient/i);
   assert.match(contrib.truthGuardrail ?? '', /serial arrival chronology/i);
 
   const finalGrad = getPublicTourContent('p2_final_gradient');
-  assert.match(finalGrad.headline, /FINAL PARAMETER GRADIENT/);
-  assert(finalGrad.plainMeaning.includes('finished accumulating'));
+  assert.match(finalGrad.headline, /THE PARAMETER’S FINAL GRADIENT/);
+  assert(finalGrad.plainMeaning.includes('completed sensitivity'));
   assert.match(finalGrad.truthGuardrail ?? '', /measures sensitivity/i);
   assert.match(finalGrad.truthGuardrail ?? '', /not the parameter update/i);
 
   const adam = getPublicTourContent('p2_adam_proposal');
-  assert(adam.plainMeaning.includes('stored optimizer state m and v'));
+  assert(adam.plainMeaning.includes('An optimizer turns gradients'));
+  assert(adam.plainMeaning.includes('optimizer called Adam'));
   assert(adam.plainMeaning.includes('provisional'));
-  assert(adam.plainMeaning.includes('accepted model remains unchanged'));
+  assert(adam.plainMeaning.includes('accepted model has not changed'));
 
   const ready = getPublicTourContent('candidate_ready');
   assert.match(ready.truthGuardrail ?? '', /not proof of general model improvement/i);
@@ -189,7 +190,7 @@ test('Part 2 selection intents remain unchanged while LS1 expands only Part 1', 
 test('Candidate Ready: peer decision actions, probabilities@q selection, and authoritative transitions', () => {
   const cr = getPublicTourContent('candidate_ready');
   assert.equal(cr.progress, 'Part 2 · Decide · Candidate');
-  assert.equal(cr.headline, 'PROVISIONAL CANDIDATE');
+  assert.equal(cr.headline, 'DECIDE WHETHER TO APPLY THE PROPOSED UPDATE');
   assert.equal(cr.selectionIntent.kind, 'probabilities');
   assert.equal(cr.selectionIntent.token, 3);
   assert.equal(advanceTour('candidate_ready'), 'candidate_ready');
@@ -197,16 +198,16 @@ test('Candidate Ready: peer decision actions, probabilities@q selection, and aut
   // Outcome: Accepted
   const accepted = getPublicTourContent('tour_complete', 'accepted');
   assert.equal(accepted.progress, 'Tour Complete');
-  assert.equal(accepted.headline, 'UPDATE ACCEPTED');
-  assert.match(accepted.plainMeaning, /updated weights/);
+  assert.equal(accepted.headline, 'MODEL LAB COMPLETE · UPDATE ACCEPTED');
+  assert.match(accepted.plainMeaning, /subsequent predictions use them/);
   assert.match(accepted.routePurpose, /committed into the live accepted model/);
   assert.equal(accepted.primaryAction?.id, 'tour-restart');
 
   // Outcome: Discarded
   const discarded = getPublicTourContent('tour_complete', 'discarded');
   assert.equal(discarded.progress, 'Tour Complete');
-  assert.equal(discarded.headline, 'UPDATE DISCARDED');
-  assert.match(discarded.plainMeaning, /discarded without modifying model parameters/);
+  assert.equal(discarded.headline, 'MODEL LAB COMPLETE · UPDATE DISCARDED');
+  assert.match(discarded.plainMeaning, /accepted model remains unchanged/);
   assert.match(discarded.routePurpose, /remains in its prior accepted state/);
   assert.equal(discarded.primaryAction?.id, 'tour-restart');
 });
@@ -325,11 +326,11 @@ test('C3: Teaching content remains stable across states and is never overwritten
 
 test('Part 2 current UI sequence follows Measure / Trace / Accumulate / Propose / Decide without a global state counter', () => {
   const expected = [
-    { state: 'p2_objective', next: 'p2_backward_trace', progress: 'Part 2 · Measure · Training objective', headline: 'MEASURE ERROR' },
-    { state: 'p2_backward_trace', next: 'p2_gradient_contribution', progress: 'Part 2 · Trace · Backward sensitivity', headline: 'TRACE BACKWARD SENSITIVITY' },
-    { state: 'p2_gradient_contribution', next: 'p2_final_gradient', progress: 'Part 2 · Trace · One contribution', headline: 'ONE GRADIENT CONTRIBUTION' },
-    { state: 'p2_final_gradient', next: 'p2_adam_proposal', progress: 'Part 2 · Accumulate · Final gradient', headline: 'FINAL PARAMETER GRADIENT' },
-    { state: 'p2_adam_proposal', next: 'candidate_ready', progress: 'Part 2 · Propose · Adam', headline: 'ADAM PROPOSES A CANDIDATE' },
+    { state: 'p2_objective', next: 'p2_backward_trace', progress: 'Part 2 · Measure · Training objective', headline: 'MEASURE THE ERROR' },
+    { state: 'p2_backward_trace', next: 'p2_gradient_contribution', progress: 'Part 2 · Trace · Backward sensitivity', headline: 'WORK BACKWARD FROM THE ERROR' },
+    { state: 'p2_gradient_contribution', next: 'p2_final_gradient', progress: 'Part 2 · Trace · One contribution', headline: 'ONE PIECE OF A PARAMETER’S GRADIENT' },
+    { state: 'p2_final_gradient', next: 'p2_adam_proposal', progress: 'Part 2 · Accumulate · Final gradient', headline: 'THE PARAMETER’S FINAL GRADIENT' },
+    { state: 'p2_adam_proposal', next: 'candidate_ready', progress: 'Part 2 · Propose · Adam', headline: 'THE OPTIMIZER PROPOSES A CHANGE' },
   ] as const;
 
   for (const item of expected) {
@@ -345,16 +346,16 @@ test('Part 2 current UI sequence follows Measure / Trace / Accumulate / Propose 
   const trace = getPublicTourContent('p2_backward_trace');
   assert.match(trace.truthGuardrail ?? '', /not measured runtime timing/i);
   assert.match(trace.truthGuardrail ?? '', /text flowing backward/i);
-  assert.match(trace.plainMeaning, /real dependency graph/i);
+  assert.match(trace.plainMeaning, /calculation dependencies backward/i);
 
   const measure = getPublicTourContent('p2_objective');
   assert.match(measure.truthGuardrail ?? '', /multiple target positions/i);
 
   const candidate = getPublicTourContent('candidate_ready');
   assert.equal(candidate.progress, 'Part 2 · Decide · Candidate');
-  assert.equal(candidate.headline, 'PROVISIONAL CANDIDATE');
-  assert.match(candidate.plainMeaning, /not accepted/i);
-  assert.match(candidate.plainMeaning, /not yet the live model/i);
+  assert.equal(candidate.headline, 'DECIDE WHETHER TO APPLY THE PROPOSED UPDATE');
+  assert.match(candidate.plainMeaning, /remains separate from the accepted model/i);
+  assert.match(candidate.plainMeaning, /Discard leaves the accepted model unchanged/i);
   assert.match(candidate.truthGuardrail ?? '', /not proof of general model improvement/i);
 });
 
@@ -502,4 +503,3 @@ test('Part 2 evidence gates separate objective, trace, contribution, final gradi
   assert.equal(canAdvanceTour('p2_adam_proposal', ev5), true);
   assert.equal(canAdvanceTour('candidate_ready', ev5), false);
 });
-

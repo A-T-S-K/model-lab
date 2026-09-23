@@ -614,13 +614,13 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
         parameterFocus ? `${parameterFocus}[${effectivePublicPin.row},${effectivePublicPin.column}]` : `p${intent.token}`,
         intent.head === undefined ? '' : `h${intent.head}`,
       ].filter(Boolean).join(' · ');
-      return `<div class="teaching-locator" data-testid="teaching-locator" data-world-kind="${esc(intent.kind)}" data-world-parameter="${esc(parameterFocus ?? '')}"><strong>${esc(tourContent.headline)}</strong>${occurrence ? `<span>${esc(occurrence)}</span>` : ''}</div>`;
+      return `<div class="teaching-locator" data-testid="teaching-locator" data-world-kind="${esc(intent.kind)}" data-world-parameter="${esc(parameterFocus ?? '')}"><strong>LOOK HERE</strong>${occurrence ? `<span>${esc(occurrence)}</span>` : ''}</div>`;
     })();
     if (tourContent) {
       if (state.attract) {
         lessonProgress = "";
         routePurpose = tourContent.routePurpose;
-        primaryAction = `<button id="exhibit-start" class="primary-action" ${state.ready && !state.busy ? '' : 'disabled'}>Start · explore a real prediction</button>`;
+        primaryAction = `<button id="exhibit-start" class="primary-action" ${state.ready && !state.busy ? '' : 'disabled'}>${esc(tourContent.primaryAction?.label ?? 'Start · make a prediction')}</button>`;
         attentionAction = "";
       } else if (publicNavigationMode !== 'guided') {
         lessonProgress = tourContent.progress;

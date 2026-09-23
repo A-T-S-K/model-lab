@@ -565,24 +565,25 @@ function renderAdamLearningOverlay(
 
   if (u) {
     return `<g class="adam-learning-overlay active-learning-anchor" data-testid="adam-learning-overlay" data-provisional="true" data-proposal-status="available" data-status="ready">
-      <title>Adam provisional proposal from the completed gradient and stored optimizer state.</title>
+      <title>Adam provisional proposal for ${esc(pinLabel)} from the completed gradient and stored optimizer state.</title>
       <path class="adam-learning-tether" d="M${bank.x + bank.width} ${bank.y + 80} H${x}"/>
       <rect class="adam-overlay-box" x="${x}" y="${y}" width="${width}" height="${height}" rx="6"/>
-      <text class="adam-overlay-tag" x="${x + 18}" y="${y + 30}">ADAM PROPOSAL</text>
-      <text class="adam-overlay-title" x="${x + 18}" y="${y + 64}">${esc(pinLabel)} · PROVISIONAL</text>
-      <text class="adam-overlay-inputs" data-testid="adam-guided-inputs" x="${x + 18}" y="${y + 102}">g ${n(u.gradient)} · stored m ${n(u.mBefore)} · stored v ${n(u.vBefore)}</text>
-      <text class="adam-overlay-value" data-testid="adam-proposal-value" x="${x + 18}" y="${y + 142}">ADAM → θ ${n(u.before)} → θ′ ${n(u.after)}</text>
+      <text class="adam-overlay-tag" x="${x + 18}" y="${y + 30}">OPTIMIZER PROPOSAL · ADAM</text>
+      <text class="adam-overlay-title" x="${x + 18}" y="${y + 64}">SELECTED PARAMETER · PROVISIONAL</text>
+      <text class="adam-overlay-inputs" data-testid="adam-guided-inputs" x="${x + 18}" y="${y + 96}">FINAL GRADIENT ${n(u.gradient)}</text>
+      <text class="adam-overlay-inputs" x="${x + 18}" y="${y + 120}">SAVED OPTIMIZER STATE ${n(u.mBefore)} / ${n(u.vBefore)}</text>
+      <text class="adam-overlay-value" data-testid="adam-proposal-value" x="${x + 18}" y="${y + 142}">CURRENT ${n(u.before)} → PROPOSED ${n(u.after)}</text>
       <text class="adam-overlay-status" x="${x + 18}" y="${y + 188}">ACCEPTED MODEL UNCHANGED</text>
     </g>`;
   }
 
   return `<g class="adam-learning-overlay active-learning-anchor" data-testid="adam-learning-overlay" data-provisional="true" data-proposal-status="pending" data-status="pending">
-    <title>Adam proposal pending for the selected parameter.</title>
+    <title>Adam proposal pending for ${esc(pinLabel)}.</title>
     <path class="adam-learning-tether" d="M${bank.x + bank.width} ${bank.y + 80} H${x}"/>
     <rect class="adam-overlay-box" x="${x}" y="${y}" width="${width}" height="${height}" rx="6"/>
-    <text class="adam-overlay-tag" x="${x + 18}" y="${y + 30}">ADAM PROPOSAL</text>
-    <text class="adam-overlay-title" x="${x + 18}" y="${y + 64}">${esc(pinLabel)}</text>
-    <text class="adam-overlay-inputs" data-testid="adam-guided-inputs" x="${x + 18}" y="${y + 102}">final gradient · stored m · stored v</text>
+    <text class="adam-overlay-tag" x="${x + 18}" y="${y + 30}">OPTIMIZER PROPOSAL · ADAM</text>
+    <text class="adam-overlay-title" x="${x + 18}" y="${y + 64}">SELECTED PARAMETER</text>
+    <text class="adam-overlay-inputs" data-testid="adam-guided-inputs" x="${x + 18}" y="${y + 102}">FINAL GRADIENT + SAVED OPTIMIZER STATE</text>
     <text class="adam-overlay-value" data-testid="adam-proposal-pending" x="${x + 18}" y="${y + 142}">PENDING</text>
     <text class="adam-overlay-status" x="${x + 18}" y="${y + 188}">ACCEPTED MODEL UNCHANGED</text>
   </g>`;
