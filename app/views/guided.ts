@@ -50,10 +50,7 @@ export interface GuidedLearning {
   afterRunId: string;
 }
 
-export function lessonPosition(result: RunResult): number {
-  // Follow the last character-to-character transition, never the final character → END payoff.
-  return Math.max(0, result.tokenIds.length - 2);
-}
+export { lessonPosition } from '../presentation/public-guided-computation.js';
 
 /** Explain the selected execution beside its probabilities, independently of the live model. */
 export function probabilityContextView(

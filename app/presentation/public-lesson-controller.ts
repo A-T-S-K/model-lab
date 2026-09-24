@@ -199,6 +199,7 @@ export function publicLessonDestinationAvailable(
 export function getPublicLessonView(
   session: PublicLessonSession,
   context: PublicLessonTransitionContext = EMPTY_CONTEXT,
+  occurrence?: { readonly position: number; readonly head?: number; readonly key?: number },
 ): PublicLessonView {
   const currentState = displayedState(session);
   const facilitatorDestinations = PUBLIC_TOUR_STATES
@@ -215,7 +216,7 @@ export function getPublicLessonView(
     targetState: session.pending?.target,
     outcome: session.outcome,
     decisionPending: session.decisionPending,
-    content: getPublicTourContent(currentState, session.outcome),
+    content: getPublicTourContent(currentState, session.outcome, occurrence),
     navigation: session.navigation,
     facilitatorDestinations,
   };
@@ -256,6 +257,7 @@ export function transitionPublicLesson(
       if (
         session.current !== 'cold'
         && session.pending?.effect !== 'START_PREDICTION'
+        && !(session.navigation.mode === 'guided' && session.current.startsWith('p1_'))
       ) return noChange(session);
       return {
         session: {

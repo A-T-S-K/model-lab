@@ -672,6 +672,67 @@ test('UX-Q2 public Predict displays the newly captured input', async ({ page }) 
   await expect(page.getByTestId('landmark-occurrence')).toHaveAttribute('data-run-id', newRun);
 });
 
+test('NL1-A Guided witnesses follow the current run and teaching occurrence', async ({ page }) => {
+  test.setTimeout(120_000);
+  await audit(page);
+  await page.setViewportSize({ width: 2408, height: 1506 });
+  await page.goto('/?presentation=spatial&kiosk=1');
+  await page.locator('#exhibit-start').click();
+  await waitForCurrentPublicState(page, 'p1_prediction_preview');
+  const firstRun = await displayedRunId(page);
+  const first = page.getByTestId('dock-context-support');
+  await expect(first).toHaveAttribute('data-source-run-id', firstRun);
+  expect(Number(await first.getAttribute('data-position'))).toBeLessThan(5);
+
+  await page.locator('#document').fill('abc');
+  await page.locator('#predict').click();
+  await expect.poll(() => displayedRunId(page)).not.toBe(firstRun);
+  const shortRun = await displayedRunId(page);
+  await expect(first).toHaveAttribute('data-source-run-id', shortRun);
+  // The old p3 occurrence is outside this shorter character-to-character lesson.
+  expect(Number(await first.getAttribute('data-position'))).toBeLessThan(3);
+
+  await page.locator('#document').fill('cabcabc');
+  await page.locator('#predict').click();
+  await expect.poll(() => displayedRunId(page)).not.toBe(shortRun);
+  await waitForCurrentPublicState(page, 'p1_prediction_preview');
+  const run = await displayedRunId(page);
+  const occurrence = await first.getAttribute('data-position');
+  expect(Number(occurrence)).toBeGreaterThanOrEqual(0);
+  expect(Number(occurrence)).toBeLessThan(8);
+  const states = ['p1_prediction_preview', 'p1_represent', 'p1_qkv', 'p1_attention_compare', 'p1_attention_weights', 'p1_value_mixture', 'p1_attention_integration', 'p1_transform', 'p1_score', 'p1_probabilities', 'p1_complete'];
+  for (const viewport of [{ width: 2408, height: 1506 }, { width: 1280, height: 720 }]) {
+    await page.setViewportSize(viewport);
+    for (const state of states) {
+      await expectPublicLesson(page, { canonicalState: state });
+      const support = page.getByTestId('dock-context-support');
+      await expect(support).toHaveAttribute('data-source-run-id', run);
+      await expect(support).toHaveAttribute('data-position', occurrence!);
+      await expect(support.locator('[data-evidence-origin="observed"][data-value]:not([data-value=""])').first()).toBeVisible();
+      if (['p1_qkv', 'p1_attention_compare', 'p1_attention_weights', 'p1_value_mixture'].includes(state)) await expect(support).toHaveAttribute('data-head', '0');
+      if (['p1_attention_compare', 'p1_attention_weights', 'p1_value_mixture'].includes(state)) await expect(support).toHaveAttribute('data-key', '0');
+      if (['p1_qkv', 'p1_attention_compare', 'p1_attention_weights', 'p1_value_mixture'].includes(state)) await expect(support.locator('[data-evidence-origin="derived"][data-value]:not([data-value=""])').first()).toBeVisible();
+      const bounds = await support.evaluate(el => { const r = el.getBoundingClientRect(); const b = document.querySelector('[data-testid="dock-body"]')!.getBoundingClientRect(); return { inside: r.top >= b.top - 1 && r.bottom <= b.bottom + 1 && r.left >= b.left - 1 && r.right <= b.right + 1 }; });
+      expect(bounds.inside, `${state} at ${viewport.width}x${viewport.height}`).toBe(true);
+      if (state === 'p1_represent' && viewport.width === 2408) {
+        await page.locator('#dock-inspect').click();
+        await page.locator('#dock-inspect').click();
+        await expect(support).toHaveAttribute('data-source-run-id', run);
+        await expect(support).toHaveAttribute('data-position', occurrence!);
+      }
+      if (state !== 'p1_complete') await page.locator('#short-continue').click();
+    }
+    if (viewport.width === 2408) {
+      await page.setViewportSize({ width: 1280, height: 720 });
+      const support = page.getByTestId('dock-context-support');
+      await expect(support).toHaveAttribute('data-source-run-id', run);
+      const bounds = await support.evaluate(el => { const r = el.getBoundingClientRect(); const b = document.querySelector('[data-testid="dock-body"]')!.getBoundingClientRect(); return { inside: r.top >= b.top - 1 && r.bottom <= b.bottom + 1 && r.left >= b.left - 1 && r.right <= b.right + 1 }; });
+      expect(bounds.inside).toBe(true);
+      break;
+    }
+  }
+});
+
 test('UX-Q2 public Part 2 camera ownership and parameter overlays', async ({ page }) => {
   test.setTimeout(180_000);
   await page.setViewportSize({ width: 2408, height: 1506 });

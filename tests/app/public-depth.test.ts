@@ -10,9 +10,11 @@ import {
 } from '../../app/spatial/public-depth.js';
 import type { ContextualDockOptions, DockDepth } from '../../app/spatial/contextual-dock.js';
 import { createServer, type ViteDevServer } from 'vite';
-import { getPublicTourContent, type PublicTourState } from '../../app/spatial/public-tour.js';
+import { getPublicTourContent as tourContent, type PublicTourState } from '../../app/spatial/public-tour.js';
 import { sourceBinding } from '../../app/presentation/source-binding.js';
 import { ModelSession } from '../../app/worker/controller.js';
+
+const getPublicTourContent = (state: PublicTourState) => tourContent(state, undefined, { position: 3 });
 
 async function part1Model(): Promise<SpatialReadModel> {
   const session = new ModelSession();

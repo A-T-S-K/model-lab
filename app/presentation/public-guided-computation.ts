@@ -9,11 +9,16 @@ export interface PublicGuidedComputationBinding {
   readonly result: RunResult;
   readonly runId: string;
   readonly capturedDocument: string;
+  readonly lessonPosition: number;
 }
 
 export interface PublicGuidedComputationDecision {
   readonly binding?: PublicGuidedComputationBinding;
   readonly restore?: PublicGuidedComputationBinding;
+}
+
+export function lessonPosition(result: RunResult): number {
+  return Math.max(0, result.tokenIds.length - 2);
 }
 
 function capturedDocument(
@@ -57,6 +62,8 @@ export function reconcilePublicGuidedComputation(
       result: candidate,
       runId: candidate.run.manifest.runId,
       capturedDocument: capturedDocument(candidate, vocabulary),
+      // The last character-to-character transition; the final position predicts END.
+      lessonPosition: lessonPosition(candidate),
     };
     return { binding: adopted };
   }

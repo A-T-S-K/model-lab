@@ -177,9 +177,6 @@ export function publicSupportActions(content: PublicTourContent): readonly Publi
 }
 
 const REVERSE_TRUTH_GUARDRAIL = 'The purple backward path explains dependency and sensitivity through the same computation. It is not measured runtime timing, text flowing backward, or execution being undone.';
-const PART_1_TOKEN = 3;
-const PART_1_HEAD = 0;
-const PART_1_KEY = 0;
 
 const FORWARD_INTEGRATION_FOCUS: PublicLessonFocus = {
   nodes: [
@@ -236,7 +233,11 @@ const FORWARD_INTEGRATION_FOCUS: PublicLessonFocus = {
 export function getPublicTourContent(
   state: PublicTourState,
   outcome?: PublicTourOutcome,
+  occurrence?: { readonly position: number; readonly head?: number; readonly key?: number },
 ): PublicTourContent {
+  const PART_1_TOKEN = occurrence?.position ?? 0;
+  const PART_1_HEAD = occurrence?.head ?? 0;
+  const PART_1_KEY = occurrence?.key ?? 0;
   switch (state) {
     case 'cold':
       return {

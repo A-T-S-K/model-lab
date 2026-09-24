@@ -888,6 +888,21 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   white-space: nowrap;
   margin-top: 0;
 }
+.contextual-dock .dock-context-support .support-short-row > span {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 2px 5px;
+  min-width: 0;
+}
+.contextual-dock .dock-context-support .support-short-row .support-observation {
+  display: inline-flex;
+  margin-top: 0;
+}
+@media (max-height: 800px) {
+  .contextual-dock .dock-context-support .support-short-row { gap: 2px; }
+  .contextual-dock .dock-context-support .support-short-row .support-observation { font-size: 11px; line-height: 1.1; }
+}
 
 /* Default Explain state: compact essential view, world dominant >= 55% */
 .contextual-dock:not(.is-expanded) {

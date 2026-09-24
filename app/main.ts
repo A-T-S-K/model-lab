@@ -273,7 +273,8 @@ function currentPublicLessonContext(): PublicLessonTransitionContext {
   };
 }
 function currentPublicLessonView() {
-  return getPublicLessonView(publicLessonSession, currentPublicLessonContext());
+  return getPublicLessonView(publicLessonSession, currentPublicLessonContext(),
+    publicGuidedComputation ? { position: publicGuidedComputation.lessonPosition } : undefined);
 }
 function dispatchPublicLesson(event: PublicLessonEvent): boolean {
   const before = publicLessonSession;

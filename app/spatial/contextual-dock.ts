@@ -186,7 +186,72 @@ const defaultSupport: Partial<Record<PublicTourContent['state'], string>> = {
 
 function renderDefaultSupport(opts: ContextualDockOptions): string {
   const content = defaultSupport[opts.tourContent!.state];
-  return `<aside id="dock-context-support" class="dock-context-support" data-testid="dock-context-support" data-support-action="default" data-run-id="${esc(opts.model?.source.sourceRunId ?? '')}" aria-label="Step overview"><strong>Step overview</strong><p>${esc(content ?? '')}</p></aside>`;
+  const context = resolvedPart1Depth(opts);
+  const model = opts.model;
+  const state = opts.tourContent!.state;
+  const find = (id: string) => context?.members.find(item => item.memberId === id);
+  const values = (id: string) => {
+    const item = find(id);
+    const raw = item?.availability === 'available' ? model?.forward.values(item.address) : undefined;
+    return raw && item?.slice ? raw.slice(item.slice.start, item.slice.end) : raw;
+  };
+  const number = (id: string, index = 0) => values(id)?.[index];
+  const cell = (label: string, value: number | undefined, origin = 'observed', member = '') => `<span class="support-observation" data-member="${esc(member)}" data-evidence-origin="${origin}" data-value="${value ?? ''}">${esc(label)} ${fmt(value)} · ${origin.toUpperCase()}</span>`;
+  const row = (label: string, cells: string, note = '') => `<div class="support-short-row"><strong>${esc(label)}</strong><span>${cells}</span>${note ? `<small>${esc(note)}</small>` : ''}</div>`;
+  const p = context?.canonical.position ?? 0;
+  const k = context?.selectedKey ?? 0;
+  const h = context?.selectedHead ?? 0;
+  const feature = context?.outputFeature ?? 0;
+  const keyMember = context?.members.find(item => item.memberId === 'keys' && item.key === k);
+  const keyRaw = keyMember?.availability === 'available' ? model?.forward.values(keyMember.address) : undefined;
+  const keyValues = keyRaw && keyMember?.slice ? keyRaw.slice(keyMember.slice.start, keyMember.slice.end) : keyRaw;
+  let witness = '';
+  if (context && model) {
+    if (state === 'p1_prediction_preview') {
+      const distribution = values('probabilities');
+      const top = distribution?.length ? distribution.indexOf(Math.max(...distribution)) : -1;
+      witness = row('Next token', cell(`P(${top < 0 ? '?' : outputTokenName(top, model.forward.vocabulary)})`, top < 0 ? undefined : distribution![top], 'observed', 'probabilities'), `Observed distribution across ${distribution?.length ?? 0} choices.`);
+    }
+    if (state === 'p1_represent') witness = row('Feature 0', `${cell('token +', number('tokenEmbedding'), 'observed', 'tokenEmbedding')} ${cell('position =', number('positionEmbedding'), 'observed', 'positionEmbedding')} ${cell('sum check', number('tokenEmbedding') !== undefined && number('positionEmbedding') !== undefined ? number('tokenEmbedding')! + number('positionEmbedding')! : undefined, 'derived', 'embeddingSum')} ${cell('sum', number('embeddingSum'), 'observed', 'embeddingSum')}`) + row('Normalize', `${cell('saved residual', number('embeddingNorm'), 'observed', 'embeddingNorm')} ${cell('attention input', number('preAttentionNorm'), 'observed', 'preAttentionNorm')}`, 'Normalization uses the full vector.');
+    if (state === 'p1_qkv') {
+      const q = find('q'); const e = q && model.forward.explain(q.address, q.slice?.start ?? 0);
+      const sum = e?.terms?.reduce((total, term) => total + term.product, 0);
+      witness = row('Shared input → Q', `${cell('input[0]', number('input'), 'observed', 'input')} ${cell('Σ input × weight', sum, 'derived', 'q')} ${cell('Q[0]', number('q'), 'observed', 'q')}`) + row(`Head ${h}`, `${cell('K[0]', number('k'), 'observed', 'k')} ${cell('V[0]', number('v'), 'observed', 'v')}`, 'Q, K and V use separate projections.');
+    }
+    if (state === 'p1_attention_compare') {
+      const q = values('query'); const score = q && keyValues && q.length === keyValues.length ? q.reduce((total, v, i) => total + v * keyValues[i]!, 0) / Math.sqrt(q.length) : undefined;
+      witness = row(`p${p} Q · p${k} K / √${q?.length ?? '?'}`, `${cell('score', score, 'derived', 'scores')} ${cell('captured score', number('scores', k), 'observed', 'scores')}`, `${context.futureKeys.length} future keys: NOT APPLICABLE.`);
+    }
+    if (state === 'p1_attention_weights') {
+      const w = find('weights'); const e = w && model.forward.explain(w.address, k);
+      const derived = e?.exponentials?.[k] !== undefined && e.denominator ? e.exponentials[k]! / e.denominator : undefined;
+      witness = row(`Softmax over ${context.eligibleKeys.length} scores`, `${cell(`score[k${k}]`, number('scores', k), 'observed', 'scores')} ${cell('exp / row sum', derived, 'derived', 'weights')} ${cell('weight', number('weights', k), 'observed', 'weights')}`, 'The denominator uses the whole eligible row.');
+    }
+    if (state === 'p1_value_mixture') {
+      const out = find('headOutput'); const e = out && model.forward.explain(out.address, feature);
+      const sum = e?.probabilities && e.points ? e.points.reduce((total, point, i) => total + e.probabilities![i]! * point![feature]!, 0) : undefined;
+      witness = row(`Head ${h} component ${feature}`, `${cell(`Σ ${context.eligibleKeys.length} weights × Values`, sum, 'derived', 'headOutput')} ${cell('head result', number('headOutput', feature), 'observed', 'headOutput')}`, 'Every eligible Value contributes.');
+    }
+    if (state === 'p1_attention_integration') {
+      const heads = context.members.filter(item => item.memberId === 'headOutputs').map(item => {
+        const headValue = item.availability === 'available' ? model.forward.values(item.address)?.[0] : undefined;
+        return cell(`h${item.head ?? 0}[0]`, headValue, 'observed', 'headOutputs');
+      }).join(' ');
+      witness = row('Join heads → WO', `${heads} ${cell('concat[0]', number('attentionOutput'), 'observed', 'attentionOutput')} ${cell(`WO[${feature}]`, number('attentionProjection', feature), 'observed', 'attentionProjection')}`, 'Concatenation joins channels; WO aggregates them.') + row('Residual add', `${cell('saved', number('savedResidual', feature), 'observed', 'savedResidual')} ${cell('WO + saved', number('attentionProjection', feature) !== undefined && number('savedResidual', feature) !== undefined ? number('attentionProjection', feature)! + number('savedResidual', feature)! : undefined, 'derived', 'attentionResidual')} ${cell('result', number('attentionResidual', feature), 'observed', 'attentionResidual')}`);
+    }
+    if (state === 'p1_transform') witness = row('8 → 32 → 8', `${cell('norm[0]', number('preMlpNorm'), 'observed', 'preMlpNorm')} ${cell('expand[0]', number('mlpUp'), 'observed', 'mlpUp')} ${cell('ReLU[0]', number('mlpRelu'), 'observed', 'mlpRelu')} ${cell(`contract[${feature}]`, number('mlpDown', feature), 'observed', 'mlpDown')}`, 'Contraction aggregates all 32 hidden features.') + row('Residual add', `${cell('saved', number('attentionResidual', feature), 'observed', 'attentionResidual')} ${cell('contract + saved', number('mlpDown', feature) !== undefined && number('attentionResidual', feature) !== undefined ? number('mlpDown', feature)! + number('attentionResidual', feature)! : undefined, 'derived', 'mlpResidual')} ${cell('result', number('mlpResidual', feature), 'observed', 'mlpResidual')}`);
+    if (state === 'p1_score') witness = row('Vocabulary score', cell('logit[0]', number('logits'), 'observed', 'logits'), 'A raw signed score, before output softmax.');
+    if (state === 'p1_probabilities' || state === 'p1_complete') {
+      const distribution = values('probabilities');
+      const top = distribution?.map((probability, index) => ({ probability, index })).sort((a, b) => b.probability - a.probability).slice(0, 3) ?? [];
+      witness = row('Output softmax', `${cell('logit[0]', number('logits'), 'observed', 'logits')} ${cell(`P(${outputTokenName(0, model.forward.vocabulary)})`, number('probabilities'), 'observed', 'probabilities')}`, `Observed distribution · ${top.map(item => `${outputTokenName(item.index, model.forward.vocabulary)} ${fmt(item.probability)}`).join(' · ')}`);
+    }
+    if (state === 'p1_complete') {
+      const at = (kind: string, head?: number) => model.forward.values({ kind, token: p, layer: 0, ...(head === undefined ? {} : { head }) })?.[0];
+      witness = `<div class="support-short-row"><strong>Forward recap · OBSERVED</strong><div class="nl1-recap" data-evidence-origin="observed" data-value="${number('probabilities') ?? ''}">Representation ${fmt(at('preAttentionNorm'))} → Q/K/V ${fmt(at('q', h))}/${fmt(at('k', h))}/${fmt(at('v', h))}<br>Score ${fmt(at('attentionLogits', h))} → weight ${fmt(at('attentionProbabilities', h))} → head ${fmt(at('headOutput', h))}<br>Attention ${fmt(at('attentionResidual'))} → MLP ${fmt(at('mlpResidual'))}<br>Logit ${fmt(number('logits'))} → probability ${fmt(number('probabilities'))}</div><small>Representative results from distinct vector operations.</small></div>`;
+    }
+  }
+  return `<aside id="dock-context-support" class="dock-context-support" data-testid="dock-context-support" data-support-action="default" data-run-id="${esc(model?.source.sourceRunId ?? '')}" data-source-run-id="${esc(context?.canonical.run ?? '')}" data-position="${context?.canonical.position ?? ''}" data-head="${context?.selectedHead ?? ''}" data-key="${context?.selectedKey ?? ''}" aria-label="Step overview"><strong>${context ? `p${p} · ${state === 'p1_complete' ? 'Forward recap' : 'Numerical witness'}` : 'Step overview'}</strong>${witness || `<p>${esc(content ?? 'Numerical evidence unavailable for this occurrence.')}</p>`}</aside>`;
 }
 
 function renderExplain(opts: ContextualDockOptions): string {
@@ -1210,7 +1275,7 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
   const supportActions = opts.tourContent && !isExpanded ? publicSupportActions(opts.tourContent) : [];
   const activeSupport = supportActions.find(action => action.id === opts.supportAction);
   const hasCoreResult = supportActions.length > 0 && bodyContent.includes('class="dock-stage-result"');
-  if (supportActions.length) bodyContent = `<div class="dock-guided-core">${bodyContent}</div><div class="dock-support-column"><span class="dock-support-heading">EXPLORE THIS STEP</span>${activeSupport ? renderPublicSupport(opts, activeSupport) : renderDefaultSupport(opts)}<nav class="dock-support-actions" aria-label="Contextual support">${activeSupport ? '<button type="button" data-support-action="default" aria-pressed="false" aria-controls="dock-context-support">Overview</button>' : ''}${supportActions.map(action => `<button type="button" data-support-action="${esc(action.id)}" aria-pressed="${activeSupport?.id === action.id}" aria-controls="dock-context-support">${esc(action.label)}</button>`).join('')}</nav></div>`;
+  if (supportActions.length || (!isExpanded && opts.tourContent?.state === 'p1_complete')) bodyContent = `<div class="dock-guided-core">${bodyContent}</div><div class="dock-support-column"><span class="dock-support-heading">EXPLORE THIS STEP</span>${activeSupport ? renderPublicSupport(opts, activeSupport) : renderDefaultSupport(opts)}<nav class="dock-support-actions" aria-label="Contextual support">${activeSupport ? '<button type="button" data-support-action="default" aria-pressed="false" aria-controls="dock-context-support">Overview</button>' : ''}${supportActions.map(action => `<button type="button" data-support-action="${esc(action.id)}" aria-pressed="${activeSupport?.id === action.id}" aria-controls="dock-context-support">${esc(action.label)}</button>`).join('')}</nav></div>`;
 
   if (opts.attract) {
     return `<section class="contextual-dock short-guide" data-testid="contextual-dock" data-active-depth="explain" aria-label="Contextual explanation dock">
@@ -1237,7 +1302,7 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
     ? `<button id="dock-inspect" class="secondary-action dock-tab dock-tab-close" data-dock-depth="explain">← Return to Guided</button>`
     : `<button id="dock-inspect" class="secondary-action dock-tab" data-dock-depth="values">${isPublic ? 'Deep inspection' : 'Inspect evidence ▾'}</button>`;
 
-  return `<section class="contextual-dock short-guide ${isExpanded ? 'is-expanded' : ''} ${supportActions.length ? 'has-support-actions' : ''} ${hasCoreResult ? 'has-core-result' : ''}" data-testid="contextual-dock" data-tour-state="${esc(opts.tourContent?.state ?? '')}" data-active-depth="${effectiveDepth}" data-active-support="${supportActions.length ? esc(activeSupport?.id ?? 'default') : ''}" aria-label="Contextual explanation dock">
+  return `<section class="contextual-dock short-guide ${isExpanded ? 'is-expanded' : ''} ${supportActions.length || (!isExpanded && opts.tourContent?.state === 'p1_complete') ? 'has-support-actions' : ''} ${hasCoreResult ? 'has-core-result' : ''}" data-testid="contextual-dock" data-tour-state="${esc(opts.tourContent?.state ?? '')}" data-active-depth="${effectiveDepth}" data-active-support="${supportActions.length ? esc(activeSupport?.id ?? 'default') : ''}" aria-label="Contextual explanation dock">
     <div class="dock-header" data-testid="dock-header">
       <div class="dock-route-info dock-slot-context">
         ${opts.tourContent ? `<span class="lesson-progress lesson-macro-progress" data-testid="lesson-progress" aria-label="${esc(opts.tourContent.part === 1 ? 'Part 1 active; Part 2 upcoming' : opts.tourContent.state === 'tour_complete' ? 'Part 1 and Part 2 complete' : 'Part 1 complete; Part 2 active')}"><span class="${opts.tourContent.part === 1 ? 'active' : 'complete'}">1 · MAKE A PREDICTION</span><span aria-hidden="true">→</span><span class="${opts.tourContent.part === 1 ? 'upcoming' : opts.tourContent.state === 'tour_complete' ? 'complete' : 'active'}">2 · LEARN FROM ERROR</span><small>${esc(lessonProgress)}</small></span>` : lessonProgress ? `<span class="lesson-progress" data-testid="lesson-progress">${esc(lessonProgress)}</span>` : ''}

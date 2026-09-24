@@ -50,6 +50,7 @@ function prediction(runId: string, document: string): RunResult {
         input: [0, ...ids],
       },
     },
+    tokenIds: [0, ...ids],
   } as unknown as RunResult;
 }
 
@@ -83,6 +84,17 @@ test('adopted prediction binds the exact Guided run and captured input', () => {
   assert.equal(completed.computation.binding?.result, a);
   assert.equal(completed.computation.binding?.runId, 'run-a');
   assert.equal(completed.computation.binding?.capturedDocument, 'abca');
+  assert.equal(completed.computation.binding?.lessonPosition, 3);
+});
+
+test('explicit Guided Predict replaces the occurrence only after the new run completes', () => {
+  const a = prediction('run-a', 'abca');
+  const short = prediction('run-short', 'abc');
+  const initial = reconcile(undefined, sessionAt('cold'), { type: 'PREDICTION_COMPLETE' }, a);
+  const next = reconcile(initial.computation.binding, sessionAt('p1_qkv'), { type: 'PREDICTION_COMPLETE' }, short);
+  assert.equal(next.transition.session.current, 'p1_prediction_preview');
+  assert.equal(next.computation.binding?.runId, 'run-short');
+  assert.equal(next.computation.binding?.lessonPosition, 2);
 });
 
 test('Explore prediction does not replace the canonical binding and Resume restores A without rewriting live B', () => {
@@ -92,6 +104,7 @@ test('Explore prediction does not replace the canonical binding and Resume resto
     result: a,
     runId: 'run-a',
     capturedDocument: 'abca',
+    lessonPosition: 3,
   };
   const guided = sessionAt('p1_represent');
 
@@ -129,6 +142,7 @@ test('reset clears the binding and restart replaces it only after an adopted com
     result: a,
     runId: 'run-a',
     capturedDocument: 'abca',
+    lessonPosition: 3,
   };
   const complete = sessionAt('tour_complete', { outcome: 'accepted' });
 
@@ -167,6 +181,7 @@ test('Resume never restores the Part 1 binding over an active Part 2 transaction
     result: a,
     runId: 'run-a',
     capturedDocument: 'abca',
+    lessonPosition: 3,
   };
   const exploringPart2: PublicLessonSession = {
     current: 'p2_gradient_contribution',
