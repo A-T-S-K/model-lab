@@ -1596,35 +1596,44 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   filter: drop-shadow(0 0 10px rgba(255, 209, 102, 0.28));
 }
 
-/* Screen-aware overlay type remains legible while the public camera keeps the whole model framed. */
+/* These SVG cards have fixed world-space bounds, so their text must not grow with
+   the camera's inverse-zoom label size. */
 .world-workspace.is-public-profile .spatial-world .objective-title {
-  font-size: calc(var(--world-label-size, 26px) + 4px);
+  font-size: 26px;
 }
 .world-workspace.is-public-profile .spatial-world .objective-scope {
-  font-size: var(--world-label-size, 22px);
+  font-size: 20px;
 }
 .world-workspace.is-public-profile .spatial-world .objective-mean {
-  font-size: calc(var(--world-label-size, 24px) + 2px);
+  font-size: 24px;
 }
 .world-workspace.is-public-profile .spatial-world .objective-origin {
-  font-size: calc(var(--world-label-size, 18px) - 2px);
+  font-size: 18px;
 }
 .world-workspace.is-public-profile .spatial-world .objective-row-main,
 .world-workspace.is-public-profile .spatial-world .objective-row-origin {
-  font-size: calc(var(--world-label-size, 18px) * .75);
+  font-size: 18px;
 }
-.world-workspace.is-public-profile .spatial-world .param-overlay-title,
+.world-workspace.is-public-profile .spatial-world .param-overlay-title {
+  font-size: 24px;
+}
+.world-workspace.is-public-profile .spatial-world .param-overlay-tag {
+  font-size: 18px;
+}
+.world-workspace.is-public-profile .spatial-world .param-overlay-calc,
+.world-workspace.is-public-profile .spatial-world .param-overlay-gradient {
+  font-size: 22px;
+}
+.world-workspace.is-public-profile .spatial-world .param-overlay-accum {
+  font-size: 17px;
+}
 .world-workspace.is-public-profile .spatial-world .adam-overlay-title {
   font-size: calc(var(--world-label-size, 24px) + 3px);
 }
-.world-workspace.is-public-profile .spatial-world .param-overlay-tag,
 .world-workspace.is-public-profile .spatial-world .adam-overlay-tag,
 .world-workspace.is-public-profile .spatial-world .adam-overlay-status {
   font-size: var(--world-label-size, 18px);
 }
-.world-workspace.is-public-profile .spatial-world .param-overlay-calc,
-.world-workspace.is-public-profile .spatial-world .param-overlay-accum,
-.world-workspace.is-public-profile .spatial-world .param-overlay-gradient,
 .world-workspace.is-public-profile .spatial-world .adam-overlay-inputs,
 .world-workspace.is-public-profile .spatial-world .adam-overlay-value {
   font-size: var(--world-label-size, 22px);
