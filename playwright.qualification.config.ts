@@ -17,7 +17,7 @@ const shellQuote = (value: string) => "'" + value.replace(/'/g, "'\\''") + "'";
 
 export default defineConfig({
   testDir: './tests/browser',
-  outputDir: qualification.runner,
+  outputDir: join(qualification.runner, 'playwright'),
   metadata: {
     qualificationRoot: qualification.allocation,
     candidateCommit: qualification.candidate.expected.commit,
