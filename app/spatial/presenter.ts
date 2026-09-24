@@ -343,7 +343,7 @@ export class SpatialPresenter {
     };
     const teachingOverlays = Array.from(
       pane.querySelectorAll<SVGGraphicsElement>(
-        '.parameter-learning-overlay, .adam-learning-overlay, .objective-learning-overlay'
+        '.parameter-learning-overlay, .adam-learning-overlay, .objective-anchor'
       ),
     ).map(el => el.getBoundingClientRect()).filter(rect => rect.width > 0 && rect.height > 0);
     const fits = (candidate: { left: number; top: number }) =>
@@ -359,7 +359,7 @@ export class SpatialPresenter {
         ? candidates[1]
         : candidates[0]
     );
-    if (parameterFocus && !preferred) {
+    if (!preferred && (parameterFocus || view.currentState === 'p2_objective')) {
       locator.style.visibility = 'hidden';
       return;
     }

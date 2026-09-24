@@ -708,6 +708,7 @@ test('NL1-A Guided witnesses follow the current run and teaching occurrence', as
       const support = page.getByTestId('dock-context-support');
       await expect(support).toHaveAttribute('data-source-run-id', run);
       await expect(support).toHaveAttribute('data-position', occurrence!);
+      if (state === 'p1_qkv') await expect(page.getByTestId('dock-explain')).toContainText(`position ${occurrence}, head 0`);
       await expect(support.locator('[data-evidence-origin="observed"][data-value]:not([data-value=""])').first()).toBeVisible();
       if (['p1_qkv', 'p1_attention_compare', 'p1_attention_weights', 'p1_value_mixture'].includes(state)) await expect(support).toHaveAttribute('data-head', '0');
       if (['p1_attention_compare', 'p1_attention_weights', 'p1_value_mixture'].includes(state)) await expect(support).toHaveAttribute('data-key', '0');
@@ -1534,6 +1535,19 @@ test('7. current Guided route fits 1280x720 and reduced motion', async ({ page }
   await expect(page.getByTestId('lesson-progress')).toContainText('LEARN FROM ERROR');
   await expect(page.locator('#reverse-continue')).toBeEnabled({ timeout: 60_000 });
   await expect(page.getByTestId('objective-anchor')).toHaveAttribute('data-objective-availability', 'available');
+  const objectiveLayout = await page.evaluate(() => {
+    const witness = document.querySelector<HTMLElement>('[data-testid="part2-numerical-witness"]')!;
+    const objective = document.querySelector<SVGGraphicsElement>('[data-testid="objective-anchor"]')!.getBoundingClientRect();
+    const locator = document.querySelector<HTMLElement>('[data-testid="teaching-locator"]')!;
+    const w = witness.getBoundingClientRect();
+    const l = locator.getBoundingClientRect();
+    return {
+      witnessInside: w.bottom <= innerHeight + 1 && w.right <= innerWidth + 1,
+      locatorClear: getComputedStyle(locator).visibility === 'hidden' || l.right <= objective.left || l.left >= objective.right || l.bottom <= objective.top || l.top >= objective.bottom,
+    };
+  });
+  expect(objectiveLayout.witnessInside, JSON.stringify(objectiveLayout)).toBe(true);
+  expect(objectiveLayout.locatorClear, JSON.stringify(objectiveLayout)).toBe(true);
   await captureEvidence(page, '25-objective-1280.png', 'p2_objective', '[data-testid="objective-anchor"]');
   for (const state of ['p2_backward_trace', 'p2_gradient_contribution', 'p2_final_gradient']) {
     await advanceCurrentPart2(page, state);

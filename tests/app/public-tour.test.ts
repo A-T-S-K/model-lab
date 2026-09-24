@@ -21,10 +21,19 @@ test('IA1 support actions follow the current mechanism and leave completion uncl
   const objective = publicSupportActions(getPublicTourContent('p2_objective'));
   const candidate = publicSupportActions(getPublicTourContent('candidate_ready'));
   assert.deepEqual(qkv.map(action => action.label), ['Inspect Q/K/V', 'Show one projection']);
-  assert.deepEqual(objective.map(action => action.label), ['See one loss', 'See all positions']);
+  assert.deepEqual(objective.map(action => action.label), []);
   assert.deepEqual(candidate.map(action => action.label), ['Measurements', 'Compare candidate']);
   assert.equal(publicSupportActions(getPublicTourContent('tour_complete', 'accepted')).length, 0);
   assert(qkv.every(action => !['Values', 'Exact Math', 'Source', 'Compare'].includes(action.label)));
+});
+
+test('Guided wording follows the selected prediction occurrence and retained gradient scope', () => {
+  const qkv = getPublicTourContent('p1_qkv', undefined, { position: 6, head: 0, key: 0 });
+  assert.match(qkv.plainMeaning, /position 6, head 0/);
+  assert.doesNotMatch(qkv.plainMeaning, /position 3/);
+  const accumulation = publicSupportActions(getPublicTourContent('p2_final_gradient'))[0]!;
+  assert.match(accumulation.explanation ?? '', /retained subset/);
+  assert.doesNotMatch(accumulation.explanation ?? '', /full provenance/);
 });
 import { sceneSvg } from '../../app/spatial/scene.js';
 

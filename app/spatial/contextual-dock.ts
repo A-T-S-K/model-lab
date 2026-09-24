@@ -199,11 +199,10 @@ function renderPart2NumericalSupport(ctx: ResolvedPublicTrainingDepthContext, fa
       `${datum('P(target)', selected.probability, selected.probability === undefined ? 'unavailable' : 'observed', 'target-probability')}
        ${datum('−log(P)', selected.derivedLoss, selected.derivedLoss === undefined ? 'unavailable' : 'derived', 'derived-loss')}
        ${datum('position loss', selected.recordedLoss, selected.recordedLoss === undefined ? 'unavailable' : 'observed', 'position-loss')}`) : '';
-    body += line(`All ${objective.rows.length} target positions`,
+    body += line(`All ${objective.rows.length} target positions · OBSERVED where available`,
       `${objective.rows.map(row => datum(`p${row.position} loss`, row.recordedLoss, row.recordedLoss === undefined ? 'unavailable' : 'observed', `loss-p${row.position}`)).join('')}
        ${datum('reconstructed mean', objective.derivedMean, objective.derivedMean === undefined ? 'unavailable' : 'derived', 'derived-mean')}
-       ${datum('runtime mean', objective.observedMean, objective.observedMean === undefined ? 'unavailable' : 'observed', 'observed-mean')}`,
-      'The objective covers every teacher-forced target.');
+       ${datum('runtime mean', objective.observedMean, objective.observedMean === undefined ? 'unavailable' : 'observed', 'observed-mean')}`);
   } else if (ctx.kind === 'backward-trace') {
     const adjointOrigin = ctx.numericAdjointsAvailable
       ? ctx.verifiedInspection?.provenance === 'recomputed' ? 'verified-recomputed' : 'observed'
@@ -1350,8 +1349,9 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
   const dockLabel = publicDepthContext || publicTrainingDepthContext ? (opts.tourContent?.headline ?? addressLabel(dockAddress)) : (opts.selectedLabel ?? addressLabel(opts.address));
   const supportActions = opts.tourContent && !isExpanded ? publicSupportActions(opts.tourContent) : [];
   const activeSupport = supportActions.find(action => action.id === opts.supportAction);
-  const hasCoreResult = supportActions.length > 0 && bodyContent.includes('class="dock-stage-result"');
-  if (supportActions.length || (!isExpanded && opts.tourContent?.state === 'p1_complete')) bodyContent = `<div class="dock-guided-core">${bodyContent}</div><div class="dock-support-column"><span class="dock-support-heading">EXPLORE THIS STEP</span>${activeSupport ? renderPublicSupport(opts, activeSupport) : renderDefaultSupport(opts)}<nav class="dock-support-actions" aria-label="Contextual support">${activeSupport ? '<button type="button" data-support-action="default" aria-pressed="false" aria-controls="dock-context-support">Overview</button>' : ''}${supportActions.map(action => `<button type="button" data-support-action="${esc(action.id)}" aria-pressed="${activeSupport?.id === action.id}" aria-controls="dock-context-support">${esc(action.label)}</button>`).join('')}</nav></div>`;
+  const showSupport = supportActions.length > 0 || (!isExpanded && (opts.tourContent?.state === 'p1_complete' || opts.tourContent?.state === 'p2_objective'));
+  const hasCoreResult = showSupport && bodyContent.includes('class="dock-stage-result"');
+  if (showSupport) bodyContent = `<div class="dock-guided-core">${bodyContent}</div><div class="dock-support-column"><span class="dock-support-heading">EXPLORE THIS STEP</span>${activeSupport ? renderPublicSupport(opts, activeSupport) : renderDefaultSupport(opts)}${supportActions.length ? `<nav class="dock-support-actions" aria-label="Contextual support">${activeSupport ? '<button type="button" data-support-action="default" aria-pressed="false" aria-controls="dock-context-support">Overview</button>' : ''}${supportActions.map(action => `<button type="button" data-support-action="${esc(action.id)}" aria-pressed="${activeSupport?.id === action.id}" aria-controls="dock-context-support">${esc(action.label)}</button>`).join('')}</nav>` : ''}</div>`;
 
   if (opts.attract) {
     return `<section class="contextual-dock short-guide" data-testid="contextual-dock" data-active-depth="explain" aria-label="Contextual explanation dock">
@@ -1378,7 +1378,7 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
     ? `<button id="dock-inspect" class="secondary-action dock-tab dock-tab-close" data-dock-depth="explain">← Return to Guided</button>`
     : `<button id="dock-inspect" class="secondary-action dock-tab" data-dock-depth="values">${isPublic ? 'Deep inspection' : 'Inspect evidence ▾'}</button>`;
 
-  return `<section class="contextual-dock short-guide ${isExpanded ? 'is-expanded' : ''} ${supportActions.length || (!isExpanded && opts.tourContent?.state === 'p1_complete') ? 'has-support-actions' : ''} ${hasCoreResult ? 'has-core-result' : ''}" data-testid="contextual-dock" data-tour-state="${esc(opts.tourContent?.state ?? '')}" data-active-depth="${effectiveDepth}" data-active-support="${supportActions.length ? esc(activeSupport?.id ?? 'default') : ''}" aria-label="Contextual explanation dock">
+  return `<section class="contextual-dock short-guide ${isExpanded ? 'is-expanded' : ''} ${showSupport ? 'has-support-actions' : ''} ${hasCoreResult ? 'has-core-result' : ''}" data-testid="contextual-dock" data-tour-state="${esc(opts.tourContent?.state ?? '')}" data-active-depth="${effectiveDepth}" data-active-support="${showSupport ? esc(activeSupport?.id ?? 'default') : ''}" aria-label="Contextual explanation dock">
     <div class="dock-header" data-testid="dock-header">
       <div class="dock-route-info dock-slot-context">
         ${opts.tourContent ? `<span class="lesson-progress lesson-macro-progress" data-testid="lesson-progress" aria-label="${esc(opts.tourContent.part === 1 ? 'Part 1 active; Part 2 upcoming' : opts.tourContent.state === 'tour_complete' ? 'Part 1 and Part 2 complete' : 'Part 1 complete; Part 2 active')}"><span class="${opts.tourContent.part === 1 ? 'active' : 'complete'}">1 · MAKE A PREDICTION</span><span aria-hidden="true">→</span><span class="${opts.tourContent.part === 1 ? 'upcoming' : opts.tourContent.state === 'tour_complete' ? 'complete' : 'active'}">2 · LEARN FROM ERROR</span><small>${esc(lessonProgress)}</small></span>` : lessonProgress ? `<span class="lesson-progress" data-testid="lesson-progress">${esc(lessonProgress)}</span>` : ''}

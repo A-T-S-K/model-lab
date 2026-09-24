@@ -1445,6 +1445,14 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
 @media (max-height: 800px) and (max-width: 1400px) {
   .world-workspace.is-public-profile .contextual-dock .part2-numerical-witness { padding: 3px 7px; line-height: 1.1; }
   .world-workspace.is-public-profile .contextual-dock .part2-numerical-witness .part2-witness-row { margin-top: 2px; line-height: 1.05; }
+  .world-workspace.is-public-profile .contextual-dock[data-tour-state="p2_objective"] .part2-witness-row:nth-child(3) > div {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1px 5px;
+  }
+  .world-workspace.is-public-profile .contextual-dock[data-tour-state="p2_objective"] [data-witness-field^="loss-p"] small {
+    display: none;
+  }
   .world-workspace.is-public-profile .contextual-dock .part2-numerical-witness + .dock-support-actions { padding-top: 2px; }
   .world-workspace.is-public-profile .contextual-dock .dock-support-column:has(.part2-numerical-witness) .dock-support-heading { margin-bottom: 2px; }
   .world-workspace.is-public-profile .contextual-dock.has-core-result:is([data-tour-state="p2_gradient_contribution"], [data-tour-state="p2_adam_proposal"], [data-tour-state="candidate_ready"]) .dock-body {

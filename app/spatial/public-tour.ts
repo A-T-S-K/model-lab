@@ -167,10 +167,10 @@ export function publicSupportActions(content: PublicTourContent): readonly Publi
     case 'p1_transform': return [{ id: 'stages', label: 'See transform stages', member: 'mlpRelu' }];
     case 'p1_score': return [{ id: 'logits', label: 'Inspect raw scores', member: 'logits' }];
     case 'p1_probabilities': return [{ id: 'probabilities', label: 'Inspect output probabilities', member: 'probabilities' }];
-    case 'p2_objective': return [{ id: 'loss', label: 'See one loss', explanation: 'Each target position contributes −log of its observed target probability; their mean is the training objective.' }, { id: 'positions', label: 'See all positions', explanation: 'The objective combines target losses across all positions. Open Deep inspection for the complete observed position table.' }];
+    case 'p2_objective': return [];
     case 'p2_backward_trace': return [{ id: 'dependency', label: 'Follow one dependency', explanation: 'The highlighted path traces how the objective depends on earlier operations. Its direction explains sensitivity, not runtime timing.' }];
     case 'p2_gradient_contribution': return [{ id: 'origin', label: 'Sensitivity source', explanation: 'The incoming sensitivity comes through the backward dependency path from the objective.' }, { id: 'running', label: 'Running gradient', explanation: 'This observed contribution is added to the previous running total shown in Guided. The result remains partial.' }];
-    case 'p2_final_gradient': return [{ id: 'accumulation', label: 'See accumulated contributions', explanation: 'The completed gradient accumulates contributions from the parameter’s uses. Deep inspection retains the full provenance.' }];
+    case 'p2_final_gradient': return [{ id: 'accumulation', label: 'See retained contributions', explanation: 'The completed gradient accumulates contributions from the parameter’s uses. Deep inspection shows the retained subset and the completed observed gradient.' }];
     case 'p2_adam_proposal': return [{ id: 'adam', label: 'How did Adam get this value?', explanation: 'Adam combines the final gradient with persistent first and second moment state, applies bias correction, then proposes a new value. The exact recorded calculation is in Deep inspection.' }];
     case 'candidate_ready': return [{ id: 'measurements', label: 'Measurements', explanation: 'Mean loss summarizes this training example; target probability shows one selected position. Neither establishes general improvement.' }, { id: 'candidate', label: 'Compare candidate', explanation: 'The candidate and accepted run used the same example. Deep inspection has the full position comparison.' }];
   }
@@ -333,7 +333,7 @@ export function getPublicTourContent(
         routePurpose: 'Prepare separate numerical roles for comparison and information carrying.',
         learnerQuestion: 'Why create three different vectors from the same representation?',
         whyHere: 'Attention needs comparison-side numbers and separate numbers containing information that may be mixed.',
-        plainMeaning: 'The same normalized input at position 3, head 0 produces three distinct vectors: Query (Q) participates in comparisons, Key (K) is compared against, and Value (V) carries information to mix.',
+        plainMeaning: `The same normalized input at position ${PART_1_TOKEN}, head ${PART_1_HEAD} produces three distinct vectors: Query (Q) participates in comparisons, Key (K) is compared against, and Value (V) carries information to mix.`,
         resultConcept: { label: 'Query / Key / Value vectors' },
         selectionIntent: { kind: 'q', token: PART_1_TOKEN, key: PART_1_KEY, layer: 0, head: PART_1_HEAD },
         depthSpec: {
