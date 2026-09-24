@@ -841,6 +841,12 @@ test('2c. current Part 2 semantics, authentic depth, ancestry, and candidate con
 
   await page.locator('#dock-inspect').click();
   await expectPublicLesson(page, { canonicalState: 'p2_objective' });
+  const guidedObjective = page.getByTestId('part2-numerical-witness');
+  await expect(guidedObjective).toHaveAttribute('data-training-depth-kind', 'objective');
+  await expect(guidedObjective.locator('[data-witness-field="target-probability"]')).toHaveAttribute('data-evidence-origin', 'observed');
+  await expect(guidedObjective.locator('[data-witness-field="position-loss"]')).toHaveAttribute('data-evidence-origin', 'observed');
+  await expect(guidedObjective.locator('[data-witness-field="derived-mean"]')).toHaveAttribute('data-evidence-origin', 'derived');
+  await expect(guidedObjective).toContainText(/All \d+ target positions/);
   expect(await workerCommandCount(page)).toBe(objectiveCommands);
 
   // Objective -> backward trace is explanatory state progression, not new execution.
@@ -858,6 +864,10 @@ test('2c. current Part 2 semantics, authentic depth, ancestry, and candidate con
   await expect(reverseTruthCue).toContainText('dependency and sensitivity through the same computation');
   await expect(reverseTruthCue).toContainText('not measured runtime timing');
   await expect(reverseTruthCue).toContainText('execution being undone');
+  const backwardWitness = page.getByTestId('part2-numerical-witness');
+  await expect(backwardWitness).toContainText('Dependency / sensitivity');
+  await expect(backwardWitness).toContainText('Numerical adjoint unavailable');
+  await expect(backwardWitness).toContainText('not runtime timing');
   await captureEvidence(page, '11-part2-backward-trace-1920.png', 'p2_backward_trace', '.reverse-causal-overlay');
 
   // Backward trace -> one contribution is evidence-gated authentic execution.
@@ -866,6 +876,10 @@ test('2c. current Part 2 semantics, authentic depth, ancestry, and candidate con
   expect(await workerCommandCount(page)).toBeGreaterThan(beforeContribution);
   await expect(page.getByTestId('parameter-learning-overlay')).toBeVisible();
   await expect(page.getByTestId('dock-explain')).toContainText('still a partial gradient');
+  const contributionWitness = page.getByTestId('part2-numerical-witness');
+  await expect(contributionWitness).toHaveAttribute('data-contribution-ordinal', /^\d+$/);
+  await expect(contributionWitness.locator('[data-witness-field="contribution"]').first()).toHaveAttribute('data-value', /.+/);
+  await expect(contributionWitness).toContainText('CURRENT TOTAL IS PARTIAL');
   await expect(page.locator('.learning-stations')).toHaveCount(0);
   await expect(page.locator('[data-learning-stage]')).toHaveCount(0);
 
@@ -926,6 +940,9 @@ test('2c. current Part 2 semantics, authentic depth, ancestry, and candidate con
   await expect(page.getByTestId('parameter-learning-overlay')).toBeVisible();
 
   const finalGradientCommands = await workerCommandCount(page);
+  const finalWitness = page.getByTestId('part2-numerical-witness');
+  await expect(finalWitness.locator('[data-witness-field="final-gradient"]')).toHaveAttribute('data-evidence-origin', 'observed');
+  await expect(finalWitness).toContainText('Retained rows are only a subset');
   await page.locator('#dock-inspect').click();
   await expectPublicLesson(page, { canonicalState: 'p2_final_gradient', navigationMode: 'detail' });
   await expect(page.getByTestId('dock-values')).toHaveAttribute('data-public-training-depth-kind', 'final-gradient');
@@ -945,6 +962,10 @@ test('2c. current Part 2 semantics, authentic depth, ancestry, and candidate con
   const finalGradientParameter = await finalGradientAction.getAttribute('data-gradient-parameter');
   expect(finalGradientSourceRun).toBeTruthy();
   expect(finalGradientParameter).toMatch(/^\d+$/);
+  await page.locator('#dock-inspect').click();
+  await expect(page.getByTestId('part2-numerical-witness')).toHaveAttribute('data-gradient-source-run-id', finalGradientSourceRun!);
+  await expect(page.getByTestId('part2-numerical-witness')).toHaveAttribute('data-parameter-index', finalGradientParameter!);
+  await page.locator('#dock-inspect').click();
   expect(await workerCommandCount(page)).toBe(finalGradientCommands);
   await captureEvidence(page, '13-part2-final-gradient-1920.png', 'p2_final_gradient', '.parameter-learning-overlay', {
     wteBank: '[data-world-parameter="wte"]',
@@ -960,6 +981,11 @@ test('2c. current Part 2 semantics, authentic depth, ancestry, and candidate con
   await expect(page.getByTestId('adam-learning-overlay')).toHaveAttribute('data-provisional', 'true');
   await expect(page.getByTestId('adam-learning-overlay')).toHaveAttribute('data-status', 'ready');
   await expect(page.getByTestId('adam-learning-overlay')).toContainText('ACCEPTED MODEL UNCHANGED');
+  const adamWitness = page.getByTestId('part2-numerical-witness');
+  await expect(adamWitness).toHaveAttribute('data-gradient-source-run-id', finalGradientSourceRun!);
+  await expect(adamWitness).toHaveAttribute('data-parameter-index', finalGradientParameter!);
+  await expect(adamWitness.locator('[data-witness-field="parameter-after"]')).toHaveAttribute('data-evidence-origin', 'observed');
+  await expect(adamWitness).toContainText('PROVISIONAL · ACCEPTED MODEL UNCHANGED');
 
   const adamCommands = await workerCommandCount(page);
   await page.locator('#dock-inspect').click();
@@ -998,6 +1024,12 @@ test('2c. current Part 2 semantics, authentic depth, ancestry, and candidate con
   await expect(page.locator('#execution-accept')).toBeVisible();
   await expect(page.locator('#execution-cancel')).toBeVisible();
   await expect(page.locator('#execution-cancel')).toContainText('Discard candidate');
+  const candidateWitness = page.getByTestId('part2-numerical-witness');
+  await expect(candidateWitness).toHaveAttribute('data-gradient-source-run-id', finalGradientSourceRun!);
+  await expect(candidateWitness).toHaveAttribute('data-candidate-run-id', /.+/);
+  await expect(candidateWitness.locator('[data-witness-field="candidate-target-probability"]')).toHaveAttribute('data-evidence-origin', 'observed');
+  await expect(candidateWitness.locator('[data-witness-field="candidate-mean"]')).toHaveAttribute('data-evidence-origin', 'derived');
+  await expect(candidateWitness).toContainText('One-example comparison only');
   await expect(page.locator('button[data-support-action="candidate"]')).toBeVisible();
   await expect(page.locator('.decision-summary')).toHaveCount(0);
   await expect(page.locator('.learning-stations')).toHaveCount(0);

@@ -795,6 +795,44 @@ test('PD1-2 contextual dock dispatches canonical Part 2 Values Math and Source b
   assert.match(candidateSource, /candidate not live/);
 });
 
+test('NL1-B Guided witnesses retain source identity and separate partial, completed, provisional, and derived evidence', async () => {
+  const harness = await LiveTrainingHarness.create('nl1-b-guided', { name: 'wte', row: 0, column: 0 });
+  await harness.objective();
+  const objective = await publicTrainingDock(harness, 'p2_objective', 'explain');
+  assert.match(objective, /data-testid="part2-numerical-witness"/);
+  assert.match(objective, /data-witness-field="target-probability" data-evidence-origin="observed"/);
+  assert.match(objective, /data-witness-field="derived-loss" data-evidence-origin="derived"/);
+  assert.match(objective, /data-witness-field="observed-mean" data-evidence-origin="observed"/);
+  assert.match(objective, /All \d+ target positions/);
+  const backward = await publicTrainingDock(harness, 'p2_backward_trace', 'explain');
+  assert.match(backward, /Dependency \/ sensitivity · STRUCTURAL/);
+  assert.match(backward, /Numerical adjoint unavailable in retained evidence/);
+  assert.match(backward, /not runtime timing/);
+
+  await harness.contribution();
+  const event = harness.progress.training!.contributions.at(-1)!;
+  const contribution = await publicTrainingDock(harness, 'p2_gradient_contribution', 'explain');
+  assert.match(contribution, new RegExp(`data-contribution-ordinal="${event.ordinal}"`));
+  assert.match(contribution, new RegExp(`data-witness-field="contribution" data-evidence-origin="observed" data-value="${event.contribution}"`));
+  assert.match(contribution, /CURRENT TOTAL IS PARTIAL/);
+
+  await harness.finalGradient();
+  const final = await publicTrainingDock(harness, 'p2_final_gradient', 'explain');
+  assert.match(final, new RegExp(`data-witness-field="final-gradient" data-evidence-origin="observed" data-value="${harness.progress.training!.gradient}"`));
+  assert.match(final, /Retained rows are only a subset/);
+  await harness.adamProposal();
+  const adam = await publicTrainingDock(harness, 'p2_adam_proposal', 'explain');
+  assert.match(adam, /data-witness-field="m-hat" data-evidence-origin="observed"/);
+  assert.match(adam, /ACCEPTED MODEL UNCHANGED/);
+  await harness.ready();
+  const candidate = await publicTrainingDock(harness, 'candidate_ready', 'explain');
+  assert.match(candidate, /data-baseline-run-id="[^"]+"/);
+  assert.match(candidate, /data-candidate-run-id="[^"]+"/);
+  assert.match(candidate, /data-witness-field="baseline-target-probability" data-evidence-origin="observed"/);
+  assert.match(candidate, /data-witness-field="candidate-mean" data-evidence-origin="derived"/);
+  assert.match(candidate, /One-example comparison only/);
+});
+
 
 function exactPublicArtifact(run: RecordedRun, kind: string, token?: number): Artifact {
   const artifact = run.artifacts.find(candidate =>

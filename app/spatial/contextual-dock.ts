@@ -184,11 +184,87 @@ const defaultSupport: Partial<Record<PublicTourContent['state'], string>> = {
   candidate_ready: 'Mean loss summarizes this training example; target probability tracks one selected position. One-example improvement does not establish general model improvement.',
 };
 
+function renderPart2NumericalSupport(ctx: ResolvedPublicTrainingDepthContext, fallback?: string): string {
+  const datum = (label: string, value: number | undefined, origin: string, key: string) =>
+    `<span class="part2-datum" data-witness-field="${key}" data-evidence-origin="${origin}" data-value="${value ?? ''}">${esc(label)} ${value === undefined ? 'unavailable' : fmt(value)} <small>${origin.toUpperCase()}</small></span>`;
+  const line = (label: string, items: string, note = '') =>
+    `<div class="part2-witness-row"><strong>${esc(label)}</strong><div>${items}</div>${note ? `<small>${esc(note)}</small>` : ''}</div>`;
+  let body = '';
+  if (!ctx.available) {
+    body = `<p data-evidence-origin="unavailable">${esc(ctx.reason ?? 'Compatible training evidence unavailable.')}</p>`;
+  } else if (ctx.kind === 'objective') {
+    const objective = ctx.objective!;
+    const selected = objective.rows.find(row => row.position === objective.selectedPosition);
+    body = selected ? line(`p${selected.position} · target ${selected.targetLabel}`,
+      `${datum('P(target)', selected.probability, selected.probability === undefined ? 'unavailable' : 'observed', 'target-probability')}
+       ${datum('−log(P)', selected.derivedLoss, selected.derivedLoss === undefined ? 'unavailable' : 'derived', 'derived-loss')}
+       ${datum('position loss', selected.recordedLoss, selected.recordedLoss === undefined ? 'unavailable' : 'observed', 'position-loss')}`) : '';
+    body += line(`All ${objective.rows.length} target positions`,
+      `${objective.rows.map(row => datum(`p${row.position} loss`, row.recordedLoss, row.recordedLoss === undefined ? 'unavailable' : 'observed', `loss-p${row.position}`)).join('')}
+       ${datum('reconstructed mean', objective.derivedMean, objective.derivedMean === undefined ? 'unavailable' : 'derived', 'derived-mean')}
+       ${datum('runtime mean', objective.observedMean, objective.observedMean === undefined ? 'unavailable' : 'observed', 'observed-mean')}`,
+      'The objective covers every teacher-forced target.');
+  } else if (ctx.kind === 'backward-trace') {
+    const adjointOrigin = ctx.numericAdjointsAvailable
+      ? ctx.verifiedInspection?.provenance === 'recomputed' ? 'verified-recomputed' : 'observed'
+      : 'unavailable';
+    body = line('Objective → selected parameter',
+      `<span data-evidence-origin="structural">Dependency / sensitivity · STRUCTURAL</span>
+       <span data-evidence-origin="${adjointOrigin}">Numerical adjoint ${ctx.numericAdjointsAvailable ? `available in bound ${adjointOrigin.toUpperCase()} inspection` : 'unavailable in retained evidence'}</span>`,
+      'Explanation direction is not runtime timing.');
+  } else if (ctx.kind === 'gradient-contribution') {
+    const event = ctx.selectedContribution;
+    body = event ? line('ONE RETAINED CONTRIBUTION',
+      `${datum('incoming sensitivity', event.childAdjoint, 'observed', 'child-adjoint')}
+       <span>×</span>${datum('local derivative', event.localDerivative, 'observed', 'local-derivative')}
+       <span>=</span>${datum('contribution', event.contribution, 'observed', 'contribution')}`) +
+      line('CURRENT TOTAL IS PARTIAL',
+        `${datum('before', event.before, 'observed', 'accumulator-before')}<span>+</span>
+         ${datum('contribution', event.contribution, 'observed', 'accumulator-contribution')}<span>=</span>
+         ${datum('after', event.after, 'observed', 'accumulator-after')}`,
+        'Occurrence ordinal identifies retained evidence, not timing.') :
+      '<p data-evidence-origin="unavailable">No matching retained contribution is available.</p>';
+  } else if (ctx.kind === 'final-gradient') {
+    const event = ctx.selectedContribution;
+    body = (event ? line('One retained example', datum('contribution', event.contribution, 'observed', 'retained-contribution')) : '') +
+      line('Backward complete', datum('final gradient', ctx.finalGradient, ctx.finalGradient === undefined ? 'unavailable' : 'observed', 'final-gradient'),
+        'Retained rows are only a subset; other fan-in is not numerically retained. Gradient is not the update.');
+  } else if (ctx.kind === 'adam') {
+    const u = ctx.proposal;
+    body = u ? line('Final gradient → Adam',
+      `${datum('g', u.gradient, 'observed', 'gradient')}
+       ${datum('m before', u.mBefore, 'observed', 'm-before')}<span>→</span>${datum('m after', u.mAfter, 'observed', 'm-after')}
+       ${datum('v before', u.vBefore, 'observed', 'v-before')}<span>→</span>${datum('v after', u.vAfter, 'observed', 'v-after')}`) +
+      line('Corrected moments → proposal',
+        `${datum('mHat', u.mHat, 'observed', 'm-hat')}${datum('vHat', u.vHat, 'observed', 'v-hat')}
+         ${datum('θ before', u.before, 'observed', 'parameter-before')}<span>→</span>
+         ${datum('θ proposed', u.after, 'observed', 'parameter-after')}`,
+        'PROVISIONAL · ACCEPTED MODEL UNCHANGED · gradient is not the parameter update.') :
+      '<p data-evidence-origin="unavailable">Authentic Adam proposal unavailable.</p>';
+  } else {
+    const candidate = ctx.candidate;
+    const row = candidate?.rows.find(item => item.position === candidate.selectedPosition);
+    body = candidate && row ? line(`Same example · p${row.position} target ${row.targetLabel}`,
+      `${datum('accepted P(target)', row.baselineTargetProbability, 'observed', 'baseline-target-probability')}<span>→</span>
+       ${datum('candidate P(target)', row.candidateTargetProbability, 'observed', 'candidate-target-probability')}
+       ${datum('accepted loss', row.baselineDerivedLoss, row.baselineDerivedLoss === undefined ? 'unavailable' : 'derived', 'baseline-position-loss')}
+       ${datum('candidate loss', row.candidateDerivedLoss, row.candidateDerivedLoss === undefined ? 'unavailable' : 'derived', 'candidate-position-loss')}`) +
+      line('Example mean loss',
+        `${datum('accepted', candidate.baselineDerivedMean, candidate.baselineDerivedMean === undefined ? 'unavailable' : 'derived', 'baseline-mean')}<span>→</span>
+         ${datum('candidate', candidate.candidateDerivedMean, candidate.candidateDerivedMean === undefined ? 'unavailable' : 'derived', 'candidate-mean')}`,
+        'One-example comparison only · candidate not accepted · no general improvement claim.') :
+      '<p data-evidence-origin="unavailable">Compatible candidate comparison unavailable.</p>';
+  }
+  return `<aside id="dock-context-support" class="dock-context-support part2-numerical-witness" data-testid="dock-context-support" data-support-action="default" aria-label="Part 2 numerical witness"><div data-testid="part2-numerical-witness" data-training-depth-kind="${esc(ctx.kind)}" data-execution-id="${esc(ctx.executionId ?? '')}" data-source-run-id="${esc(ctx.sourceRunId ?? '')}" data-gradient-source-run-id="${esc(ctx.gradientSourceRunId ?? '')}" data-starting-snapshot-id="${esc(ctx.startingSnapshotId ?? '')}" data-candidate-run-id="${esc(ctx.candidate?.candidateRunId ?? '')}" data-baseline-run-id="${esc(ctx.candidate?.baselineRunId ?? '')}" data-parameter-index="${ctx.parameter?.index ?? ''}" data-contribution-ordinal="${ctx.selectedContribution?.ordinal ?? ''}"><strong>${esc(ctx.kind.replaceAll('-', ' '))}${ctx.parameter && ctx.kind !== 'objective' && ctx.kind !== 'candidate' ? ` · ${esc(ctx.parameter.name)}[${ctx.parameter.row},${ctx.parameter.column}]` : ''}</strong>${body || `<p>${esc(fallback ?? 'Numerical evidence unavailable.')}</p>`}</div></aside>`;
+}
+
 function renderDefaultSupport(opts: ContextualDockOptions): string {
   const content = defaultSupport[opts.tourContent!.state];
   const context = resolvedPart1Depth(opts);
   const model = opts.model;
   const state = opts.tourContent!.state;
+  const training = resolvedPart2Depth(opts);
+  if (training) return renderPart2NumericalSupport(training, content);
   const find = (id: string) => context?.members.find(item => item.memberId === id);
   const values = (id: string) => {
     const item = find(id);

@@ -876,7 +876,13 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
 }
 .contextual-dock .dock-context-support p { overflow-wrap: anywhere; }
 .contextual-dock .dock-context-support > strong { color: #8fd8ee; }
+.contextual-dock .part2-numerical-witness [data-testid="part2-numerical-witness"] > strong { color: #8fd8ee; }
 .contextual-dock .dock-context-support p { margin: 6px 0 0; }
+.contextual-dock .part2-numerical-witness .part2-witness-row { margin-top: 5px; font-size: 11px; line-height: 1.2; }
+.contextual-dock .part2-numerical-witness .part2-witness-row > div { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; min-width: 0; }
+.contextual-dock .part2-numerical-witness .part2-witness-row > small { display: block; color: #b7c7d0; white-space: normal; }
+.contextual-dock .part2-numerical-witness .part2-datum { display: inline-block; font-family: PlexMono, monospace; white-space: normal; overflow-wrap: anywhere; }
+.contextual-dock .part2-numerical-witness .part2-datum small { color: #a9c2ce; font-family: PlexSans, sans-serif; font-size: 9px; }
 .contextual-dock .support-observation { display: flex; flex-wrap: wrap; gap: 2px 6px; margin-top: 4px; font-size: 12px; line-height: 1.2; }
 .contextual-dock .support-observation span { font-family: PlexMono, monospace; }
 .contextual-dock .support-short-row {
@@ -1433,6 +1439,22 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
   .reverse-landmark-reticle {
     animation: none !important;
     stroke-dashoffset: 0 !important;
+  }
+}
+
+@media (max-height: 800px) and (max-width: 1400px) {
+  .world-workspace.is-public-profile .contextual-dock .part2-numerical-witness { padding: 3px 7px; line-height: 1.1; }
+  .world-workspace.is-public-profile .contextual-dock .part2-numerical-witness .part2-witness-row { margin-top: 2px; line-height: 1.05; }
+  .world-workspace.is-public-profile .contextual-dock .part2-numerical-witness + .dock-support-actions { padding-top: 2px; }
+  .world-workspace.is-public-profile .contextual-dock .dock-support-column:has(.part2-numerical-witness) .dock-support-heading { margin-bottom: 2px; }
+  .world-workspace.is-public-profile .contextual-dock.has-core-result:is([data-tour-state="p2_gradient_contribution"], [data-tour-state="p2_adam_proposal"], [data-tour-state="candidate_ready"]) .dock-body {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .world-workspace.is-public-profile .contextual-dock.has-core-result:is([data-tour-state="p2_gradient_contribution"], [data-tour-state="p2_adam_proposal"], [data-tour-state="candidate_ready"]) .dock-stage-result {
+    display: none;
+  }
+  .world-workspace.is-public-profile .contextual-dock.has-core-result:is([data-tour-state="p2_gradient_contribution"], [data-tour-state="p2_adam_proposal"], [data-tour-state="candidate_ready"]) .dock-support-column {
+    grid-column: 2;
   }
 }
 
