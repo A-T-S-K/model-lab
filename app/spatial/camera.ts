@@ -106,6 +106,8 @@ export class SpatialCamera {
     const pane=svg.closest<HTMLElement>('.world-pane');
     const width=pane?.clientWidth??0,height=pane?.clientHeight??0;
     if(width<=0||height<=0)return undefined;
+    if(shell?.dataset.publicCameraOwner==='part2-working')
+      return responsivePublicFrame(width,height,PUBLIC_CONTENT_BOUNDS);
     const state=(shell?.dataset.publicDisplayedState??shell?.dataset.publicCanonicalState??'cold') as PublicTourState;
     const plan=publicLessonCameraPlan(state);
     if(plan.mode==='overview')return responsivePublicFrame(width,height,PUBLIC_CONTENT_BOUNDS);
@@ -146,7 +148,8 @@ export class SpatialCamera {
     this.abort?.abort();this.stop();this.svg=svg;this.changed=changed;this.gesture=gesture;this.abort=new AbortController();
     const signal=this.abort.signal;this.apply();
     const semantic=this.publicSemanticFrame();
-    if(semantic&&!sameBox(this.box,semantic))this.move(semantic,true);
+    if(semantic&&!sameBox(this.box,semantic))
+      this.move(semantic,svg.closest<HTMLElement>('.spatial-shell')?.dataset.publicCameraOwner!=='part2-working');
     let drag:{x:number;y:number;id:number;moved:boolean}|undefined;
     svg.addEventListener("wheel",event=>{
       event.preventDefault();this.gesture?.();const matrix=svg.getScreenCTM();

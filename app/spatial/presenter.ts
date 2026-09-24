@@ -183,6 +183,11 @@ export class SpatialPresenter {
     return view.content.selectionIntent.parameter;
   }
 
+  private publicPart2Working(view: PublicLessonView | undefined, execution: ForwardDriver | undefined): boolean {
+    return Boolean(view?.content.part === 2 && view.navigation.mode === 'guided' &&
+      (view.targetState || execution?.phase === 'running' || execution?.phase === 'starting'));
+  }
+
   resetVisitor(){
     const wasPublic = this.isPublicProfile();
     this.publicLessonVisualKey="";
@@ -205,7 +210,9 @@ export class SpatialPresenter {
     if (!this.isPublicProfile()) return;
     const visualState = view.currentState;
     const visualMode = view.navigation.mode;
-    const key = `${visualState}:${view.outcome ?? ''}:${visualMode}`;
+    const isPublicPart2Working = this.publicPart2Working(view, this.state?.execution);
+    const executionVisualState = isPublicPart2Working ? 'running' : 'settled';
+    const key = `${visualState}:${view.outcome ?? ''}:${visualMode}:${executionVisualState}`;
     this.freeExplore = visualMode === 'explore';
     if (visualMode === 'detail' || visualMode === 'explore') {
       this.publicLessonVisualKey = key;
@@ -319,15 +326,45 @@ export class SpatialPresenter {
       { placement: 'right', left: anchorRect.right - paneRect.left + gap, top: anchorCenterY - height / 2 },
       { placement: 'left', left: anchorRect.left - paneRect.left - width - gap, top: anchorCenterY - height / 2 },
     ];
+    const overlaps = (
+      candidate: { left: number; top: number },
+      rect: DOMRect,
+    ) => {
+      const left = candidate.left + paneRect.left;
+      const top = candidate.top + paneRect.top;
+      const right = left + width;
+      const bottom = top + height;
+      return !(
+        right + gap <= rect.left ||
+        left - gap >= rect.right ||
+        bottom + gap <= rect.top ||
+        top - gap >= rect.bottom
+      );
+    };
+    const teachingOverlays = Array.from(
+      pane.querySelectorAll<SVGGraphicsElement>(
+        '.parameter-learning-overlay, .adam-learning-overlay, .objective-learning-overlay'
+      ),
+    ).map(el => el.getBoundingClientRect()).filter(rect => rect.width > 0 && rect.height > 0);
     const fits = (candidate: { left: number; top: number }) =>
       candidate.left >= margin &&
       candidate.top >= margin &&
       candidate.left + width <= paneRect.width - margin &&
-      candidate.top + height <= paneRect.height - margin;
+      candidate.top + height <= paneRect.height - margin &&
+      !teachingOverlays.some(rect => overlaps(candidate, rect));
     const preferred = candidates.find(fits);
+
     const fallback = preferred ?? (
-      paneRect.bottom - anchorRect.bottom >= anchorRect.top - paneRect.top ? candidates[1] : candidates[0]
+      paneRect.bottom - anchorRect.bottom >= anchorRect.top - paneRect.top
+        ? candidates[1]
+        : candidates[0]
     );
+    if (parameterFocus && !preferred) {
+      locator.style.visibility = 'hidden';
+      return;
+    }
+    locator.style.visibility = '';
+
     const maxLeft = Math.max(margin, paneRect.width - width - margin);
     const maxTop = Math.max(margin, paneRect.height - height - margin);
     locator.style.left = `${Math.round(Math.min(maxLeft, Math.max(margin, fallback.left)))}px`;
@@ -569,6 +606,9 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
     if(state.publicLesson&&this.isPublicProfile())this.applyPublicLessonView(state.publicLesson);
     const p=this.playback;
     if(p.source && (state.busy||!m||!m.valid|| (p.route==='forward'?m.source.sourceRunId!==p.source:!state.learning?.available||state.learning.experiment.id!==p.source)))this.invalidate();
+
+    const publicPart2Working = this.publicPart2Working(state.publicLesson, state.execution);
+
     const s=this.selection,a=this.address();
     const isKiosk = Boolean(state.exhibit);
     const profile = state.profile ?? (isKiosk ? (this.profile === 'facilitator' ? 'facilitator' : 'visitor') : 'workbench');
@@ -741,7 +781,7 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
           : learningScene(state.learning, this.learningStage, this.pin))
       : '';
     const publicLessonSemantics = isPublicProfile && state.publicLesson
-      ? ` data-public-canonical-state="${esc(state.publicLesson.canonicalState)}" data-public-displayed-state="${esc(state.publicLesson.currentState)}" data-public-navigation-mode="${esc(state.publicLesson.navigation.mode)}" data-public-target-state="${esc(state.publicLesson.targetState ?? '')}" data-public-outcome="${esc(state.publicLesson.outcome ?? '')}"`
+      ? ` data-public-canonical-state="${esc(state.publicLesson.canonicalState)}" data-public-displayed-state="${esc(state.publicLesson.currentState)}" data-public-navigation-mode="${esc(state.publicLesson.navigation.mode)}" data-public-target-state="${esc(state.publicLesson.targetState ?? '')}" data-public-outcome="${esc(state.publicLesson.outcome ?? '')}" data-public-camera-owner="${publicPart2Working ? 'part2-working' : 'lesson'}"`
       : '';
 
     return `<div data-retention="${esc(JSON.stringify(state.retention))}" class="spatial-shell ${state.attract?"spatial-attract":""} ${isVisitor&&!this.operatorControls?"visitor-controls":""}" data-experience-profile="${profile}"${publicLessonSemantics}><header class="spatial-header"><div class="world-brand"><strong>MODEL LAB</strong><small>${esc(m?.forward.descriptor.label??"one tiny transformer")} · one connected computation</small></div>${state.evidenceWorld?`<strong>${esc(state.evidenceWorld.label)}</strong><button id="return-canonical-world">Return to canonical world</button>`:isPublicProfile?`<label>Input<input id="document" type="text" maxlength="7" value="${esc(state.document)}" ${state.busy?"disabled":""}></label><button id="predict" ${state.busy||state.execution||!state.ready?"disabled":""}>Predict</button><button id="clear-session">Public Reset</button>`:`<label>Input<input id="document" type="text" maxlength="7" value="${esc(state.document)}" ${state.busy?"disabled":""}></label><button id="predict" ${state.busy||state.execution||!state.ready?"disabled":""}>Predict</button>${state.execution?"":`<button id="step-prediction" ${state.busy||!state.ready?"disabled":""}>Step through prediction</button><button id="step-learning" ${state.busy||!state.ready?"disabled":""}>Step through learning</button>`}<button id="spatial-learn" ${state.canLearn?"":"disabled"}>Learn · one update</button>${capabilities.classicToggle?`<button id="presentation-toggle">Classic presentation</button>`:""}<button id="clear-session">${isVisitor||state.exhibit?'Public Reset':'Clear session'}</button>`}<button id="spatial-home">⌂ Home</button>${isPublicProfile?'':`<button id="spatial-back" ${!this.history.length?"disabled":""}>← Back</button>`}${showDeeperControls?`<button id="spatial-focus">◎ Focus</button><button id="spatial-lens">Q/K lens</button>`:""}<span class="spatial-badge">${state.evidenceWorld?(state.evidenceWorld.replay?"SAVED REPLAY · NO EXECUTION":"RETAINED EVIDENCE · READ ONLY"):state.attract?"RECORDED RUN · REPLAY":state.execution?(state.execution.progress?.training?(isPublicProfile?"LIVE TRAINING":"LIVE TRAINING · WAVE 2B"):(isPublicProfile?"LIVE PREDICTION":"LIVE FORWARD · WAVE 2A")):(isPublicProfile?"COMPLETED EVIDENCE":"COMPLETED EVIDENCE · WAVE 1D")}</span></header>

@@ -630,6 +630,86 @@ async function advanceCurrentPart2(page: Page, target: string): Promise<void> {
   }
 }
 
+async function assertPublicOverlayLayout(page: Page): Promise<void> {
+  const layout = await page.evaluate(() => {
+    const pane = document.querySelector('.world-workspace.is-public-profile > .world-pane')!.getBoundingClientRect();
+    const locator = document.querySelector<HTMLElement>('[data-testid="teaching-locator"]');
+    const cards = [...document.querySelectorAll<SVGGraphicsElement>('.parameter-learning-overlay, .adam-learning-overlay')]
+      .map(el => el.getBoundingClientRect()).filter(rect => rect.width > 0 && rect.height > 0);
+    const inside = (rect: DOMRect) => rect.left >= pane.left - 1 && rect.top >= pane.top - 1
+      && rect.right <= pane.right + 1 && rect.bottom <= pane.bottom + 1;
+    const locatorRect = locator?.getBoundingClientRect();
+    const locatorVisible = Boolean(locator && getComputedStyle(locator).visibility !== 'hidden' && locatorRect);
+    const intersects = (a: DOMRect, b: DOMRect) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    return { cards: cards.length, cardsInside: cards.every(inside), locatorInside: !locatorVisible || inside(locatorRect!),
+      locatorClear: !locatorVisible || cards.every(card => !intersects(locatorRect!, card)) };
+  });
+  expect(layout.cards).toBeGreaterThan(0);
+  expect(layout.cardsInside).toBe(true);
+  expect(layout.locatorInside).toBe(true);
+  expect(layout.locatorClear).toBe(true);
+}
+
+test('UX-Q2 public Predict displays the newly captured input', async ({ page }) => {
+  await audit(page);
+  await page.goto('/?presentation=spatial&kiosk=1');
+  await page.locator('#exhibit-start').click();
+  await expect(page.locator('#document')).toBeVisible();
+  const oldRun = await displayedRunId(page);
+  await page.locator('#document').fill('cabc');
+  await expect(page.locator('#document')).toHaveValue('cabc');
+  await page.locator('#predict').click();
+  await expect.poll(() => displayedRunId(page)).not.toBe(oldRun);
+  await expect(page.locator('#document')).toHaveValue('cabc');
+  await expect.poll(() => displayedCapturedInput(page)).toBe('cabc');
+  const newRun = await displayedRunId(page);
+  const computed = await page.evaluate(() => (window as any).abq.lastResult?.run?.manifest?.runId);
+  expect(computed).toBe(newRun);
+  const graphTokens = await page.locator('#spatial-world [data-world-token] .token-label').allTextContents();
+  expect(graphTokens.slice(1, 5).map(label => label.trim().slice(-1))).toEqual(['c', 'a', 'b', 'c']);
+  await page.locator('#short-continue').click();
+  await expectPublicLesson(page, { canonicalState: 'p1_represent' });
+  await expect(page.getByTestId('landmark-occurrence')).toHaveAttribute('data-run-id', newRun);
+});
+
+test('UX-Q2 public Part 2 camera ownership and parameter overlays', async ({ page }) => {
+  test.setTimeout(180_000);
+  await page.setViewportSize({ width: 2408, height: 1506 });
+  await audit(page);
+  await page.goto('/?presentation=spatial&kiosk=1');
+  await startCurrentPart2(page);
+  for (const target of ['p2_backward_trace', 'p2_gradient_contribution', 'p2_final_gradient', 'p2_adam_proposal']) {
+    await expect(page.locator('#reverse-continue')).toBeEnabled({ timeout: 60_000 });
+    const working = await page.evaluate(() => {
+      document.querySelector<HTMLButtonElement>('#reverse-continue')!.click();
+      const shell = document.querySelector<HTMLElement>('.spatial-shell')!;
+      const vb = document.querySelector<SVGSVGElement>('#spatial-world')!.viewBox.baseVal;
+      const pane = document.querySelector<HTMLElement>('.world-workspace.is-public-profile > .world-pane')!;
+      return { owner: shell.dataset.publicCameraOwner, box: { x: vb.x, y: vb.y, width: vb.width, height: vb.height },
+        pane: { width: pane.clientWidth, height: pane.clientHeight } };
+    });
+    if (target !== 'p2_backward_trace') {
+      expect(working.owner, target).toBe('part2-working');
+      const aspect = working.pane.width / working.pane.height;
+      const rawWidth = Math.max(4480, 1280 * aspect);
+      const rawHeight = Math.max(1280, 4480 / aspect);
+      expect(working.box, target).toEqual({ x: Math.round(2240 - rawWidth / 2), y: Math.round(640 - rawHeight / 2),
+        width: Math.round(rawWidth), height: Math.round(rawHeight) });
+    }
+    await waitForCurrentPublicState(page, target);
+    await expect(page.locator('#reverse-continue')).toBeEnabled({ timeout: 60_000 });
+    await expect(page.locator('.spatial-shell')).toHaveAttribute('data-public-camera-owner', 'lesson');
+    if (target !== 'p2_backward_trace') {
+      await assertPublicOverlayLayout(page);
+      await captureEvidence(page, `ux-q2-${target}-2408.png`, target);
+      await expect.poll(() => page.locator('#spatial-world').evaluate((svg: SVGSVGElement) => svg.viewBox.baseVal.width),
+        { message: `${target} must settle into a semantic close-up` }).toBeLessThan(working.box.width - 100);
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await assertPublicOverlayLayout(page);
+});
+
 async function driveCurrentPart2ToCandidateReady(page: Page): Promise<void> {
   await startCurrentPart2(page);
   await advanceCurrentPart2(page, 'p2_backward_trace');

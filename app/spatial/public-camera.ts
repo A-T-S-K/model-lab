@@ -58,7 +58,7 @@ export function publicLessonCameraPlan(state: PublicTourState): PublicLessonCame
     case 'p2_gradient_contribution':
     case 'p2_final_gradient':
       return semantic({
-        includeSelected: true,
+        kinds: ['tokenEmbedding'],
         overlays: ['.explanation-active[data-world-parameter]', '[data-testid="parameter-learning-overlay"]'],
         padX: 120,
         padY: 100,
