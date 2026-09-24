@@ -37,13 +37,18 @@ with exact statements/sections, decision needed and affected gate.
 - [Evidence and operations](evidence-and-operations.md): current binary64, MicroGPT/Adam, worker and archive contracts.
 - [Fixture guide](../fixtures/README.md), [reference provenance](../reference/PROVENANCE.md) and [portability record](../reference/PORTABILITY.md): canonical identities, independent reference and numerical policy.
 
-## Operational profile and future human gates
+## Current ABQ operations and pending human gates
 
-[Operator runbook](abq-operator-runbook.md), [facilitator guide](abq-facilitator-guide.md),
-[morning checklist](morning-checklist.md) and [teaching check](teaching-check.md) retain
-useful operations and unrun human checks. Full unfamiliar-user testing, timed workshop
-rehearsal, station and release qualification follow M5 foundation acceptance at M6.
-Internal engineering/visual/accessibility review can continue earlier.
+The [presenter and facilitator guide](abq-facilitator-guide.md) and
+[operator runbook](abq-operator-runbook.md) describe the current Guided ABQ experience
+and local field operation. The [morning checklist](morning-checklist.md) separates
+automated qualification and owner device smoke from pending unfamiliar-user and
+actual-station checks. The [teaching check](teaching-check.md) is the pending
+unfamiliar-user protocol. Historical reviews remain tied to their original candidates.
+The [foundation ledger](foundation-status.md) governs M5 and M6 status: full
+unfamiliar-user testing follows M5 acceptance; workshop, station and release
+qualification follow at M6. Internal engineering, visual and accessibility review
+can continue earlier.
 
 ## Historical evidence
 

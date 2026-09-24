@@ -1,38 +1,27 @@
-# Morning human review · results not yet collected
+# ABQ morning checks and evidence levels
 
-**Foundation prerequisite:** full unfamiliar-user testing, timed workshop rehearsal,
-actual-station and release qualification follow independent M5 foundation acceptance
-at M6. See the [status ledger](foundation-status.md) and [authority map](README.md).
-These current MicroGPT/ABQ instructions are retained for that gate and for authorized
-internal engineering/visual/accessibility review; old rehearsal passes do not waive it.
-Human results remain unrun/pending. This document grants no execution permission.
+The [foundation ledger](foundation-status.md) governs M5 and M6 status. The [operator runbook](abq-operator-runbook.md) gives the current startup and health check; the [teaching check](teaching-check.md) gives the future unfamiliar-user protocol.
 
-Engineering rehearsal, facilitated exhibit and unattended walk-up are separate gates. Review `abq-overnight-review.md` first. Do not infer the latter gates from automated browser tests.
-
-## Six tasks · proposed formative sample of about five unfamiliar visitors
-
-Do not teach answers before the first attempt. Record familiarity, start state, action count, elapsed time, misconception/error, assistance and outcome (unassisted / assisted / not completed) for each participant/task. A provisional project criterion is four of five completing critical navigation/decision tasks without prompts; this is not a statistical guarantee or proven educational effect.
-
-| Task | Observable understanding | Result |
+| Evidence level | Current record | Limit |
 | --- | --- | --- |
-| Find what comes next at a chosen position | Distinguish prefix, prediction and known target | NOT RUN |
-| Explain one scene operation before full tables | Name operands, action and output | NOT RUN |
-| Take an unplanned detour and return | Restore context without resetting weights | NOT RUN |
-| Reach and explain a partial gradient | Distinguish contribution, accumulator and final gradient | NOT RUN |
-| Inspect a candidate and decide | Know what Accept changes and Discard preserves | NOT RUN |
-| Explain a head experiment | Identify replacement site and unchanged accepted model | NOT RUN |
+| Automated exact-candidate public qualification | The `pre-m5-public` run passed with verified binding for commit `9ff4e0f87d34ceb0c29b860ea617f1bcced2c7e6`, tree `fe097e71bf922ed13c4b24e1103e89358e2b1890`. | It qualifies that pre-documentation candidate only. Browser automation does not prove comprehension or transfer to a later commit. |
+| Owner-operated real-device Neo smoke | The owner used and visually checked the MacBook Neo. The primary observed visual blockers were popup/card text overflow; those were repaired, and the owner visually confirmed the main observed Neo issues were fixed. | Owner smoke is not an unfamiliar-user pass, complete station check, or measured comprehension. |
+| Unfamiliar-user formative teaching test | **NOT RUN**. | Requires independent M5 foundation acceptance before full unfamiliar-user testing. Do not invent participants, counts, timing, or outcomes. |
+| M6 actual-station and release acceptance | **NOT RUN**. | Requires the later station, workshop, and release procedure. No event acceptance is granted. |
 
-Ask: “What did you think this display was showing?” Record accidental acceptance, lost work or misattributed sources as serious findings, even if task completion was fast.
+## Six unfamiliar-user tasks · pending
 
-## Actual event station · NOT RUN
+After the M5 gate, give each unfamiliar participant the current Guided page without teaching answers first. Record start state, actions, assistance, their own explanation, outcome, and any misconception. Do not use owner smoke or browser checks as participant results.
 
-Record CPU/RAM, OS, browser/version, Node version, display model/native resolution, OS scaling, browser zoom, device pixel ratio, input devices, orientation, power and external-display configuration. Generic 1920/1280 captures do not qualify a specific screen.
+| Task | Observe | Result |
+| --- | --- | --- |
+| Find the next-character prediction | Separate read prefix, prediction, and known target. | NOT RUN |
+| Explain one forward operation | Point to operands, operation, and a numerical result. | NOT RUN |
+| Explore and return | Inspect deeper evidence or a world object and resume Guided without losing context. | NOT RUN |
+| Explain gradient accumulation | Separate one retained contribution, running partial, and completed gradient. | NOT RUN |
+| Inspect and decide on a candidate | Explain proposal, Accept, Discard, and the one-example comparison. | NOT RUN |
+| Explain one optional model experiment | Identify intervention site, observed result, and unchanged accepted model. | NOT RUN |
 
-- Check readable calculation, source and decisions at intended distance, seated/standing reach, glare and off-axis viewing.
-- Test actual touch and keyboard, dense-selector alternatives, camera comfort and reduced motion.
-- Rehearse startup without conference WAN, source/fonts/workers, one prediction, explicit learning decision, both-head choices and public reset.
-- Test actual background/resume, monitor/power reconnect, OS restart, and recovery instructions. Reload is a new session.
-- Practice Keep this session and facilitated opt-out. Decide whether unattended expiry suits the station.
-- Confirm a labeled recorded fallback is locally available. Record operator and event approval separately.
+## Actual station and release checks · NOT RUN
 
-Feature freeze, event acceptance and deployment require human review. Generative continuation, additional models/datasets and general experiment editing are not current exhibit capabilities. Required bounded generation, model and experiment witnesses precede this full-user gate under the foundation plan; a general public editor is not required.
+Record exact kit commit/tree and manifest hashes; device, OS, browser, display/scaling, power, and input configuration. Verify offline launch, fonts and workers, readable evidence and decisions at viewing distance, touch and keyboard use, reduced motion, idle warning and opt-out, Public Reset, restart, and any approved local recorded fallback. Record operator and event decisions separately. The brief startup check is in the [runbook](abq-operator-runbook.md); neither it nor automated qualification substitutes for M6.

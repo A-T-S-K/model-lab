@@ -1,73 +1,81 @@
 # ABQ operator runbook
 
-**Foundation prerequisite:** full unfamiliar-user testing, timed workshop rehearsal,
-actual-station and release qualification follow independent M5 foundation acceptance
-at M6. See the [status ledger](foundation-status.md) and [authority map](README.md).
-These current MicroGPT/ABQ instructions are retained for that gate and for authorized
-internal engineering/visual/accessibility review; old rehearsal passes do not waive it.
-Human results remain unrun/pending. This document grants no execution permission.
+Use this for local field operation of the current Guided exhibit. Independent M5 review, unfamiliar-user testing, actual-station checks, and M6 release acceptance remain pending; see the [foundation ledger](foundation-status.md). The [presenter guide](abq-facilitator-guide.md) covers the lesson.
 
-This is a local engineering rehearsal. Physical station and unfamiliar-user acceptance remain separate gates. Run commands from the standalone repository root unless explicitly inside the prepared kit.
+## 1. Candidate and kit identity
 
-## Prepare before travel
+Operate only a kit tied by its `manifest.json` commit, tree, runtime identity, and file hashes to the candidate explicitly accepted at the appropriate release gate. The current documentation candidate is provisional, not a frozen release. Keep the kit and its manifest together; verify hashes before use.
 
-Requires Node 24+, installed project dependencies, Python 3.9+ for reference tests, and the installed Playwright Chromium for engineering checks. Installation/build preparation may need networking. Do not install anything at exhibit startup.
+## 2. Station prerequisites
+
+Prepare on a machine with Node.js 24+, installed project dependencies, and the build toolchain. The station needs Node.js 24+, a supported browser, local file access, and the prepared kit. The exhibit does not require a WAN connection, source checkout, `node_modules`, or a dependency install at startup. Protect power, display, input devices, and browser availability under the later station gate.
+
+## 3. Build and prepare
+
+From the repository root, after the candidate is chosen and dependencies are installed:
 
 ```sh
-npm ci
 npm run prepare:abq
 ```
 
-The command builds once and creates `test-results/abq-overnight/release/`: bundled app, model/inspector workers, fonts, notices, hash manifest, `serve.mjs`, and `START-HERE.txt`. It deliberately refuses to overwrite an existing kit. Preserve a qualified kit before preparing a replacement. No source checkout or node_modules is copied. The artifact files are read-only. Node itself must already be installed on the station.
+This runs a build and writes `test-results/abq-overnight/release/`: bundled assets and workers, font notices, `serve.mjs`, `START-HERE.txt`, and a hash manifest. It refuses an existing release directory rather than overwriting it. The kit is made read-only. Preserve any existing qualified kit and use a fresh owned destination for a replacement. `npm ci` is a preparation step only when dependencies are absent; it may need networking.
 
-## Offline startup
+## 4. Offline startup
 
-Stop only your identified project preview before taking its port. Inside the prepared kit:
+From the prepared kit directory:
 
 ```sh
 node serve.mjs
 ```
 
-Open **http://127.0.0.1:4173/?presentation=spatial&kiosk=1**. If the port is occupied, the launcher fails without stopping that process. Use `PORT=4175 node serve.mjs` and the corresponding URL if needed. The server binds loopback only. Stop it with Ctrl-C. Ordinary `/` retains Classic entry; `/?presentation=spatial` remains the direct development presentation.
+Open `http://127.0.0.1:4173/?presentation=spatial&kiosk=1`. The launcher binds loopback by default. If that port is occupied, stop this launcher and use `PORT=4175 node serve.mjs`, then open the same URL on port 4175. Do not stop an unidentified process to free a port. The optional `MODEL_LAB_HOST=0.0.0.0` bind is a separate, intentional network configuration.
 
-Confirm the connected model and **RECORDED RUN · REPLAY / Recorded real run. Not live.** Start produces a fresh prediction through the same model owner. Idle presentation is static, so it needs no motion loop or recurring model commands. The recording is numerical evidence from this runtime, not a live execution claim.
+The opening prediction is a recorded replay. **Start · make a prediction** performs fresh local execution.
 
-## Experience profiles and operator procedures
+## 5. Brief operator health check
 
-Model Lab presents three distinct experience profiles:
-- **Visitor (`visitor`)**: Default walk-up kiosk profile activated via `/?presentation=spatial&kiosk=1`. Applies progressive disclosure over the continuous spatial world. Unneeded workbench controls are omitted from the DOM: Shared Inspector, classic presentation toggle, portable archive host / import / export, research variants, `.learning-toolbar`, `#spatial-patch`, raw execution stepping controls (`#step-prediction`, `#step-learning`, `#spatial-learn`), and diagnostics stepping controls (`#execution-next`, `#execution-pause`, `#execution-follow`). Primary navigation is driven by the 5-stop short route (`#short-continue` for stops 0–3, `#short-teach` for stop 4) with optional Free Exploration toggle and detour resumption. Touch targets maintain a 44px minimum height.
-- **Facilitator (`facilitator`)**: Revealed when the operator clicks **Show operator controls** (`#operator-controls`). Exposes the facilitator panel with teaching landmarks (`#short-sample` and direct stop selectors `0`–`4`), authoritative retention capacity status, idle reset opt-out toggle, and operator header controls.
-- **Workbench (`workbench`)**: Full engineering inspection Workbench profile accessed at `/?presentation=spatial` (without `kiosk=1`). Contains all research variants, shared inspector, export/import archive capabilities, learning transition toolbar, and full diagnostic stepping controls.
+After launch or restart, check the station without treating this as a full teaching session:
 
-## Visitor and facilitated use
+1. Confirm the local page opens, bundled fonts and workers load, and **Start · make a prediction** is visible.
+2. Press Start; confirm a fresh Predict result and advance into Part 1.
+3. Open **Deep inspection**, inspect a value, and **Return to Guided**.
+4. Advance through the forward recap to **Part 2 · learn from an example**. Reach one retained contribution, then continue to the candidate comparison.
+5. Choose **Discard candidate**; confirm the accepted model was preserved. Press **Public Reset** and confirm the opening state returns.
 
-**Start · explore a real prediction** launches a fresh live prediction and opens the 5-stop Short teaching route:
-1. **Stop 1 · Prediction**: shows the chosen position, known target, top token and probability distribution.
-2. **Stop 2 · Q/K scores**: inspects query/key dot products and scaling.
-3. **Stop 3 · Softmax**: inspects causal attention softmax normalization.
-4. **Stop 4 · Value mixture**: inspects attention-weighted value combinations.
-5. **Stop 5 · Residual**: distinguishes concatenation, WO projection, and residual connection.
+A failed check needs investigation and a new check; it is not a release disposition.
 
-The primary action button advances sequentially: **Continue: [Next Landmark]** (`#short-continue`) for stops 1–4, and **Teach: step through learning** (`#short-teach`) at stop 5.
-Visitors can click **Explore freely** (`#visitor-explore-toggle`) to open full semantic selection, or take an operation detour. While on a detour, **Resume short route** (`#short-resume`) restores the route landmark and camera focus.
+## 6. Visitor profile
 
-When **Teach: step through learning** is clicked, the visitor steps through learning using paced controls: **Run to next gradient contribution** (`#execution-pin`) advances to the next matching backward node for the pinned parameter, and **Continue** (`#execution-continue`) runs to **Candidate ready — not accepted**. At Ready, the visitor decides explicitly: **Accept update** (`#execution-accept`) or **Discard candidate** (`#execution-cancel`). Diagnostic stepping buttons (`#execution-next`, `#execution-pause`, `#execution-follow`) are omitted in visitor mode.
+The kiosk visitor follows the continuous Guided Part 1 prediction and Part 2 learning path. Guided advances through the current concepts; selecting a world object opens Explore, and **Resume route** returns to the same Guided computation. Deep inspection offers Values, Exact Math, and Source; scalar Microscope access appears where available. Visitor controls omit workbench research, archive, and raw diagnostic stepping controls. The completed route offers **Explore the Model** and **Start Over**.
 
-## Reset, retention, and recovery
+## 7. Facilitator controls
 
-**Public Reset** (`#clear-session`) is the visitor reset action: resets to canonical baseline model, clears visitor history, cancels active candidate/intervention, and returns to the initial exhibit entry. Crucially, **Public Reset preserves facilitator configuration**: if the facilitator clicked **Disable idle reset · facilitated session**, the opt-out remains active across resets until explicitly re-enabled.
+Open `?presentation=spatial&kiosk=1&facilitator=1` for the facilitator profile. **Show operator controls** opens the panel with the authoritative retained archive capacity display and **Disable idle reset · facilitated session**. Facilitators follow the same Guided lesson as visitors; the panel does not replace lesson navigation. **Hide operator controls** closes it. The normal visitor URL does not expose this panel.
 
-The authoritative retention display reports durable archive capacity:
-`${runs} retained runs · ${retainedMiB} MiB retained of ${hardLimitMiB} MiB durable archive limit; this is durable retained evidence capacity, not total page/process memory.`
+## 8. Candidate decision
 
-Initial field-test idle timing is **300 seconds**, with a **20-second warning**. **Keep this session** renews activity. Pointer, touch, keyboard, and wheel count as activity; background execution/rendering do not. To facilitate without expiry: **Show operator controls → Disable idle reset · facilitated session**. The opt-out persists across Public Reset until **Enable idle reset · 300 seconds** is clicked. For custom timing, set `&idleSeconds=900&warningSeconds=20` in the event URL. Bounds: idle 30–3600 seconds; warning 5–120 seconds, at least five seconds shorter than idle. Setting changes are runtime state, not persisted visitor data.
+Training produces a provisional candidate evaluated against the accepted baseline on one example. **Accept update** commits the candidate parameters and optimizer state only after successful acceptance. **Discard candidate** leaves the prior accepted state authoritative. A lower loss on the example, if shown, does not establish general improvement. Do not call a proposal accepted before the receipt completes. If the acceptance result is ambiguous, stop further mutation and reconcile authoritative state.
 
-When durable archive capacity is exceeded, admission backpressure cleanly refuses new executions with `Retention capacity exceeded` until cleared via Public Reset. History is never silently evicted. Cancel, discard, and reset remain available.
+## 9. Public Reset
 
-On worker/inspection failure, cancel the current action if available, then Clear session to restart from the canonical visitor baseline. Already accepted receipts remain accepted even if later archival failed; public reset is a separate deliberate action. If the app cannot recover, reload and start a new in-memory session. Reload, browser restart and OS reboot do **not** resume transactions or history.
+**Public Reset** cancels active provisional work, clears visitor history, restores canonical weights, and returns to the recorded opening. It does not turn an unaccepted candidate into an accepted one. A facilitator idle-reset opt-out persists across Public Reset until explicitly re-enabled. Reset is deliberate; use it between visitors after decisions or recovery.
 
-Fallback: play the actual `test-results/abq-overnight/final-media/paced-route.webm` with the label **RECORDED DEMONSTRATION · NOT LIVE**. Keep that file beside the kit when transporting the release materials; no remote URL is required. Do not describe fallback playback as fresh computation.
+## 10. Idle and reset behavior
 
-## Morning checks
+The initial kiosk policy resets after 300 seconds without activity, with a 20-second warning. **Keep this session** renews activity. Pointer, touch, keyboard, and wheel input count as activity; background rendering or execution does not. The facilitator opt-out persists across Public Reset. Re-enable with **Enable idle reset · 300 seconds**. URL parameters `idleSeconds` and `warningSeconds` set runtime timing; allowed ranges are 30–3600 and 5–120 seconds, with warning at least five seconds shorter than idle. Settings are reflected in the URL; visitor evidence is not persisted across reload.
 
-Verify kit hashes against `manifest.json`, launch with conference networking unavailable, confirm bundled fonts and source, rehearse a prediction, partial gradient, explicit candidate decision, matched head test and public reset. Consult `abq-overnight-review.md` for actual completed checks and limitations. Complete `morning-checklist.md` on the real station. No browser-shell lockdown, system sleep setting, deployment or event approval is implied.
+## 11. Failure and recovery
+
+If execution or inspection fails, cancel the active action when offered, then use Public Reset for a fresh canonical visitor session. Retention-capacity refusal blocks new execution without silently evicting retained history; reset is the explicit way to clear this public session. Do not infer that an archival failure undid an already accepted update. If the page cannot recover, reload: this starts a new in-memory session, not transaction or history recovery. Keep error text and candidate identity for review.
+
+## 12. Offline fallback
+
+A recorded fallback may be used only if the actual labeled media is present, checked with the release kit, and approved in the later station procedure. The current kit preparation script does not bundle a fallback video. Label any fallback **RECORDED DEMONSTRATION · NOT LIVE** and never describe playback as a fresh prediction.
+
+## 13. End of day and restart
+
+Finish or discard the visitor candidate, use Public Reset, and close the local browser. Stop the identified `serve.mjs` process with Ctrl-C. On restart, launch the same accepted kit, verify its identity, and run the brief health check. A restart does not resume visitor history or an in-flight transaction.
+
+## 14. Morning checks
+
+Use the [morning checklist](morning-checklist.md) for evidence levels and the later actual-station procedure. Operator checks do not establish unfamiliar-user comprehension or M6 acceptance.
