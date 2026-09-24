@@ -2,7 +2,8 @@
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 import { readFile } from 'node:fs/promises';
-import { basename, fileURLToPath, join, relative } from 'node:path';
+import { basename, join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   QUALIFICATION_PROFILE,
   QUALIFICATION_REPOSITORY,
