@@ -41,7 +41,8 @@ with exact statements/sections, decision needed and affected gate.
 
 The [presenter and facilitator guide](abq-facilitator-guide.md) and
 [operator runbook](abq-operator-runbook.md) describe the current Guided ABQ experience
-and local field operation. The [morning checklist](morning-checklist.md) separates
+and local field operation, with curated screenshots in [ABQ assets](assets/abq/).
+The [morning checklist](morning-checklist.md) separates
 automated qualification and owner device smoke from pending unfamiliar-user and
 actual-station checks. The [teaching check](teaching-check.md) is the pending
 unfamiliar-user protocol. Historical reviews remain tied to their original candidates.
@@ -60,8 +61,8 @@ original scope. In particular: [v0.1](acceptance.md), [v0.2](acceptance-v0.2.md)
 [capture benchmark](capture-benchmark.md), [training benchmark](training-benchmark.md),
 [guided measurement](guided-measurement.md), [experiment evidence](experiments-v0.2.md)
 and [CI supply-chain snapshot](ci-supply-chain.md) are historical records.
-The pre-existing local [ABQ product review](abq-product-review.md) is untracked prior
-work, preserved as received; its availability in another checkout is not guaranteed.
+The pre-existing local ABQ product review is untracked prior work, preserved as
+received; its availability in another checkout is not guaranteed.
 
 Old pass-specific exclusions, event-first plans and “ready for human rehearsal”
 recommendations do not supersede the foundation-first direction. The experiment

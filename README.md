@@ -16,13 +16,15 @@ Internal engineering, visual and accessibility review may continue earlier.
 
 ## Current implementation
 
-This tiny GPT sees characters and predicts what comes next. Start with `abca`: after seeing `abc`, how likely does it think `a` is? Predict, teach it with real updates, then compare the probability before and after.
+The current public Guided exhibit follows one tiny real transformer through a fresh next-character prediction and a proposed training change. Its opening computation is a recorded replay; **Start · make a prediction** runs a fresh prediction. Part 1 traces the connected forward calculation, and Part 2 traces the objective, backward contribution, completed gradient, Adam proposal, and explicit candidate decision. This teaching-scale model does not provide useful natural-language capability.
+
+![Guided opening showing the connected computation world](docs/assets/abq/guided-opening.webp)
 
 Characters become **tokens**: numbered entries in a small vocabulary. Each token ID and its position select vectors of numbers. Attention mixes information from the current and earlier positions; an MLP (a small feed-forward network) transforms those features. The model turns the resulting scores into **probabilities**—shares of the next-token distribution that sum to one.
 
 A **parameter** is an adjustable number used in those calculations. The known next character supplies a target. **Loss** measures how poorly the model predicts the targets; lower loss on this example means it assigned them more probability overall. A **gradient** says how a small parameter change would affect that loss. Training uses the gradients to change parameters, then predicts the same input again.
 
-The model starts untrained and uses only `a`, `b`, `c`, and a shared start/end marker. Fitting this one example demonstrates learning mechanics, not useful language understanding.
+The model starts untrained and uses only `a`, `b`, `c`, and a shared start/end marker. One example demonstrates learning mechanics, not useful language understanding. In Guided, a candidate update remains provisional until **Accept update**; **Discard candidate** preserves the accepted model.
 
 ## Run locally
 
@@ -34,16 +36,16 @@ npm ci
 npm run dev
 ```
 
-Open the localhost URL printed by Vite. `npm run dev` builds and serves fixed local assets. After editing source, stop and restart it to rebuild; automatic source hot-reloading is disabled so running workers and their recorded runtime revision stay aligned. Guided follows **Predict → Teach → See What Changed**. Its canonical example follows the prefix `abc` and target `a`, using 10 real updates selected from a [fixed deterministic measurement](docs/guided-measurement.md). The numbers shown come from your actual run.
+Open the localhost URL printed by Vite. `npm run dev` builds and serves fixed local assets. After editing source, stop and restart it to rebuild; automatic source hot-reloading is disabled so running workers and their recorded runtime revision stay aligned. The public Guided route begins with Start, advances through Part 1 and Part 2, and asks whether to accept or discard one provisional update. The recorded opening is labeled replay; fresh execution and its numbers are labeled separately. The earlier ten-update Guided measurement remains [historical evidence](docs/guided-measurement.md).
 
 For an explicitly network-reachable HTTP preview, use `npm run dev:network` and open
 the printed machine IP. The ordinary browser-local workflow supports such
 insecure HTTP origins; the separately installed native Python bridge remains restricted
 to its qualified exact-loopback application origin.
 
-Enter up to seven characters from `a`, `b`, and `c`. The START / END marker is added automatically; the same marker is called BOS in the technical views. Edited input makes old evidence visibly stale until Predict runs again. Explore opens positions, stages, attention, one-step Learn, and history. Microscope follows individual arithmetic operations, gradients, and Adam (the optimizer that calculates parameter updates).
+The workbench accepts up to seven characters from `a`, `b`, and `c`. The START / END marker is added automatically; the same marker is called BOS in technical views. Edited input makes old evidence visibly stale until Predict runs again. In the public Guided route, selecting a world object opens Explore; **Resume route** returns to the same computation. **Deep inspection** offers Values, Exact Math, Source, and scalar Microscope where available.
 
-Reset model restores the selected or canonical state and preserves history. Cancel restores the last completed live state. Clear session clears both workers and the session history; opt-in Exhibit mode does this after five minutes without activity.
+Workbench **Reset model** restores the selected or canonical state and preserves history. **Cancel** restores the last completed live state. In the public exhibit, **Public Reset** clears the visitor session and returns to the recorded opening; the default idle policy does this after five minutes without activity, following a 20-second warning.
 
 Live model arithmetic runs in its owning Web Worker. A separate inspector worker reconstructs old runs and verifies all available semantic anchors before returning recomputed detail. No live `Value` object leaves its owner. Core runtime assets are bundled locally: no model API, remote font, dataset download, or WAN access is required after installing/building. Development dependency installation may require Internet access.
 
@@ -53,7 +55,9 @@ From this repository root, `npm run prepare:abq` builds once and creates a read-
 The generated launcher keeps loopback as its default; `MODEL_LAB_HOST=0.0.0.0 node serve.mjs`
 is the explicit network-bind form.
 
-Start makes a fresh prediction. The short route offers an explicit `abca` q3/head0/key0 selection and Q/K → softmax → mixture → residual explanations. This is teacher-forced next-token prediction, not generative continuation. Public Reset restores the canonical visitor baseline, history and navigation. The initial idle policy is 300 seconds with a 20-second warning; **Show operator controls → Disable idle reset · facilitated session** opts out. See the [operator runbook](docs/abq-operator-runbook.md) for preparation, recovery and qualification limits.
+Start makes a fresh prediction. The public route follows the connected forward world, then one training example through an explicit candidate decision. This is teacher-forced next-token prediction, not generative continuation. Public Reset restores the canonical visitor baseline, clears visitor history, and returns to the recorded opening. The initial idle policy is 300 seconds with a 20-second warning; the facilitator profile offers **Show operator controls → Disable idle reset · facilitated session**. See the [operator runbook](docs/abq-operator-runbook.md) for preparation, recovery and qualification limits.
+
+![Guided Part 1 attention mixture in the connected computation world](docs/assets/abq/part1-attention.webp)
 
 ## Validation
 

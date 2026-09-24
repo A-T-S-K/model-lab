@@ -32,6 +32,10 @@ Open `http://127.0.0.1:4173/?presentation=spatial&kiosk=1`. The launcher binds l
 
 The opening prediction is a recorded replay. **Start · make a prediction** performs fresh local execution.
 
+![Healthy public opening with Start available](assets/abq/guided-opening.webp)
+
+Healthy opening state: the connected world and Start are visible before fresh execution.
+
 ## 5. Brief operator health check
 
 After launch or restart, check the station without treating this as a full teaching session:
@@ -46,13 +50,25 @@ A failed check needs investigation and a new check; it is not a release disposit
 
 ## 6. Visitor profile
 
+![Normal Guided Part 1 attention state with Continue available](assets/abq/part1-attention.webp)
+
+Normal Guided state during Part 1: the selected operation, witness, and Continue action are visible together.
+
 The kiosk visitor follows the continuous Guided Part 1 prediction and Part 2 learning path. Guided advances through the current concepts; selecting a world object opens Explore, and **Resume route** returns to the same Guided computation. Deep inspection offers Values, Exact Math, and Source; scalar Microscope access appears where available. Visitor controls omit workbench research, archive, and raw diagnostic stepping controls. The completed route offers **Explore the Model** and **Start Over**.
 
 ## 7. Facilitator controls
 
+![Facilitator operator controls open beside the Guided exhibit](assets/abq/facilitator-controls.webp)
+
+Facilitator view: use the panel for retained capacity and idle-reset control while the Guided lesson stays available.
+
 Open `?presentation=spatial&kiosk=1&facilitator=1` for the facilitator profile. **Show operator controls** opens the panel with the authoritative retained archive capacity display and **Disable idle reset · facilitated session**. Facilitators follow the same Guided lesson as visitors; the panel does not replace lesson navigation. **Hide operator controls** closes it. The normal visitor URL does not expose this panel.
 
 ## 8. Candidate decision
+
+![Candidate ready with Discard candidate and Accept update actions](assets/abq/candidate-decision.webp)
+
+Candidate decision state before Accept or Discard: the candidate remains provisional.
 
 Training produces a provisional candidate evaluated against the accepted baseline on one example. **Accept update** commits the candidate parameters and optimizer state only after successful acceptance. **Discard candidate** leaves the prior accepted state authoritative. A lower loss on the example, if shown, does not establish general improvement. Do not call a proposal accepted before the receipt completes. If the acceptance result is ambiguous, stop further mutation and reconcile authoritative state.
 

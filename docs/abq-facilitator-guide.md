@@ -8,6 +8,10 @@ This is one very small real transformer using actual model calculations. Its tea
 
 ## 20–30 second orientation
 
+![Recorded Guided opening with Start and the connected model world](assets/abq/guided-opening.webp)
+
+The opening is recorded evidence. Point to **Start · make a prediction** before describing fresh execution.
+
 - “The model has read these characters and predicts which character comes next.”
 - “These visible numbers come from its computation. The opening recorded run is replay evidence; Start makes a fresh prediction.”
 - “Part 1 follows how that prediction was made. Part 2 follows one proposed training change and lets you decide whether to apply it.”
@@ -31,6 +35,10 @@ Use these chapters as a map, not as button names. Read a displayed value before 
 
 ## Part 1 · Make a prediction
 
+![Guided attention value mixture with the selected head and numerical witness](assets/abq/part1-attention.webp)
+
+At the value mixture, follow the highlighted weight and Value term into the head output; the whole connected computation remains visible.
+
 Press **Start · make a prediction** for fresh execution. The opening display is a recorded run, not live execution. Follow the Guided Continue actions through:
 
 1. **Prediction:** identify the read prefix, next-character distribution, and known target separately. Predicting uses accepted parameters without changing them.
@@ -45,6 +53,14 @@ Press **Start · make a prediction** for fresh execution. The opening display is
 10. **Output softmax:** vocabulary logits become the next-character distribution. The forward recap reconnects Represent, Attend, Transform, and Output; prediction itself did not train the model.
 
 ## Part 2 · Learn from error
+
+![Guided objective showing losses across target positions](assets/abq/part2-objective.webp)
+
+The objective uses known targets at multiple positions, rather than only the prediction followed in Part 1.
+
+![One retained gradient contribution in Guided Part 2](assets/abq/part2-contribution.webp)
+
+Use this retained contribution to distinguish a running partial from the completed gradient.
 
 Use **Part 2 · learn from an example** at the forward recap, then follow the Guided Continue actions.
 
