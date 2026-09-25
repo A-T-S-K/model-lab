@@ -13,6 +13,7 @@ import { PUBLIC_HOME } from "./spatial/camera.js";
 import { computeLiveTourEvidence, getPublicExecutionStatus } from "./spatial/public-tour.js";
 import { isPublicPart2DetailRenderOnly } from "./spatial/public-training-depth.js";
 import { createPublicLessonSession, getPublicLessonView, transitionPublicLesson, type PublicLessonEvent, type PublicLessonRuntimeEffect, type PublicLessonTransitionContext } from "./presentation/public-lesson-controller.js";
+import { PublicDemo, publicDemoEnabled } from "./presentation/public-demo.js";
 import { reconcilePublicGuidedComputation, type PublicGuidedComputationBinding } from "./presentation/public-guided-computation.js";
 import { exhibitTiming, exhibitState } from "./presentation/exhibit-state.js";
 import { experienceCapabilities, resolveExperienceProfile, type ExperienceCapabilities, type ExperienceProfile } from "./presentation/experience-profile.js";
@@ -109,6 +110,7 @@ import {
 } from "./views/evidence.js";
 
 const spatialEnabled = new URLSearchParams(location.search).get("presentation") === "spatial";
+const demoEnabled = publicDemoEnabled(new URLSearchParams(location.search));
 let spatialActive = spatialEnabled;
 const spatialSelection: MicrogptSelection = { layer: 0, query: 4, key: 0, head: 0, feature: 0 };
 const worldSelection: WorldSelection = {node:'',port:'',phase:'',coordinates:{}};
@@ -175,13 +177,13 @@ let compactFanIn = false;
 let offerParameterUpdate = false;
 let liveTrainingStep = 0;
 let liveRunId = "";
-let exhibitEntry = new URLSearchParams(location.search).get("kiosk") === "1";
+let exhibitEntry = demoEnabled || new URLSearchParams(location.search).get("kiosk") === "1";
 const facilitatorLaunch = exhibitEntry && new URLSearchParams(location.search).get("facilitator") === "1";
 if (exhibitEntry) {
   spatialPresenter.profile = facilitatorLaunch ? "facilitator" : "visitor";
   spatialPresenter.camera.box = spatialPresenter.getResponsivePublicFrame();
 }
-let idleResetEnabled = exhibitEntry;
+let idleResetEnabled = exhibitEntry && !demoEnabled;
 let kioskEnabled = exhibitEntry;
 let exhibitConfiguration = exhibitTiming(new URLSearchParams(location.search));
 let lastActivity = Date.now();
@@ -224,6 +226,16 @@ function cancelRetention(transaction: RetentionTransaction | undefined): void {
 }
 
 const mount = document.querySelector<HTMLDivElement>("#app")!;
+const publicDemo = new PublicDemo(demoEnabled, () => !document.hidden, event => {
+  if (dispatchPublicLesson(event)) render();
+}, () => { void activateAttract(); });
+if (demoEnabled) {
+  for (const type of ['pointerdown', 'touchstart', 'click'])
+    window.addEventListener(type, () => publicDemo.stop(), { capture: true });
+  window.addEventListener('keydown', event => {
+    if ((event.target as Element).closest?.('button, a, input, select, textarea, summary, [role="button"], [tabindex]')) publicDemo.stop();
+  }, { capture: true });
+}
 let documentText = fixture.document;
 let result: RunResult | undefined;
 let player: TracePlayer | undefined;
@@ -277,6 +289,7 @@ function currentPublicLessonView() {
     publicGuidedComputation ? { position: publicGuidedComputation.lessonPosition } : undefined);
 }
 function dispatchPublicLesson(event: PublicLessonEvent): boolean {
+  if (event.type === 'EXECUTION_FAILED' || event.type === 'EXECUTION_CANCELLED') publicDemo.stop();
   const before = publicLessonSession;
   const transition = transitionPublicLesson(before, event, currentPublicLessonContext());
   const computation = reconcilePublicGuidedComputation(
@@ -870,6 +883,14 @@ function render(): void {
     else restoreSemanticFocus();
     const restored = focusId && document.getElementById(focusId);
     if (selection && restored instanceof HTMLInputElement) restored.setSelectionRange(selection[0], selection[1]);
+    if (publicDemo.active) {
+      const indicator = document.createElement('span');
+      indicator.className = 'demo-indicator';
+      indicator.textContent = 'Demo mode · autoplay';
+      mount.querySelector('.spatial-shell')?.append(indicator);
+      if (error) publicDemo.stop();
+      else publicDemo.sync(publicLessonSession, currentPublicLessonContext(), attract && ready && !busy);
+    }
     return;
   }
   if (mode === "guided") {
@@ -2882,8 +2903,10 @@ window.addEventListener(
 );
 window.setInterval(checkExhibitIdle, 1000);
 document.addEventListener("visibilitychange", () => {
+  publicDemo.visibilityChanged();
   if (document.hidden && forwardDriver.active) forwardDriver.pause();
   if (!document.hidden) checkExhibitIdle();
+  if (!document.hidden && publicDemo.active) render();
 });
 window.addEventListener(
   "click",

@@ -1794,3 +1794,15 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
     transition: none !important;
   }
 }
+.demo-indicator {
+  position: absolute;
+  right: 1rem;
+  bottom: 0.75rem;
+  z-index: 10;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  background: rgba(18, 24, 30, 0.78);
+  color: #d9dfe3;
+  font: 0.7rem 'IBM Plex Mono', monospace;
+  pointer-events: none;
+}
