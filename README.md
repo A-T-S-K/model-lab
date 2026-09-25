@@ -23,7 +23,7 @@ The current public Guided exhibit follows one tiny real transformer through a fr
 
 Characters become **tokens**: numbered entries in a small vocabulary. Each token ID and its position select vectors of numbers. Attention mixes information from the current and earlier positions; an MLP (a small feed-forward network) transforms those features. The model turns the resulting scores into **probabilities**—shares of the next-token distribution that sum to one.
 
-A **parameter** is an adjustable number used in those calculations. The known next character supplies a target. **Loss** measures how poorly the model predicts the targets; lower loss on this example means it assigned them more probability overall. A **gradient** says how a small parameter change would affect that loss. Training uses the gradients to change parameters, then predicts the same input again.
+A **parameter** is an adjustable number used in those calculations. The known next character supplies a target. **Loss** measures how poorly the model predicts the targets; lower loss on this example means it assigned them more probability overall. A **gradient** says how a small parameter change would affect that loss. Training uses gradients and Adam’s saved state to propose new parameter values. The exhibit evaluates that candidate on the same example; the accepted model changes only after **Accept update** succeeds.
 
 The model starts untrained and uses only `a`, `b`, `c`, and a shared start/end marker. One example demonstrates learning mechanics, not useful language understanding. In Guided, a candidate update remains provisional until **Accept update**; **Discard candidate** preserves the accepted model.
 

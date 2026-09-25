@@ -60,7 +60,7 @@ The objective uses known targets at multiple positions, rather than only the pre
 
 ![One retained gradient contribution in Guided Part 2](assets/abq/part2-contribution.webp)
 
-Use this retained contribution to distinguish a running partial from the completed gradient.
+This image shows one contribution entering a running partial. Continue to **Final gradient** to compare it with the completed result.
 
 Use **Part 2 · learn from an example** at the forward recap, then follow the Guided Continue actions.
 

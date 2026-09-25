@@ -58,7 +58,7 @@ The kiosk visitor follows the continuous Guided Part 1 prediction and Part 2 lea
 
 ## 7. Facilitator controls
 
-![Facilitator operator controls open beside the Guided exhibit](assets/abq/facilitator-controls.webp)
+![Facilitator view with operator controls enabled; the capacity and idle-reset panel is outside this capture](assets/abq/facilitator-controls.webp)
 
 Facilitator view: use the panel for retained capacity and idle-reset control while the Guided lesson stays available.
 
