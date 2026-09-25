@@ -40,7 +40,14 @@ P0-E2 visual / information-architecture disposition PASS.
 P0-E3 learning / spatial disposition PASS.
 P0-E4 exact-candidate engineering / visual qualification COMPLETE on implementation candidate 5d4bd623... / application runtime sha256:90c1951a... (see [Pre-M5 E4 qualification](reviews/pre-M5-ABQ-E4-integration-qualification.md); historical P0-R3 preserved at [Pre-M5 R3 review](reviews/pre-M5-ABQ-experience-qualification.md)).
 The original M4-C1 near-limit archive 97cc5303... is unavailable and remains historical-only evidence; E4 used distinct current-candidate witness 3950504e... for current retention/backpressure qualification without transferring historical identity.
-P0 final product disposition remains pending.
+P0 final product disposition remains pending. The latest public exact-candidate
+engineering qualification passed for commit `ec842f8ff8d0be10ed0a547359333b6e4ad6a859`,
+tree `fc00de8d766cc49edd537f3f0218638512b8ba26`, and runtime
+`sha256:81b0670ab4d49eefede24d0f72ff3b6914e541c34c4ca4803e1b35be75f32ca6`:
+15/15 browser tests passed. See the [current qualification record](reviews/pre-M5-current-public-qualification.md).
+The owner-operated MacBook Neo smoke remains limited real-device visual evidence;
+it is not unfamiliar-user or M6 acceptance. Current presenter and operator guides
+describe the Guided experience. The next foundation gate is independent M5 review.
 M5 independent foundation review remains NOT_RUN.
 M6 remains NOT_RUN.
 
@@ -52,8 +59,8 @@ OWNER**. No old pass or retired sample is transferred into the new qualification
 ## Historical engineering evidence
 
 [Canonical acceptance](acceptance-v0.2.1.md), [experiments](experiments-v0.2.md),
-[overnight rehearsal](abq-overnight-review.md) and the pre-existing local
-[product review](abq-product-review.md) report results for their own implementations
+[overnight rehearsal](abq-overnight-review.md) and a pre-existing local
+product review (not checked into this repository) report results for their own implementations
 and artifacts. Existing ablation, training-data research and the test-only alternate
 trace producer are prerequisites/evidence, not FP passes through a future shared path.
 Their tests, visual checks and soak were not rerun in D0. No old-soak transfer applies.
@@ -130,7 +137,11 @@ define the intended separation. The first shared legacy/native path is now exerc
 as scoped above. General codecs and the complete replacement/experiment/failure
 portfolio remain target work; no complete acceptance follows from this subset.
 
-## Findings retained and next gate
+## Historical M1 recovery and stage progression
+
+The following entries retain their original incremental status, stop points and
+evidence losses. Their former forward instructions are historical; the current
+stage state and next gate are recorded above.
 
 The previously identified projection wording and pre-ablation provenance findings
 remain later authorized runtime work, included in the M5 candidate by the proof plan.
@@ -147,7 +158,8 @@ are still needed for recovery. The prepared ABQ kit, original dist, canonical fi
 oracle, D0 documents other than this authorized ledger update, and product review
 remain preserved. Do not use the overwritten timing file as original Wave 2B evidence.
 
-Next: recover that exact historical artifact and review this uncommitted slice. Any
+At that M1 point, the next instruction was to recover that exact historical artifact
+and review the then-uncommitted slice. Any
 remaining M1 witnesses require a separate bounded authorization. No M2, independent
 foundation acceptance, unfamiliar-user testing or release gate is authorized by this
 status update. Full M1/FP/M5 acceptance remains ungranted.

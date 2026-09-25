@@ -4,7 +4,7 @@ The [foundation ledger](foundation-status.md) governs M5 and M6 status. The [ope
 
 | Evidence level | Current record | Limit |
 | --- | --- | --- |
-| Automated exact-candidate public qualification | The `pre-m5-public` run passed with verified binding for commit `9ff4e0f87d34ceb0c29b860ea617f1bcced2c7e6`, tree `fe097e71bf922ed13c4b24e1103e89358e2b1890`. | It qualifies that pre-documentation candidate only. Browser automation does not prove comprehension or transfer to a later commit. |
+| Automated exact-candidate public qualification | The [current record](reviews/pre-M5-current-public-qualification.md) reports `pre-m5-public` PASS, 15/15 browser tests, for commit `ec842f8ff8d0be10ed0a547359333b6e4ad6a859`, tree `fc00de8d766cc49edd537f3f0218638512b8ba26`. | It qualifies that exact candidate only. Browser automation does not prove comprehension or transfer to a later commit. |
 | Owner-operated real-device Neo smoke | The owner used and visually checked the MacBook Neo. The primary observed visual blockers were popup/card text overflow; those were repaired, and the owner visually confirmed the main observed Neo issues were fixed. | Owner smoke is not an unfamiliar-user pass, complete station check, or measured comprehension. |
 | Unfamiliar-user formative teaching test | **NOT RUN**. | Requires independent M5 foundation acceptance before full unfamiliar-user testing. Do not invent participants, counts, timing, or outcomes. |
 | M6 actual-station and release acceptance | **NOT RUN**. | Requires the later station, workshop, and release procedure. No event acceptance is granted. |

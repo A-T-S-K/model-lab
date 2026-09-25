@@ -8,9 +8,10 @@ preferred presentation, and ABQ is a deployment/workshop profile.
 
 The [full v2 design and proof plan](docs/README.md) govern the target: native model
 integrations, shared evidence/player/inspection, technique variants and controlled
-experiments. These foundations are proposed and unqualified; see the
+experiments. The target remains subject to independent foundation acceptance;
+M0–M4 have scoped engineering qualification, while M5 and M6 have not run. See the
 [FP/M status ledger](docs/foundation-status.md). Native Pythia and MLP/SGD are required
-complementary witnesses, not capabilities delivered by this documentation pass.
+complementary implemented witnesses, each with bounded qualification scope.
 Full unfamiliar-user testing follows independent foundation acceptance at M5, then M6.
 Internal engineering, visual and accessibility review may continue earlier.
 

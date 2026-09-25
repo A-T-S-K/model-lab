@@ -28,6 +28,7 @@ with exact statements/sections, decision needed and affected gate.
 - [Platform design](design/Model-Lab-Refined-Platform-Design-v2.md): complete requirements and source register.
 - [Foundation proofs and migration](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md): FP-01–FP-12, M0–M6, acceptance and disqualifying shortcuts. Section 8 is a future prompt, not authorization.
 - [Foundation status](foundation-status.md): current proof/stage ledger and source-to-target map.
+- [Current pre-M5 public qualification](reviews/pre-M5-current-public-qualification.md): exact-candidate engineering/browser record and limits.
 - [D0 alignment report](reviews/D0-documentation-alignment.md): local documentation checks and disposition, not another specification.
 
 ## Current implementation guides

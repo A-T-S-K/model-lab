@@ -1,12 +1,13 @@
 # Evidence and operations
 
-This guide describes the current MicroGPT implementation, not implemented cross-backend
-contracts. The [target contracts](design/Model-Lab-Refined-Platform-Design-v2.md#5-execution-and-evidence-contracts)
+This guide describes the current MicroGPT implementation and the identified shared
+evidence and archive boundaries. Guarantees remain scoped to their qualified profiles.
+The [target contracts](design/Model-Lab-Refined-Platform-Design-v2.md#5-execution-and-evidence-contracts)
 and [migration plan](design/Model-Lab-Foundation-Proofs-and-Migration-v2.md#6-migration-stages-and-ownership)
-remain unqualified; consult [authority](README.md) and [status](foundation-status.md).
-Versioned codecs, typed payload diversity and per-point capabilities are implemented
-foundation slices whose broader portable-archive and failure-boundary qualification is
-tracked in the foundation ledger.
+are not themselves implementation status; consult [authority](README.md) and
+[status](foundation-status.md). Versioned codecs, typed payload diversity, per-point
+capabilities, portable archives and failure boundaries have scoped engineering
+qualification recorded in that ledger. Independent M5 acceptance is pending.
 
 Model Lab keeps execution, saved evidence, and explanation separate. The source contracts live in [trace/types.ts](../trace/types.ts); the mathematical runtime lives in [model/](../model/).
 
