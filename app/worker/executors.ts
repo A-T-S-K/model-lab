@@ -2,8 +2,10 @@ import { check, validateNumericInput, type EvidenceRun, type EvidenceStore } fro
 import { NONCANONICAL } from '../../trace/noncanonical.js';
 import { NativeClient } from './native-client.js';
 import { randomUuid } from './random-uuid.js';
-export type CanonicalReceipt = { status: 'completed'; runId: string } | { status: 'refused' | 'failed'; reason: string };
-export interface ExecutorContext { input:string; action?:string; endpoint:string; store:EvidenceStore; canonical:()=>Promise<CanonicalReceipt> }
+export type CanonicalReceipt = { status: 'completed'; runId: string; evidence: EvidenceStore } | { status: 'refused' | 'failed'; reason: string };
+export type CanonicalPublication = (store: EvidenceStore) => void;
+export type CanonicalExecution = (published?: CanonicalPublication) => Promise<CanonicalReceipt>;
+export interface ExecutorContext { input:string; action?:string; endpoint:string; store:EvidenceStore; canonical:CanonicalExecution }
 export interface ExecutorBinding {
   id:string; label:string; inputLocation:'world'|'request'|'saved'; inputLabel?:string; defaultInput?:string; endpoint?:boolean; actions?:string[];
   execute(context:ExecutorContext):Promise<EvidenceRun>; connected():boolean;
@@ -14,10 +16,10 @@ export class ExecutorRegistry {
   #bindings=new Map<string,ExecutorBinding>();readonly native=new NativeClient();
   constructor(){
     this.register({id:'microgpt-legacy-v1',label:'MicroGPT · browser',inputLocation:'world',connected:()=>true,
-      async execute({store,canonical}){
+      async execute({canonical}){
         const receipt=await canonical();
         if(receipt.status!=='completed')throw new Error(receipt.reason);
-        const run=store.get(receipt.runId);
+        const run=receipt.evidence.get(receipt.runId);
         check(run.integration==='microgpt-legacy-v1','Canonical receipt names another producer');return run;
       }});
     this.register({id:'pythia-native-v1',label:'Pythia-14M · optional native CPU',inputLocation:'request',inputLabel:'Prompt',defaultInput:'The cat sat',endpoint:true,actions:['predict','generate'],connected:()=>this.native.connected,

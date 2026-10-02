@@ -12,7 +12,7 @@ async function prediction(page: Page) {
 for (const failure of ['invalid input', 'budget refusal', 'worker failure']) {
   test(`shared canonical receipt refuses ${failure} after a successful run`, async ({ page, evidenceDir }) => {
     await page.addInitScript((failure) => {
-      const w=window as any;w.requestAudit=[];w.failNext=false;
+      const w=window as any;w.requestAudit=[];w.failNext=false;w.refuseBudget=false;w.budgetHits=0;
       const send=Worker.prototype.postMessage;
       Worker.prototype.postMessage=function(message:any,...rest:any[]) {
         w.requestAudit.push(message.command);
@@ -28,7 +28,9 @@ for (const failure of ['invalid input', 'budget refusal', 'worker failure']) {
         TextEncoder.prototype.encode=function(input?:string) {
           // Fault injection at the existing accounting boundary; never change a
           // numerical payload or disable the real SESSION_BUDGET refusal.
-          if(input?.includes('"snapshots":')&&input.includes('"runs":')&&input.includes('"trainingStep":')) return new Uint8Array(64*1024*1024);
+          if(w.refuseBudget&&input?.includes('"format":"model-lab-session-archive-v1"')&&input.includes('"directRuns":')&&input.includes('"snapshots":')) {
+            w.budgetHits++;return new Uint8Array(64*1024*1024);
+          }
           return encode.call(this,input);
         };
       }
@@ -40,6 +42,7 @@ for (const failure of ['invalid input', 'budget refusal', 'worker failure']) {
       await page.locator('#open-shared-inspector').click();
     }
     if(failure==='worker failure') await page.evaluate(()=>(window as any).failNext=true);
+    if(failure==='budget refusal') await page.evaluate(()=>(window as any).refuseBudget=true);
     const requests=await page.evaluate(()=>(window as any).requestAudit.filter((c:string)=>c==='predict').length);
     await page.locator('#shared-execute').click();
     await expect(page.getByTestId('shared-status')).toContainText('Execution refused or failed');
@@ -47,6 +50,9 @@ for (const failure of ['invalid input', 'budget refusal', 'worker failure']) {
     await expect(page.locator('#shared-run')).toHaveValue(original);
     await expect(page.locator('#shared-run option')).toHaveCount(historyCount);
     const after=await page.evaluate(()=>(window as any).requestAudit.filter((c:string)=>c==='predict').length);
+    if(failure==='budget refusal') expect(await page.evaluate(()=>(window as any).budgetHits)).toBe(1);
+    await expect(page.locator('#shared-execute')).toBeEnabled();
+    await expect(page.locator('#shared-cancel')).toBeDisabled();
     expect(after-requests).toBe(failure==='worker failure'?1:0);
     await writeFile(`${evidenceDir}/refusal.json`,JSON.stringify({failure,original,historyCount,requests,after,status:await page.getByTestId('shared-status').textContent()}),{flag:'wx'});
   });

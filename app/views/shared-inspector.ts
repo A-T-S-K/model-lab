@@ -1,5 +1,5 @@
 import { EvidencePlayer, serializeEvidence, parseEvidence, MAX_RECORD_BYTES, check, type EvidenceStore, type EvidencePoint } from '../../trace/evidence.js';
-import { ExecutorRegistry, type CanonicalReceipt } from '../worker/executors.js';
+import { ExecutorRegistry, type CanonicalExecution } from '../worker/executors.js';
 import { RUNTIME_REVISION } from '../../runtime/revision.js';
 import { boundSource } from '../source/registered.js';
 import { memoizedFullSupportDistribution } from './full-support-distribution.js';
@@ -38,15 +38,15 @@ export class SharedInspector {
       }
     });
     this.#root.id='shared-inspector';document.body.append(this.#root);}
-  sync(store:EvidenceStore,liveId:string|undefined,canSwitch:boolean,onCanonical:()=>Promise<CanonicalReceipt>,onWorld?:(runId:string,replay:boolean)=>void,worldAvailability?:(runId:string)=>string|undefined,retention?:SharedEvidenceRetention,allowOpen=true){
+  sync(store:EvidenceStore,liveId:string|undefined,canSwitch:boolean,onCanonical:CanonicalExecution,onWorld?:(runId:string,replay:boolean)=>void,worldAvailability?:(runId:string)=>string|undefined,retention?:SharedEvidenceRetention,allowOpen=true){
     this.#retention=retention;
     this.#allowOpen=allowOpen;
     if(!allowOpen&&this.#open){this.#open=false;}
-    if(this.#store!==store){this.#operation++;this.#executors.cancel();this.#pendingRetention?.cancel();this.#pendingRetention=undefined;this.#store=store;this.#player=undefined;this.#offset=0;this.#runOffset=0;this.#pointOffset=0;this.#dependencyOffset=0;this.#replay=false;}
+    if(this.#store!==store){this.#operation++;this.#executors.cancel();this.#pendingRetention?.cancel();this.#pendingRetention=undefined;if(this.#busy)this.#message='Request superseded by evidence replacement; no request receipt selected.';this.#busy=false;this.#store=store;this.#player=undefined;this.#offset=0;this.#runOffset=0;this.#pointOffset=0;this.#dependencyOffset=0;this.#replay=false;}
     if(!this.#open&&liveId&&store.list().some(r=>r.id===liveId)&&this.#executors.get(this.#selected).inputLocation==='world'&&this.#player?.runId!==liveId)this.select(liveId,false);
     this.#canSwitch=canSwitch;this.#canonical=onCanonical;this.#onWorld=onWorld;this.#worldAvailability=worldAvailability;this.render();
   }
-  #canSwitch=true;#canonical:()=>Promise<CanonicalReceipt>=async()=>({status:'refused',reason:'Canonical executor unavailable'});
+  #canSwitch=true;#canonical:CanonicalExecution=async()=>({status:'refused',reason:'Canonical executor unavailable'});
   #onWorld?: (runId:string,replay:boolean)=>void;#worldAvailability?: (runId:string)=>string|undefined;
   private select(id:string,replay=false){check(this.#store,'Store unavailable');this.#player=new EvidencePlayer(this.#store,id);this.#offset=0;this.#dependencyOffset=0;this.#replay=replay;this.#selected=this.#player.run.integration;const runIndex=this.#store.list().findIndex(item=>item.id===id);this.#runOffset=Math.floor(Math.max(0,runIndex)/PRESENTATION_WORK.sharedRuns)*PRESENTATION_WORK.sharedRuns;this.#pointOffset=0;}
   private distribution(p:EvidencePoint):string{
@@ -103,10 +103,10 @@ export class SharedInspector {
     this.#root.querySelector<HTMLSelectElement>('#shared-run')!.onchange=e=>{const id=(e.target as HTMLSelectElement).value;if(id){this.#operation++;this.#executors.cancel();this.#busy=false;this.select(id);this.#message='Selected immutable evidence; no executor invoked.';this.render();}};
     on('#shared-run-prev',()=>{this.#runOffset=previousWindowOffset(this.#runOffset,PRESENTATION_WORK.sharedRuns);this.render();});
     on('#shared-run-next',()=>{this.#runOffset=nextWindowOffset(this.#runOffset,PRESENTATION_WORK.sharedRuns,list.length);this.render();});
-    on('#shared-run-open',()=>{const id=this.#root.querySelector<HTMLInputElement>('#shared-run-id')?.value??'';if(list.some(item=>item.id===id)){this.select(id);this.#message='Selected exact immutable run ID; no executor invoked.';}else this.#message='No retained run has that exact ID.';this.render();});
+    on('#shared-run-open',()=>{const id=this.#root.querySelector<HTMLInputElement>('#shared-run-id')?.value??'';if(list.some(item=>item.id===id)){this.#operation++;this.#executors.cancel();this.#pendingRetention?.cancel();this.#pendingRetention=undefined;this.#busy=false;this.select(id);this.#message='Selected exact immutable run ID; no executor invoked.';}else this.#message='No retained run has that exact ID.';this.render();});
     on('#shared-point-prev',()=>{this.#pointOffset=previousWindowOffset(this.#pointOffset,PRESENTATION_WORK.sharedPoints);this.render();});
     on('#shared-point-next',()=>{this.#pointOffset=nextWindowOffset(this.#pointOffset,PRESENTATION_WORK.sharedPoints,run?.points.length??0);this.render();});
-    on('#shared-execute',()=>void this.execute());on('#shared-cancel',()=>{this.#operation++;this.#executors.cancel();this.#pendingRetention?.cancel();this.#pendingRetention=undefined;this.#busy=false;this.#message='Cancelled admission; canonical state unchanged.';this.render();});
+    on('#shared-execute',()=>void this.execute());on('#shared-cancel',()=>{this.#operation++;this.#executors.cancel();this.#pendingRetention?.cancel();this.#pendingRetention=undefined;this.#busy=false;this.#message='Cancelled request selection; completed evidence remains retained.';this.render();});
     on('#shared-world',()=>{if(!run||!this.#onWorld)return;if(!this.#canSwitch){this.#message='Finish or cancel the active canonical operation before opening another world.';this.render();return;}const unavailable=this.#worldAvailability?.(run.id);if(unavailable){this.#message=unavailable;this.render();return;}this.#open=false;this.#onWorld(run.id,this.#replay);this.render();});
     this.#root.querySelectorAll<HTMLElement>('[data-point]').forEach(el=>el.onclick=()=>{player!.seek(Number(el.dataset.point));this.#pointOffset=Math.floor(player!.index/PRESENTATION_WORK.sharedPoints)*PRESENTATION_WORK.sharedPoints;this.#offset=0;this.#dependencyOffset=0;this.render();});
     this.#root.querySelectorAll<HTMLElement>('[data-dependency]').forEach(el=>el.onclick=()=>{player!.seek(player!.run.points.findIndex(p=>p.id===el.dataset.dependency));this.#pointOffset=Math.floor(player!.index/PRESENTATION_WORK.sharedPoints)*PRESENTATION_WORK.sharedPoints;this.#offset=0;this.#dependencyOffset=0;this.render();});
@@ -127,24 +127,36 @@ export class SharedInspector {
   }
   private async execute(){
     const operation=++this.#operation;
+    let transaction:SharedEvidenceTransaction|undefined;
     this.#busy=true;this.#message='Checking durable retention capacity…';this.render();
     try{
       const binding=this.#executors.get(this.#selected);check(!binding.endpoint||!nativeOriginUnavailable(),'Optional native execution requires an exact HTTP loopback application origin');
-      const transaction=binding.inputLocation==='world'?undefined:await this.#retention?.begin('nativeEvidence');
+      transaction=binding.inputLocation==='world'?undefined:await this.#retention?.begin('nativeEvidence');
       if(operation!==this.#operation){transaction?.cancel();return;}
       this.#pendingRetention=transaction;this.#message='Executing selected producer…';this.render();
-      const run=await binding.execute({action:this.#action,input:this.#input,endpoint:this.#endpoint,store:transaction?.store??this.#store!,canonical:this.#canonical});
+      // Only this request can adopt its own publication before the shell syncs.
+      // Reset/import and explicit selection still invalidate the operation.
+      const canonical=this.#canonical;
+      const run=await binding.execute({action:this.#action,input:this.#input,endpoint:this.#endpoint,store:transaction?.store??this.#store!,canonical:()=>canonical(store=>{
+        if(operation!==this.#operation)return;
+        const previous=this.#player;
+        this.#store=store;
+        this.#player=previous&&store.list().some(run=>run.id===previous.runId)?new EvidencePlayer(store,previous.runId):undefined;
+        if(previous&&this.#player)this.#player.seek(previous.index);
+      })});
       if(operation!==this.#operation){transaction?.cancel();return;}
       if(transaction){await transaction.commit();if(operation!==this.#operation)return;this.#store=transaction.store;this.#pendingRetention=undefined;}
       this.select(run.id);
       this.#message='Execution receipt validated and admitted; inspection reads retained evidence.';
-    }catch(e){this.#pendingRetention?.cancel();this.#pendingRetention=undefined;if(operation!==this.#operation)return;this.#message=`Execution refused or failed: ${e instanceof Error?e.message:String(e)}`;}
+    }catch(e){transaction?.cancel();if(this.#pendingRetention===transaction)this.#pendingRetention=undefined;if(operation!==this.#operation)return;this.#message=`Execution refused or failed: ${e instanceof Error?e.message:String(e)}`;}
     finally{if(operation===this.#operation){this.#busy=false;this.render();}}
   }
   private async load(json:string|null){
     const operation=++this.#operation;this.#executors.cancel();this.#pendingRetention?.cancel();this.#pendingRetention=undefined;
-    try{check(json,'No saved recording');check(new TextEncoder().encode(json).length<=MAX_RECORD_BYTES,'Import byte budget');const transaction=await this.#retention?.begin('standaloneImport');if(operation!==this.#operation){transaction?.cancel();return;}this.#pendingRetention=transaction;const store=transaction?.store??this.#store!;const run=await store.admit(parseEvidence(json),undefined,()=>operation===this.#operation);if(operation!==this.#operation){transaction?.cancel();return;}if(transaction){await transaction.commit();this.#store=transaction.store;this.#pendingRetention=undefined;}this.select(run.id,true);this.#message='Saved replay loaded. Native executor disconnected; no execution requested.';}
-    catch(e){this.#pendingRetention?.cancel();this.#pendingRetention=undefined;if(operation===this.#operation)this.#message=`Recording refused: ${e instanceof Error?e.message:String(e)}`;}
+    this.#busy=false;
+    let transaction:SharedEvidenceTransaction|undefined;
+    try{check(json,'No saved recording');check(new TextEncoder().encode(json).length<=MAX_RECORD_BYTES,'Import byte budget');transaction=await this.#retention?.begin('standaloneImport');if(operation!==this.#operation){transaction?.cancel();return;}this.#pendingRetention=transaction;const store=transaction?.store??this.#store!;const run=await store.admit(parseEvidence(json),undefined,()=>operation===this.#operation);if(operation!==this.#operation){transaction?.cancel();return;}if(transaction){await transaction.commit();if(operation!==this.#operation)return;this.#store=transaction.store;this.#pendingRetention=undefined;}this.select(run.id,true);this.#message='Saved replay loaded. Native executor disconnected; no execution requested.';}
+    catch(e){transaction?.cancel();if(this.#pendingRetention===transaction)this.#pendingRetention=undefined;if(operation===this.#operation)this.#message=`Recording refused: ${e instanceof Error?e.message:String(e)}`;}
     this.render();
   }
 }

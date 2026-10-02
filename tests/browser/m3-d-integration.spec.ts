@@ -123,10 +123,11 @@ test('M3-D crosses every experiment family, cancels stale work, and returns to o
   await writeFile(`${directory}/m3-d-browser-evidence.json`, JSON.stringify({ acceptedSnapshot: accepted, afterSnapshot: after, audit, errors }, null, 2));
 });
 
-test('M3-D reset cancels data work and rejects late completion without publishing a receipt', async ({ page }) => {
+test('M3-D reset cancels data work and rejects late completion without publishing a receipt', async ({ page, evidenceDir }) => {
   test.setTimeout(90_000); await installAudit(page);
   await page.goto('/?presentation=spatial'); await page.locator('#predict').click();
   await expect(page.getByTestId('status')).toContainText('Live prediction complete');
+  const accepted = await page.evaluate(() => (window as any).m3d.responses.filter((r: any) => r.status === 'result').at(-1).result.snapshots[0]);
 
   await page.evaluate(() => { (window as unknown as { m3d: { dataFault: 'hold' } }).m3d.dataFault = 'hold'; });
   await page.locator('#open-data-experiment').click(); await expect(page.locator('#cancel-ablation')).toBeVisible();
@@ -134,12 +135,23 @@ test('M3-D reset cancels data work and rejects late completion without publishin
   await expect(page.getByTestId('data-experiment-receipt')).toHaveCount(0);
 
   await page.locator('#predict').click(); await expect(page.getByTestId('status')).toContainText('Live prediction complete');
+  await expect(page.locator('#open-data-experiment')).toBeVisible();
   await page.evaluate(() => { (window as unknown as { m3d: { dataFault: 'late' } }).m3d.dataFault = 'late'; });
   await page.locator('#open-data-experiment').click(); await expect(page.locator('#cancel-ablation')).toBeVisible();
   await page.locator('#clear-session').click(); await page.waitForTimeout(350);
   await expect(page.getByTestId('data-experiment-receipt')).toHaveCount(0);
   await expect(page.getByRole('alert')).toHaveCount(0);
   await page.locator('#predict').click(); await expect(page.getByTestId('status')).toContainText('Live prediction complete');
+  const audit = await page.evaluate(() => (window as any).m3d);
+  expect(audit.commands.filter((r: any) => r.command === 'dataExperiment')).toHaveLength(2);
+  expect(audit.responses.filter((r: any) => r.status === 'dataExperiment')).toHaveLength(1);
+  expect(audit.responses.filter((r: any) => r.status === 'result').at(-1).result.snapshots[0]).toEqual(accepted);
+  const final = audit.responses.filter((r: any) => r.status === 'result').at(-1).result;
+  expect(final.trainingStep).toBe(0);
+  expect(final.run.manifest.startingSnapshotId).toBe(accepted.id);
+  expect(final.run.manifest.runtimeRevision).toBe(audit.responses.find((r: any) => r.status === 'result').result.run.manifest.runtimeRevision);
+  await expect(page.getByTestId('data-experiment-receipt')).toHaveCount(0);
+  await writeFile(`${evidenceDir}/reset-late-completion.json`, JSON.stringify({ accepted, audit }, null, 2), { flag: 'wx' });
 });
 
 test('M3-D developer experiments do not enter the canonical Guided lesson or attract reset', async ({ page }) => {

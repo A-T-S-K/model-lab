@@ -6,6 +6,7 @@ import { loadModel } from '../../model/state.js';
 import { predict } from '../../model/microgpt.js';
 import { forwardStages, trainingStages, greedySelection } from '../../app/source/stages.js';
 import { sourceMapping } from '../../app/source/mappings.js';
+import { snippet } from '../../app/source/extraction.js';
 
 test('displayed forward order follows actual observed execution and ends in one greedy selection', () => {
   const observed: string[] = [];
@@ -24,15 +25,19 @@ test('every displayed stage maps to a real bundled implementation symbol', () =>
     assert.equal(mapping.status, 'mapped', kind);
     if (mapping.status !== 'mapped') continue;
     const source = readFileSync(new URL(`../../${mapping.file}`, import.meta.url), 'utf8');
-    const marker = mapping.file === 'model/value.ts' ? `  ${mapping.symbol}(` : `export function${['forwardSequence','objectiveSequence','backwardSequence','adamProposals'].includes(mapping.symbol) ? '*' : ''} ${mapping.symbol}(`;
+    const marker = mapping.file === 'model/value.ts' ? `  ${mapping.symbol}(` : `export function${['forwardSequence','forwardSequenceForDefinition','objectiveSequence','backwardSequence','adamProposals'].includes(mapping.symbol) ? '*' : ''} ${mapping.symbol}(`;
     assert.ok(source.includes(marker), `${kind}: ${mapping.file} ${mapping.symbol}`);
+    assert.ok(snippet(source, mapping.symbol, mapping.file), `bundled excerpt for ${kind}`);
   }
   assert.deepEqual(sourceMapping('gradient'), sourceMapping('backward'));
   const combined = sourceMapping('attentionOutput');
   assert.equal(combined.status, 'mapped');
   if (combined.status === 'mapped') {
-    assert.equal(combined.file, 'model/microgpt.ts'); assert.equal(combined.symbol, 'forwardSequence');
-    assert.match(readFileSync(new URL('../../model/microgpt.ts', import.meta.url), 'utf8'), /combinedHeads\.push\(\.\.\.headOutput\)/);
+    assert.equal(combined.file, 'model/microgpt.ts'); assert.equal(combined.symbol, 'forwardSequenceForDefinition');
+    const source = readFileSync(new URL('../../model/microgpt.ts', import.meta.url), 'utf8');
+    assert.match(snippet(source, combined.symbol, combined.file)!, /combinedHeads\.push\(\.\.\.headOutput\)/);
+    assert.match(snippet(source, combined.entry!, combined.file)!, /yield\* forwardSequenceForDefinition\(canonicalMicrogptDefinition/);
+    assert.equal(snippet(source, 'unknownSymbol', combined.file), undefined);
   }
 });
 

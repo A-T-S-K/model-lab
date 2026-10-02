@@ -274,3 +274,100 @@ conditions, preserving six accepted updates from its step-20 baseline and refusi
 transport for update 27. Original step-29 refusal observations retain their different
 source/setup identity; neither count is a universal capacity threshold. No resource
 limit, numerical policy, accepted update history or independent oracle was weakened.
+
+## 2026-10-02 canonical workflow correctness disposition
+
+This dated disposition follows the separate [canonical workflow repair](canonical-workflow-correctness.md).
+It preserves every preceding report identity, failure, count and limitation. Branch
+`pre-m5-abq-experience`, HEAD `ffb2db9217dac8ff3195fc2943918656daa78b59`, final
+dirty-source runtime
+`sha256:896bbf46b599076733dc2f6d7092805e7a318b9c29d909b9a8492b0d537c2ed0`.
+Starting runtime was `sha256:7ee8d4cbfb9513e1da264d4185643d4a2fc6f354724eecd1d03762f8601c7db6`.
+The [fresh starting reproduction](../../test-results/scratch/browser-jQhecU/report/results.json)
+confirms all three original failure boundaries on that starting source. The
+[final focused report](../../test-results/scratch/browser-psywJ7/report/results.json)
+passes 22/22 with no skips/flaky, including the original BF-027/BF-035/BF-042 identities
+and separate unfaulted/regression controls.
+
+| ID | New scoped disposition |
+| --- | --- |
+| BF-027 | Repaired workbench activity ownership: Clear keeps the opening recorded state, successful fresh workbench Predict restores capability-permitted experiment controls. Original M3-D withheld/late-completion test now reaches both experiment requests, rejects the actual injected old-generation reply, publishes neither receipt, and verifies exact accepted snapshot, optimizer/source/runtime identity. Visitor/facilitator restrictions and experiment-family return-to-baseline pass. |
+| BF-035 | Repaired shared request publication ownership and exact receipt lookup from authoritative published evidence. Unfaulted completion settles busy and selects its exact new run. Budget injection now demonstrably reaches the portable manifest boundary after an earlier success; one boundary hit, zero new prediction transport, unchanged history/selection and no success status. Invalid input/worker failure, cancelled request, Clear, saved import, run selection and producer change also settle without stale receipt selection. |
+| BF-042 | Combined heads and neighboring native forward mappings open the executed `forwardSequenceForDefinition` arithmetic, with the canonical wrapper relationship disclosed. The original `combinedHeads.push(...headOutput)` and backward `parent.grad +=` assertions pass unchanged. Bundled offline/current source and genuine historical replay preserve source revision; unavailable historical bodies explicitly refuse current-code substitution. |
+
+The identical latest Guided ten-case selection passes **10/10 serially** and
+**10/10 with two workers** on this final runtime. Core selection passes **149** with
+**5 existing missing-input skips**; portable reference conformance, runner/output
+regressions and HTTP pass. These selections are not a full-suite pass. Installed
+Playwright 1.63.0 expects absent Chromium 1243; actual checks explicitly use existing
+headless shell 1234 / Chrome for Testing 151.0.7922.34 through the scratch-only adapter,
+without downloads or settings changes. See the repair report for commands, environment,
+original failed attempts, preservation and qualification limitations.
+
+The new broad invocation ran **once**, `npm run test:browser -- --workers=2`, on
+this final runtime: **147 passed / 16 failed / 14 skipped**, zero flaky, **177 selected**,
+18.2 minutes. [Report](../../test-results/scratch/browser-3xM7ar/report/results.json),
+[source/argv](../../test-results/scratch/browser-3xM7ar/source.json),
+[console](../../test-results/scratch/browser-3xM7ar/playwright.log),
+[failure/cleanup receipt](../../test-results/scratch/browser-3xM7ar/failure.json), and
+[complete machine baseline](../../test-results/scratch/canonical-workflow-sNLxrP/browser-baseline.json)
+retain every current result, full error, source and attachment. The unsuccessful exit
+is preserved; cleanup errors are empty. This is not a full-suite pass.
+
+All remaining failures/skips below retain their earlier observed assertion/control
+boundary and classification. **No newly failing previously passing identity or
+previously hidden downstream failure was observed.** Unexecuted assertions beyond
+remaining failures are still unrun. The complete machine baseline also lists the
+now-passing earlier identities; their outcome includes the incoming Guided repairs,
+which are not credited to this three-defect pass. BF-051's corrected held-reply title
+is explicitly related to its original retained title rather than silently replacing it.
+BF-027/BF-035/BF-042 and the new controls pass in the broad run as well as focused checks.
+No previous counts/passes are transferred, no new skips added and no failure suppressed.
+
+| ID | Current full test identity | Current result | Retained scope / classification |
+| --- | --- | --- | --- |
+| BF-001 | `abq-overnight.spec.ts:13` — Q01/Q03 entry and source-bound chain 1280 | FAILED | outdated test contract |
+| BF-002 | `abq-overnight.spec.ts:13` — Q01/Q03 entry and source-bound chain 1920 | FAILED | outdated test contract |
+| BF-003 | `abq-overnight.spec.ts:26` — Q02 complete public reset across completed, forward, partial, Ready, historical and intervention | FAILED | outdated test contract |
+| BF-004 | `abq-overnight.spec.ts:45` — Q04/Q05 short route detour, keyboard, reduced motion and source invalidation | FAILED | outdated test contract |
+| BF-005 | `abq-overnight.spec.ts:51` — Q08 test-only serialized-estimate fixture refuses new work visibly and Clear recovers | FAILED | outdated test contract |
+| BF-006 | `end-to-end-fixes.spec.ts:21` — five corrections: public same-session route, scalar arms, compact Ready and prediction meaning | FAILED | unresolved |
+| BF-007 | `exhibit-v2.spec.ts:44` — browser measures max-context live scalar rendering and worker responsiveness | FAILED | outdated test contract |
+| BF-008 | `exhibit-v2.spec.ts:95` — measured session budget stops new capture without deleting retained history | FAILED | outdated test contract |
+| BF-017 | `m1-witnesses.spec.ts:5` — live MLP prediction and SGD, then noncanonical multilayer selection in the same inspector | FAILED | missing prerequisite |
+| BF-018 | `m1-witnesses.spec.ts:41` — new models reopen after native shutdown without executors and refuse uncaptured actions | SKIPPED | missing prerequisite |
+| BF-019 | `m1-witnesses.spec.ts:59` — structural and opaque imports show truthful fallback and no invented numerical display | FAILED | missing prerequisite |
+| BF-020 | `m2-b-mlp-world.spec.ts:6` — M2-B live MLP prediction and SGD inhabit the shared continuous world without transformer state | FAILED | missing prerequisite |
+| BF-021 | `m2-b-mlp-world.spec.ts:35` — M2-B saved MLP evidence reopens in the world with the native executor disconnected | SKIPPED | missing prerequisite |
+| BF-022 | `m2-c-evidence-fallback.spec.ts:11` — M2-C grouped axes, shape-only and opaque evidence inhabit one truthful bounded world | SKIPPED | missing prerequisite |
+| BF-023 | `m2-c-evidence-fallback.spec.ts:39` — M2-C saved fixture replay is executor-free and switching to MicroGPT clears fallback state | SKIPPED | missing prerequisite |
+| BF-024 | `m2-d-pythia-world.spec.ts:12` — M2-D live native Pythia inhabits the shared world with truthful selected-layer coverage | SKIPPED | missing prerequisite |
+| BF-025 | `m2-d-pythia-world.spec.ts:37` — M2-D saved Pythia world replays after verified bridge shutdown with zero native requests | SKIPPED | missing prerequisite |
+| BF-026 | `m2-e-integration.spec.ts:15` — M2-E cross-world switching preserves canonical state and keeps replay inert | SKIPPED | missing prerequisite |
+| BF-028 | `m4-a-pythia-generation.spec.ts:9` — M4-A live Predict and bounded uncached Generate retain separate native occurrences | SKIPPED | missing prerequisite |
+| BF-029 | `m4-a-pythia-generation.spec.ts:24` — M4-A retained generation replays with zero native requests after bridge shutdown | SKIPPED | missing prerequisite |
+| BF-030 | `m4-b1-payload.spec.ts:7` — M4-B1 retained generation uses payload-backed bounded inspection with no executor | SKIPPED | missing prerequisite |
+| BF-031 | `m4-b2-portable-archive.spec.ts:6` — M4-B2 mixed historical archive exports, imports inertly, and survives a tampered replacement attempt | SKIPPED | missing prerequisite |
+| BF-032 | `m4-c1-retention.spec.ts:6` — M4-C1 near-limit history stays inspectable while native work refuses before transport and Clear Session restores capacity | SKIPPED | missing prerequisite |
+| BF-033 | `m4-c2-render-work.spec.ts:7` — M4-C2 retained navigation stays bounded and truthful without execution | SKIPPED | missing prerequisite |
+| BF-034 | `model-lab-v2.spec.ts:92` — bounded training retains real checkpoints and complete capture displays statistics | FAILED | outdated test contract |
+| BF-036 | `shared-slice.spec.ts:4` — two real producers share admission, inspection, sources and saved evidence | FAILED | missing prerequisite |
+| BF-037 | `shared-slice.spec.ts:44` — saved native evidence replays after shutdown and canonical operation requires no Python endpoint | SKIPPED | missing prerequisite |
+| BF-038 | `shared-slice.spec.ts:58` — a real native reply delayed past a model switch cannot enter retained evidence | FAILED | missing prerequisite |
+| BF-039 | `spatial-wave1b.spec.ts:5` — B01–B09 complete source-bound forward route and contextual exploration over real HTTP | FAILED | unresolved |
+| BF-040 | `spatial-wave1d.spec.ts:4` — D01–D05 source-bound explanations, interruption and static arithmetic | FAILED | unresolved |
+
+BF-006 still stops at the fixed-width assertion (>400 versus observed
+302.1175231933594); BF-039/BF-040 at viewport/overflow checks. BF-007/BF-008 remain
+bounded whole-capture contract mismatches, and BF-034 remains summary wording.
+Native-input failures retain the concrete undefined endpoint/recording/route errors;
+they prove no faulty real native execution. Full machine errors, including secondary
+errors and stopping sites, remain available rather than collapsed into a pass.
+
+CG-01/CG-02 remain **NOT_RUN** optional M4-E Pythia/near-limit branches, despite the
+parent test passing. Missing actual MLP/SGD, Pythia/generation, grouped-axis numerical,
+shape-only/opaque and near-limit heterogeneous witnesses still prevent qualification
+of the optimized shared archive boundary. Genuine historical canonical replay is a
+focused witness; the broad source-availability control is synthetic and explicitly
+labeled. No M5, unfamiliar-user, foundation or release acceptance is granted.
+

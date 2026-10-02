@@ -1,4 +1,4 @@
-import type { CanonicalReceipt } from './worker/executors.js';
+import type { CanonicalReceipt, CanonicalPublication } from './worker/executors.js';
 import { SharedInspector } from './views/shared-inspector.js';
 import './views/shared-inspector.css';
 import { forwardReadModel } from './spatial/forward.js';
@@ -1191,7 +1191,7 @@ function syncSpatialSelection(): void {
 function bind(): void {
   const profile = currentProfile();
   const capabilities = currentCapabilities();
-  sharedInspector.sync(archive.evidence,result?.run.manifest.runId,!busy&&!forwardDriver.active,async()=>execute('predict'),(runId,replay)=>{spatialEvidenceRunId=runId;spatialEvidenceReplay=replay;clearWorldSelection();attract=false;clearDisplayedInspection();spatialPresenter.invalidate();render();},runId=>spatialEvidenceUnavailable(archive.evidence.get(runId)),{
+  sharedInspector.sync(archive.evidence,result?.run.manifest.runId,!busy&&!forwardDriver.active,async published=>execute('predict',1,false,undefined,undefined,published),(runId,replay)=>{spatialEvidenceRunId=runId;spatialEvidenceReplay=replay;clearWorldSelection();attract=false;clearDisplayedInspection();spatialPresenter.invalidate();render();},runId=>spatialEvidenceUnavailable(archive.evidence.get(runId)),{
     begin:async operation=>{const transaction=await beginRetention(operation);return {store:transaction.archive.evidence,
       commit:async()=>{await commitRetention(transaction);},cancel:()=>cancelRetention(transaction)};},
   }, capabilities.sharedInspector);
@@ -1925,6 +1925,7 @@ async function execute(
   guided = false,
   completedForward?: RunResult,
   suppliedTransaction?: RetentionTransaction,
+  published?: CanonicalPublication,
 ): Promise<CanonicalReceipt> {
   if (busy || !ready || forwardDriver.active) return {status:'refused',reason:'Canonical execution unavailable while another operation is active'};
   if (lastAcceptedResult?.experiment && !archive.learningExperiments.has(lastAcceptedResult.experiment.id)) {
@@ -2070,6 +2071,7 @@ async function execute(
         if (currentOperation !== operation) { if (activeRetentionTransaction === transaction) cancelRetention(transaction); return {status:'refused',reason:'Canonical execution was superseded'}; }
         await commitRetention(transaction); activeRetentionTransaction = undefined;
         completedRunId = incoming.run.manifest.runId;
+        published?.(archive.evidence);
       }
     }
   } catch (failure) {
@@ -2092,6 +2094,7 @@ async function execute(
           await commitRetention(activeRetentionTransaction);
           activeRetentionTransaction = undefined;
           completedRunId = acceptedThisIteration.run.manifest.runId;
+          published?.(archive.evidence);
           failureReason = undefined;
           status = "Accepted update · evidence retained after retry";
         } catch (retentionFailure) {
@@ -2103,12 +2106,17 @@ async function execute(
       if (guided && guidedBatch?.completedCount === 0 && guidedLearning) guidedBatch = previousGuidedBatch;
       else if (guidedBatch?.status === "RUNNING") guidedBatch.status = "STOPPED";
       busy = false;
+      if (completedRunId && !failureReason && command === 'predict' && currentProfile() === 'workbench') {
+        attract = false;
+        lastActivity = Date.now();
+        clearExhibitBanner();
+      }
       render();
       void loadDetail();
     }
   }
   if (failureReason) return {status:'failed',reason:failureReason};
-  if (completedRunId && currentOperation === operation) return {status:'completed',runId:completedRunId};
+  if (completedRunId && currentOperation === operation) return {status:'completed',runId:completedRunId,evidence:archive.evidence};
   return {status:'refused',reason:'Canonical execution produced no new retained receipt'};
 }
 

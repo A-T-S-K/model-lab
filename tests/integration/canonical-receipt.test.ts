@@ -15,9 +15,11 @@ test('canonical binding returns only the request receipt; refuses failures with 
     await archive.addRun(response.result.run);
   }
   const binding=new ExecutorRegistry().get('microgpt-legacy-v1');
-  const context={input:'unused',endpoint:'unused',store:archive.evidence};
-  const run=await binding.execute({...context,canonical:async()=>({status:'completed',runId:'first'})});
+  const captured=new SessionArchive();
+  const context={input:'unused',endpoint:'unused',store:captured.evidence};
+  const run=await binding.execute({...context,canonical:async()=>({status:'completed',runId:'first',evidence:archive.evidence})});
   assert.equal(run.id,'first','select exact returned identity even if it is not last in the store');
+  assert.equal(captured.evidence.list().length,0,'publication is resolved from its authoritative store without copying into the captured store');
   const before=archive.evidence.list();
   for(const outcome of [
     {status:'refused',reason:'invalid input d'},
@@ -28,5 +30,5 @@ test('canonical binding returns only the request receipt; refuses failures with 
     assert.deepEqual(archive.evidence.list(),before);
   }
   await assert.rejects(binding.execute({...context,canonical:async()=>{throw Error('worker rejected');}}),/worker rejected/);
-  await assert.rejects(binding.execute({...context,canonical:async()=>({status:'completed',runId:'missing'})}),/Missing run/);
+  await assert.rejects(binding.execute({...context,canonical:async()=>({status:'completed',runId:'missing',evidence:archive.evidence})}),/Missing run/);
 });
