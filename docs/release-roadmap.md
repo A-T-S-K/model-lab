@@ -144,3 +144,12 @@ and [engineering review](reviews/release-learning-introduction.md) record exact 
 Context/attention, output, learning and experiment release rewrites remain proposed;
 existing capabilities are reachable via Explore and Open workbench. This is not
 M5, unfamiliar-user, foundation, workshop/station or release acceptance.
+
+## 2026-10-02 forward-tour implementation
+
+The opt-in lesson now implements context/attention and output through the same
+recorded prediction, with authentic causal arithmetic, optional depth/checks and
+explicit handoff to existing learning computation. [Forward-tour review](reviews/release-learning-forward-tour.md)
+records incremental scope, current-candidate checks and rendered evidence. Chapters
+5–6 remain proposed; default entry, release packaging and qualification gates remain
+unchanged. No learning gains, full-suite success, foundation or M5 acceptance claimed.

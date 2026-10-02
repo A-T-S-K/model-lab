@@ -1,7 +1,7 @@
 # Release learning journey
 
-Status: implemented introductory engineering slice, provisional pending the
-[review record](../reviews/release-learning-introduction.md). Foundation acceptance,
+Status: implemented opening and forward-prediction engineering slice, provisional pending the
+[forward-tour review](../reviews/release-learning-forward-tour.md). Foundation acceptance,
 independent M5 and unfamiliar-user learning evidence remain ungranted. See
 [authority](../README.md), [foundation ledger](../foundation-status.md),
 [release roadmap](../release-roadmap.md) and design §§3–5/8 in the
@@ -34,9 +34,9 @@ arithmetic, native source, axes, source identities and experiment contracts rema
 | Chapter | Learner question / prerequisites | Authentic computation and semantic anchors | Takeaway / misconception | Optional Values, Math, Source | Action, feedback and transition | Implementation / qualification |
 | --- | --- | --- | --- | --- | --- | --- |
 | Prediction | What is the model predicting at this position? No ML knowledge; introduce example, prefix and next character. | Canonical abca, p3: START + abc → target a; separate p4 target END. `model.probabilities`, complete vocabulary support, recorded run/position. | Current parameters assign next-token probabilities. Top rank is neither guaranteed answer, sampled output nor empirical accuracy; prediction does not train. | Original full-support values, logits/softmax, native forward source, immutable run and snapshot identity. | Explicit fresh Predict. Optional three-choice check explains assigned probabilities, guarantee and training using this run's highest output/known target. Continue to representation or Explore. | Opening and chapter implemented in this pass; engineering controls and visual evidence in review. No measured learning gains. |
-| Representation | How can the model calculate with a character and its position? Know that a vocabulary lists possible tokens; introduce ID, lookup, component and vector. | Selected p3 c → ID 2 → `tokenEmbedding`/wte row, `positionEmbedding`/wpe p3 → `embeddingSum` → `embeddingNorm` → layer0 `preAttentionNorm`. | Tables turn character/position into numerical lists; add corresponding components and rescale. Signs are not quality judgments; dimensions have no established human meanings; initial weights are not trained semantics. | All original components, actual component-zero addition; both RMS norms, full feature reductions, epsilon 1e-5, source-bound artifacts, saved embeddingNorm residual identity. | Read one worked numeric example; open component details. Continue explicitly into existing attention lesson, or Explore/return. | Implemented introductory chapter; native mathematics preserved. Later attention sequence retains its existing scope. |
-| Context / attention | How does earlier context affect this position? Vectors and current versus earlier positions. | Existing Q/K/V, causal scores, attention weights, full weighted-value contributors, head concatenation, projection and saved residual. | Causality restricts future keys; attention weights mix vectors. They are not proof of semantic circuits or causal explanations of learned behavior. | Actual dot products, head/key coordinates, scaling, softmax support, signed weighted sums, residual source and native code. | Existing lesson supports inspect/follow transitions. Future release rewrite should include a causality check; not implemented here. | Existing engineering lesson only; release chapter redesign deferred. No transferred qualification. |
-| Output | How do numbers become possible outputs? Representation and context. | Existing MLP/ReLU, logits/unembedding and complete output softmax; distinguish known target, greedy rank and sampling. | Raw scores differ from probabilities; support and denominator matter. No sampled text or language-performance claim from a single distribution. | Native activation differences, all logits, softmax denominator, exact probabilities. | Existing sequence reaches probabilities; future release question/check/handoff into learning remains proposed. | Existing lesson preserved; release rewrite deferred. |
+| Representation | How can the model calculate with a character and its position? Know that a vocabulary lists possible tokens; introduce ID, lookup, component and vector. | Selected p3 c → ID 2 → `tokenEmbedding`/wte row, `positionEmbedding`/wpe p3 → `embeddingSum` → `embeddingNorm` → layer0 `preAttentionNorm`. | Tables turn character/position into numerical lists; add corresponding components and rescale. Signs are not quality judgments; dimensions have no established human meanings; initial weights are not trained semantics. | All original components, actual component-zero addition; both RMS norms, full feature reductions, epsilon 1e-5, source-bound artifacts, saved embeddingNorm residual identity. | Read one worked numeric example; open component details. Continue explicitly into the context/attention chapter, or Explore/return. | Implemented introductory chapter; native mathematics preserved. Forward attention sequence uses the same public lesson states. |
+| Context / attention | How does earlier context affect this position? Vectors and current versus earlier positions. | Existing Q/K/V, causal scores, attention weights, full weighted-value contributors, head concatenation, projection and saved residual. | Causality restricts future keys; attention weights mix vectors. They are not proof of semantic circuits or causal explanations of learned behavior. | Actual dot products, head/key coordinates, scaling, softmax support, signed weighted sums, residual source and native code. | Five implemented beats: Q/K/V, causal comparison, position weights, Value mixture, head integration. Optional causal/importance check gives explanatory feedback. | Implemented release chapter; complete p3/head0/key0 comparison, causal row and full contributors, source-bound projections and residual. Engineering evidence in the forward-tour review. |
+| Output | How do numbers become possible outputs? Representation and context. | Existing MLP/ReLU, logits/unembedding and complete output softmax; distinguish known target, greedy rank and sampling. | Raw scores differ from probabilities; support and denominator matter. No sampled text or language-performance claim from a single distribution. | Native activation differences, all logits, softmax denominator, exact probabilities. | Implemented transform → logits → output probabilities → original prediction recap. Optional normalization check; explicit Start learning computation · propose one update hands off to the existing workflow. | Implemented release chapter; canonical ReLU/no-bias/RMSNorm, both saved residual sources, all output indices and denominator retained. |
 | Learning | How could this example change a later prediction? Prediction, target and error. | Existing whole-example mean loss, backward contributions/accumulation, Adam moments/schedule, provisional candidate and explicit acceptance/discard. | Sensitivity is not the applied update; candidate is not accepted state; one example improvement is not generalization. | Numerical adjoints where available, complete state/receipt lineage, optimizer arithmetic/source. | Existing bounded proposal/decision workflow. Future chapter should compare matched before/after at the same occurrence. | Existing lifecycle/comparison controls retained. New introductory learning chapter not implemented. |
 | Experiment | What changes when we change one thing? Baseline, controlled variable and outcome. | Registered matched interventions/replacements/data experiments, compatible run/arm/state meanings, clean/treatment/defense controls where qualified. | Correlation is not causation; a null result is valid; replacement is not original execution. | Matched state/order/budgets, numerical declarations, receipt/source and explicit missing coverage. | Open existing workbench without finishing lesson. Future release experiment lesson and approachable lab recipes remain proposed. | Existing capabilities reachable; no new recipe/backend or qualification claimed. |
 
@@ -80,3 +80,36 @@ Sources inspected 2026-10-02. No comprehension gain, foundation acceptance, full
 study, workshop/station qualification or release readiness follows from clicks,
 research citations or the engineering checks. Those boundaries remain governed by
 [proof plan M5/M6](Model-Lab-Foundation-Proofs-and-Migration-v2.md#m5-independent-foundation-review).
+
+## Implemented chapter 3–4 contract
+
+Chapter 3 asks “How does earlier context affect this position?” Chapter 4 asks
+“How do those numbers become probabilities for possible outputs?” Both bind the
+canonical abca p3 occurrence retained by PublicLessonSession. The bounded read model
+uses the existing spatial Query/Key lens and ForwardModel explanations; it creates
+no execution trace, numerical engine or independent lesson state.
+
+At p3, START/p0 and p1–p3 are eligible. p4 remains visible as future/excluded with
+no score coordinate, rather than zero or a fabricated mask. Head0/key0 shows every
+Query/Key component, derived signed products/sum and width scaling beside captured
+score. The complete score/weight row normalizes over positions. Every eligible
+weight and Value component contributes to the selected head-output sum. Distinct
+head vectors join channels; the output projection transforms them; addition uses
+the saved embeddingNorm, preceding preAttentionNorm.
+
+Chapter 4 exposes preMlpNorm, expansion, componentwise ReLU, contraction and
+addition to saved attentionResidual, then lm_head logits and vocabulary softmax.
+Each operation has a focused purpose and bound example; optional full projection
+operands, all ReLU components, stable softmax denominator, Math and Source supply
+depth. These architecture declarations apply to canonical MicroGPT only.
+
+The recap is the unchanged chapter 1 distribution, with known target, top rank and
+absence of sampling explicit. Start learning computation · propose one update
+begins the existing learning workflow; candidate decisions remain explicit and
+unresolved work blocks activity switching. Redesigned chapters 5–6 remain proposed.
+Optional check clicks grant no comprehension evidence.
+
+The learning handoff requires complete compatible chapter evidence and a prediction
+matching the current input/accepted state. Edited input or a retained historical
+prediction disables it with an explicit refusal. The controller rejects a stale
+handoff before any runtime effect; explanation navigation remains available.

@@ -492,3 +492,58 @@ was weakened. Engineering execution is not full-suite, foundation, M5 or release
 | BF-038 | `shared-slice.spec.ts:58` — a real native reply delayed past a model switch cannot enter retained evidence | FAILED | missing prerequisite |
 | BF-039 | `spatial-wave1b.spec.ts:5` — B01–B09 complete source-bound forward route and contextual exploration over real HTTP | FAILED | unresolved |
 | BF-040 | `spatial-wave1d.spec.ts:4` — D01–D05 source-bound explanations, interruption and static arithmetic | FAILED | unresolved overflow at line 20:916; outdated line-17 camera assertion reconciled, later learning checks NOT_RUN |
+
+## 2026-10-02 release-learning forward-tour disposition
+
+Final runtime `sha256:8e67767e6d3bdc345263d54c51c4c41c3076fa1a0f8dbc9a45b060e37c12e949`,
+branch/HEAD unchanged. [Forward-tour review](release-learning-forward-tour.md)
+records implemented chapters 3–4, final input/accepted-state handoff refusal and
+qualification limits. The complete final owned broad run passed **162**, failed
+**16**, skipped **14**, zero flaky, **192 selected**, in **1,170.391776 seconds**.
+[Report](../../test-results/scratch/browser-TLU09e/report/results.json),
+[source/argv](../../test-results/scratch/browser-TLU09e/source.json) and
+[exact-identity comparison](../../test-results/scratch/release-forward-6i25ccmq/browser-baseline-comparison.json)
+retain all original errors, annotations and artifacts. All 188 prior identities
+retain their outcomes and all error stack stopping boundaries are identical. No
+prior pass newly fails; no identity is missing; all four new forward-tour identities
+pass. There are no newly reached downstream failures. Earlier interrupted and
+intermediate attempts are separate, not a baseline.
+
+No old test, timeout, prerequisite, resource limit or geometry assertion was
+reconciled or weakened by this slice. Native/fixture gaps remain unqualified.
+The four new browser cases cover desktop, compact/reduced motion, mobile/reduced
+motion, and the explicit learning/candidate decision boundary. New read-model
+coverage uses an authentic canonical run and preserves the independent oracle.
+
+| Retained ID | Exact test identity | Current outcome / stopping scope | Disposition retained |
+| --- | --- | --- | --- |
+| BF-002 | `abq-overnight.spec.ts` — Q01/Q03 entry and source-bound chain 1920 | FAILED · `tests/browser/abq-overnight.spec.ts:15:106` | outdated test contract |
+| BF-001 | `abq-overnight.spec.ts` — Q01/Q03 entry and source-bound chain 1280 | FAILED · `tests/browser/abq-overnight.spec.ts:15:106` | outdated test contract |
+| BF-003 | `abq-overnight.spec.ts` — Q02 complete public reset across completed, forward, partial, Ready, historical and intervention | FAILED · `tests/browser/abq-overnight.spec.ts:31:69` | outdated test contract |
+| BF-004 | `abq-overnight.spec.ts` — Q04/Q05 short route detour, keyboard, reduced motion and source invalidation | FAILED · `tests/browser/abq-overnight.spec.ts:48:97` | outdated test contract |
+| BF-005 | `abq-overnight.spec.ts` — Q08 test-only serialized-estimate fixture refuses new work visibly and Clear recovers | FAILED · `tests/browser/abq-overnight.spec.ts:56:190` | outdated test contract |
+| BF-006 | `end-to-end-fixes.spec.ts` — five corrections: public same-session route, scalar arms, compact Ready and prediction meaning | FAILED · `tests/browser/end-to-end-fixes.spec.ts:41:122` | unresolved |
+| BF-007 | `exhibit-v2.spec.ts` — browser measures max-context live scalar rendering and worker responsiveness | FAILED · `tests/browser/exhibit-v2.spec.ts:64:49` | outdated test contract |
+| BF-008 | `exhibit-v2.spec.ts` — measured session budget stops new capture without deleting retained history | FAILED · `tests/browser/exhibit-v2.spec.ts:108:51` | outdated test contract |
+| BF-017 | `m1-witnesses.spec.ts` — live MLP prediction and SGD, then noncanonical multilayer selection in the same inspector | FAILED · `tests/browser/m1-witnesses.spec.ts:10:108` | missing prerequisite |
+| BF-019 | `m1-witnesses.spec.ts` — structural and opaque imports show truthful fallback and no invented numerical display | FAILED · `tests/browser/m1-witnesses.spec.ts:63:16` | missing prerequisite |
+| BF-020 | `m2-b-mlp-world.spec.ts` — M2-B live MLP prediction and SGD inhabit the shared continuous world without transformer state | FAILED · `tests/browser/m2-b-mlp-world.spec.ts:11:161` | missing prerequisite |
+| BF-034 | `model-lab-v2.spec.ts` — bounded training retains real checkpoints and complete capture displays statistics | FAILED · `tests/browser/model-lab-v2.spec.ts:102:54` | outdated test contract |
+| BF-036 | `shared-slice.spec.ts` — two real producers share admission, inspection, sources and saved evidence | FAILED · `tests/browser/shared-slice.spec.ts:19:111` | missing prerequisite |
+| BF-038 | `shared-slice.spec.ts` — a real native reply delayed past a model switch cannot enter retained evidence | FAILED · `tests/browser/shared-slice.spec.ts:66:14` | missing prerequisite |
+| BF-039 | `spatial-wave1b.spec.ts` — B01–B09 complete source-bound forward route and contextual exploration over real HTTP | FAILED · `tests/browser/spatial-wave1b.spec.ts:60:137` | unresolved |
+| BF-040 | `spatial-wave1d.spec.ts` — D01–D05 source-bound explanations, interruption and static arithmetic | FAILED · `tests/browser/spatial-wave1d.spec.ts:20:916` | unresolved overflow at line 20:916; outdated line-17 camera assertion reconciled, later learning checks NOT_RUN |
+| BF-018 | `m1-witnesses.spec.ts` — new models reopen after native shutdown without executors and refuse uncaptured actions | SKIPPED · Declared prerequisite skip | missing prerequisite |
+| BF-021 | `m2-b-mlp-world.spec.ts` — M2-B saved MLP evidence reopens in the world with the native executor disconnected | SKIPPED · Declared prerequisite skip | missing prerequisite |
+| BF-022 | `m2-c-evidence-fallback.spec.ts` — M2-C grouped axes, shape-only and opaque evidence inhabit one truthful bounded world | SKIPPED · Declared prerequisite skip | missing prerequisite |
+| BF-023 | `m2-c-evidence-fallback.spec.ts` — M2-C saved fixture replay is executor-free and switching to MicroGPT clears fallback state | SKIPPED · Declared prerequisite skip | missing prerequisite |
+| BF-024 | `m2-d-pythia-world.spec.ts` — M2-D live native Pythia inhabits the shared world with truthful selected-layer coverage | SKIPPED · Declared prerequisite skip | missing prerequisite |
+| BF-025 | `m2-d-pythia-world.spec.ts` — M2-D saved Pythia world replays after verified bridge shutdown with zero native requests | SKIPPED · Declared prerequisite skip | missing prerequisite |
+| BF-026 | `m2-e-integration.spec.ts` — M2-E cross-world switching preserves canonical state and keeps replay inert | SKIPPED · Declared prerequisite skip | missing prerequisite |
+| BF-028 | `m4-a-pythia-generation.spec.ts` — M4-A live Predict and bounded uncached Generate retain separate native occurrences | SKIPPED · Declared prerequisite skip | missing prerequisite |
+| BF-029 | `m4-a-pythia-generation.spec.ts` — M4-A retained generation replays with zero native requests after bridge shutdown | SKIPPED · Declared prerequisite skip | missing prerequisite |
+| BF-030 | `m4-b1-payload.spec.ts` — M4-B1 retained generation uses payload-backed bounded inspection with no executor | SKIPPED · Declared prerequisite skip | missing prerequisite |
+| BF-031 | `m4-b2-portable-archive.spec.ts` — M4-B2 mixed historical archive exports, imports inertly, and survives a tampered replacement attempt | SKIPPED · Declared prerequisite skip | missing prerequisite |
+| BF-032 | `m4-c1-retention.spec.ts` — M4-C1 near-limit history stays inspectable while native work refuses before transport and Clear Session restores capacity | SKIPPED · Declared prerequisite skip | missing prerequisite |
+| BF-033 | `m4-c2-render-work.spec.ts` — M4-C2 retained navigation stays bounded and truthful without execution | SKIPPED · Declared prerequisite skip | missing prerequisite |
+| BF-037 | `shared-slice.spec.ts` — saved native evidence replays after shutdown and canonical operation requires no Python endpoint | SKIPPED · Declared prerequisite skip | missing prerequisite |

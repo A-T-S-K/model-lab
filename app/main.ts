@@ -296,6 +296,11 @@ function currentPublicLessonView() {
     publicGuidedComputation ? { position: publicGuidedComputation.lessonPosition } : undefined);
 }
 function dispatchPublicLesson(event: PublicLessonEvent): boolean {
+  if (releaseLearning && event.type === 'START_PART2' &&
+    (!publicGuidedComputation || publicGuidedComputation.capturedDocument !== documentText || result?.run.manifest.runId !== liveRunId)) {
+    error = 'Learning handoff refused: the retained prediction must match the current input and accepted state. Explicitly Predict before starting learning computation.';
+    render(); return false;
+  }
   if (releaseLearning && (busy || forwardDriver.active) && (['OPEN_DETAIL','RETURN_FROM_DETAIL','ENTER_EXPLORE','RESUME_GUIDED'].includes(event.type) || event.type === 'PRIMARY_ACTION' && publicLessonSession.current.startsWith('p1_'))) {
     error = 'Finish or cancel active work, or explicitly accept/discard its candidate, before changing learning activity.'; render(); return false;
   }

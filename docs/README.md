@@ -33,7 +33,8 @@ with exact statements/sections, decision needed and affected gate.
 
 ## Release preparation
 
-- [Release learning journey](design/release-learning-journey.md): opt-in opening and introductory prediction/representation contract; later chapters remain proposed.
+- [Release learning journey](design/release-learning-journey.md): opt-in opening and prediction, representation, context/attention and output contracts; redesigned learning/experiment chapters remain proposed.
+- [Forward-tour implementation review](reviews/release-learning-forward-tour.md): chapters 3–4, authentic arithmetic, rendered evidence, explicit learning handoff and current verification limits.
 - [Introductory implementation review](reviews/release-learning-introduction.md): incremental scope, rendered evidence and current validation limits.
 
 - [First release contract and roadmap](release-roadmap.md): Learn → Explore → Lab, audience outcomes, proposed curriculum, ordered gates and unresolved decisions.
