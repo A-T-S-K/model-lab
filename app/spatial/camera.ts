@@ -103,14 +103,14 @@ export class SpatialCamera {
     const shell=svg.closest<HTMLElement>('.spatial-shell');
     const profile=shell?.dataset.experienceProfile;
     const mode=shell?.dataset.publicNavigationMode;
-    if((profile!=='visitor'&&profile!=='facilitator')||(mode!=='guided'&&mode!=='detail'))return undefined;
+    if((profile!=='visitor'&&profile!=='facilitator'&&shell?.dataset.releaseLearning!=='true')||(mode!=='guided'&&mode!=='detail'))return undefined;
     const pane=svg.closest<HTMLElement>('.world-pane');
     const width=pane?.clientWidth??0,height=pane?.clientHeight??0;
     if(width<=0||height<=0)return undefined;
     if(shell?.dataset.publicCameraOwner==='part2-working')
       return responsivePublicFrame(width,height,PUBLIC_CONTENT_BOUNDS);
     const state=(shell?.dataset.publicDisplayedState??shell?.dataset.publicCanonicalState??'cold') as PublicTourState;
-    const plan=publicLessonCameraPlan(state);
+    const plan=svg.classList.contains('learn-collapsed-world') ? {mode:'overview' as const} : publicLessonCameraPlan(state);
     if(plan.mode==='overview')return responsivePublicFrame(width,height,PUBLIC_CONTENT_BOUNDS);
     if(plan.mode==='hold')return {...this.box};
 

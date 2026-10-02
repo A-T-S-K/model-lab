@@ -134,3 +134,13 @@ controlled security lessons: data substitution, poisoning/defense controls,
 interventions and attribution hypotheses with faithful provenance and null outcomes.
 These horizons require new scoped authorization, proofs and content; this pass
 implements neither their UI nor production architecture cleanup.
+
+## 2026-10-02 introductory implementation
+
+The opt-in `/?experience=learn` slice implements an opening plus prediction and
+representation chapters over the existing world/controller. Default and explicit
+legacy/deployment entries remain. [Journey/coverage](design/release-learning-journey.md)
+and [engineering review](reviews/release-learning-introduction.md) record exact scope.
+Context/attention, output, learning and experiment release rewrites remain proposed;
+existing capabilities are reachable via Explore and Open workbench. This is not
+M5, unfamiliar-user, foundation, workshop/station or release acceptance.

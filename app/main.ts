@@ -1,3 +1,4 @@
+import { releaseLearningEnabled, INTRO_POSITION } from './presentation/release-learning.js';
 import type { CanonicalReceipt, CanonicalPublication } from './worker/executors.js';
 import { SharedInspector } from './views/shared-inspector.js';
 import './views/shared-inspector.css';
@@ -109,7 +110,9 @@ import {
   vectorView,
 } from "./views/evidence.js";
 
-const spatialEnabled = new URLSearchParams(location.search).get("presentation") === "spatial";
+const releaseLearningEntry = releaseLearningEnabled(new URLSearchParams(location.search));
+let releaseLearning = releaseLearningEntry;
+const spatialEnabled = releaseLearning || new URLSearchParams(location.search).get("presentation") === "spatial";
 const demoEnabled = publicDemoEnabled(new URLSearchParams(location.search));
 let spatialActive = spatialEnabled;
 const spatialSelection: MicrogptSelection = { layer: 0, query: 4, key: 0, head: 0, feature: 0 };
@@ -117,6 +120,7 @@ const worldSelection: WorldSelection = {node:'',port:'',phase:'',coordinates:{}}
 function clearWorldSelection(){Object.assign(worldSelection,{node:'',port:'',phase:'',coordinates:{}});}
 function focusCanonicalPredict(){queueMicrotask(()=>document.querySelector<HTMLButtonElement>('#predict')?.focus({preventScroll:true}));}
 const spatialPresenter = new SpatialPresenter(spatialSelection);
+spatialPresenter.releaseLearning = releaseLearning;
 let publicLessonSession = createPublicLessonSession();
 let publicGuidedComputation: PublicGuidedComputationBinding | undefined;
 let spatialExperimentId = "";
@@ -194,6 +198,9 @@ function currentProfile(): ExperienceProfile {
     isFacilitatorOpen: spatialPresenter.operatorControls,
   });
 }
+function usesGuidedLesson(): boolean {
+  return releaseLearning || currentProfile() !== 'workbench';
+}
 function currentCapabilities(): ExperienceCapabilities {
   return experienceCapabilities(currentProfile(), spatialPresenter.freeExplore);
 }
@@ -251,7 +258,7 @@ function restoreExecutionView() {
 }
 const forwardDriver = new ForwardDriver(client, forwardChanged, async incoming => {
   const transaction = activeRetentionTransaction; activeRetentionTransaction = undefined;
-  const acceptingPublicCandidate = currentProfile() !== 'workbench'
+  const acceptingPublicCandidate = usesGuidedLesson()
     && incoming.learn
     && publicLessonSession.decisionPending === 'accepted';
   beforeForward = undefined; beforeForwardLocation = undefined;
@@ -262,7 +269,7 @@ const forwardDriver = new ForwardDriver(client, forwardChanged, async incoming =
   }
 }, failure => {
   cancelRetention(activeRetentionTransaction); activeRetentionTransaction = undefined;
-  if (currentProfile() !== 'workbench') dispatchPublicLesson({ type: 'EXECUTION_FAILED' });
+  if (usesGuidedLesson()) dispatchPublicLesson({ type: 'EXECUTION_FAILED' });
   result = beforeForward; beforeForward = undefined; restoreExecutionView();
   player = result && new TracePlayer(result.run);
   clearDisplayedInspection();
@@ -272,7 +279,7 @@ const forwardDriver = new ForwardDriver(client, forwardChanged, async incoming =
 client.onFailure = failure => {
   if (!forwardDriver.active) return;
   cancelRetention(activeRetentionTransaction); activeRetentionTransaction = undefined;
-  if (currentProfile() !== 'workbench') dispatchPublicLesson({ type: 'EXECUTION_FAILED' });
+  if (usesGuidedLesson()) dispatchPublicLesson({ type: 'EXECUTION_FAILED' });
   discardForward(); ready = false;
   status = "Worker failed · partial prediction released · Reset model or Clear session to restart";
   error = failure.message; render();
@@ -289,6 +296,9 @@ function currentPublicLessonView() {
     publicGuidedComputation ? { position: publicGuidedComputation.lessonPosition } : undefined);
 }
 function dispatchPublicLesson(event: PublicLessonEvent): boolean {
+  if (releaseLearning && (busy || forwardDriver.active) && (['OPEN_DETAIL','RETURN_FROM_DETAIL','ENTER_EXPLORE','RESUME_GUIDED'].includes(event.type) || event.type === 'PRIMARY_ACTION' && publicLessonSession.current.startsWith('p1_'))) {
+    error = 'Finish or cancel active work, or explicitly accept/discard its candidate, before changing learning activity.'; render(); return false;
+  }
   if (event.type === 'EXECUTION_FAILED' || event.type === 'EXECUTION_CANCELLED') publicDemo.stop();
   const before = publicLessonSession;
   const transition = transitionPublicLesson(before, event, currentPublicLessonContext());
@@ -300,12 +310,13 @@ function dispatchPublicLesson(event: PublicLessonEvent): boolean {
     result,
     config.vocabulary,
   );
-  publicGuidedComputation = computation.binding;
+  publicGuidedComputation = computation.binding && releaseLearning ? {...computation.binding, lessonPosition: INTRO_POSITION} : computation.binding;
   publicLessonSession = transition.session;
-  if (computation.restore) {
-    result = computation.restore.result;
+  const releaseRestore = releaseLearning && publicGuidedComputation && ['RESUME_GUIDED','RETURN_FROM_DETAIL'].includes(event.type) && transition.session !== before ? publicGuidedComputation : undefined;
+  if (computation.restore || releaseRestore) {
+    result = (releaseRestore ?? computation.restore)!.result;
     player = new TracePlayer(result.run);
-    documentText = computation.restore.capturedDocument;
+    documentText = (releaseRestore ?? computation.restore)!.capturedDocument;
   }
   for (const effect of transition.effects) interpretPublicLessonEffect(effect);
   return transition.session !== before || transition.effects.length > 0;
@@ -348,7 +359,7 @@ function forwardChanged() {
     const profile = currentProfile();
     const training = forwardDriver.progress?.training;
     const boundary = forwardDriver.progress?.last;
-    if (currentProfile() !== 'workbench' && training) dispatchPublicLesson({ type: 'TRAINING_PROGRESS' });
+    if (usesGuidedLesson() && training) dispatchPublicLesson({ type: 'TRAINING_PROGRESS' });
     if (forwardDriver.follow) {
       if (training?.phase.endsWith('forward')) {
         // Real forward phases (baseline forward, training forward, candidate forward)
@@ -356,7 +367,7 @@ function forwardChanged() {
         if (boundary) spatialPresenter.followBoundary(boundary);
       } else if (training) {
         // Non-forward learning phases (loss, backward seed, backward, optimizer proposal, candidate application, ready)
-        if (profile === 'workbench') {
+        if (!usesGuidedLesson()) {
           // Workbench retains expert lower learning rail framing and learningStage
           spatialPresenter.followLearning(
             training.phase === 'loss'
@@ -375,7 +386,7 @@ function forwardChanged() {
         spatialPresenter.followBoundary(boundary);
       }
     }
-    if (currentProfile() !== 'workbench') {
+    if (usesGuidedLesson()) {
       const lesson = currentPublicLessonView();
       status = getPublicExecutionStatus({
         currentState: lesson.canonicalState,
@@ -394,7 +405,7 @@ function forwardChanged() {
     syncSpatialSelection();
   } else if (!forwardDriver.active) {
     cancelRetention(activeRetentionTransaction); activeRetentionTransaction = undefined;
-    if (currentProfile() !== 'workbench' && publicLessonSession.decisionPending !== 'discarded') {
+    if (usesGuidedLesson() && publicLessonSession.decisionPending !== 'discarded') {
       dispatchPublicLesson({ type: 'EXECUTION_CANCELLED' });
     }
     result = beforeForward; beforeForward = undefined; restoreExecutionView(); player = result && new TracePlayer(result.run);
@@ -405,7 +416,7 @@ function forwardChanged() {
 }
 function executionExplore(event: Event) {
   if (!forwardDriver.active) return;
-  if (currentProfile() !== 'workbench') return;
+  if (usesGuidedLesson()) return;
   const target = event.target as Element;
   if (target.closest('.contextual-dock, #execution-controls')) return;
   if (!target.closest('.world-workspace,.spatial-selection,#spatial-home,#spatial-back,#spatial-focus,#spatial-lens')) return;
@@ -436,15 +447,15 @@ function bindForwardControls() {
       if (source) void inspect(source, { kind: 'node', nodeId: Number(button.dataset.liveChild) }, 'Actual processed contribution');
     }));
     mount.querySelector('#step-learning')?.addEventListener('click', () => {
-      if (currentProfile() !== 'workbench') { dispatchPublicLesson({ type: 'START_PART2' }); render(); return; }
+      if (usesGuidedLesson()) { dispatchPublicLesson({ type: 'START_PART2' }); render(); return; }
       void startForward(true);
     });
     mount.querySelector('#short-teach')?.addEventListener('click', () => {
-      if (currentProfile() !== 'workbench') { dispatchPublicLesson({ type: 'START_PART2' }); render(); return; }
+      if (usesGuidedLesson()) { dispatchPublicLesson({ type: 'START_PART2' }); render(); return; }
       void startForward(true);
     });
     mount.querySelector('#execution-accept')?.addEventListener('click', () => {
-      if (currentProfile() !== 'workbench') { dispatchPublicLesson({ type: 'ACCEPT_REQUESTED' }); render(); return; }
+      if (usesGuidedLesson()) { dispatchPublicLesson({ type: 'ACCEPT_REQUESTED' }); render(); return; }
       void forwardDriver.acceptUpdate();
     });
     mount.querySelector('#execution-pin')?.addEventListener('click', () => {
@@ -462,7 +473,7 @@ function bindForwardControls() {
     });
     mount.querySelector('#execution-pause')?.addEventListener('click', () => forwardDriver.pause());
     mount.querySelector('#execution-cancel')?.addEventListener('click', () => {
-      if (currentProfile() !== 'workbench' && currentPublicLessonView().canonicalState === 'candidate_ready') {
+      if (usesGuidedLesson() && currentPublicLessonView().canonicalState === 'candidate_ready') {
         dispatchPublicLesson({ type: 'DISCARD_REQUESTED' }); render(); return;
       }
       void cancelForward();
@@ -479,11 +490,11 @@ function syncTrainingPin() {
 }
 async function startForward(training = false) {
   if (busy || !ready || forwardDriver.active) {
-    if (training && currentProfile() !== 'workbench') dispatchPublicLesson({ type: 'EXECUTION_FAILED' });
+    if (training && usesGuidedLesson()) dispatchPublicLesson({ type: 'EXECUTION_FAILED' });
     return;
   }
   try { activeRetentionTransaction = await beginRetention('canonical'); }
-  catch (failure) { error = failure instanceof Error ? failure.message : String(failure); status = 'Retention capacity refused · no execution started'; if (currentProfile() !== 'workbench') dispatchPublicLesson({ type: 'EXECUTION_FAILED' }); render(); return; }
+  catch (failure) { error = failure instanceof Error ? failure.message : String(failure); status = 'Retention capacity refused · no execution started'; if (usesGuidedLesson()) dispatchPublicLesson({ type: 'EXECUTION_FAILED' }); render(); return; }
   readyComparison=true; beforeForwardLocation = spatialPresenter.captureLocation(); beforeForwardExperiment = spatialExperimentId;
   spatialPresenter.invalidate(); spatialPresenter.learningStage = undefined; spatialExperimentId = '';
   clearDisplayedInspection(); operation++; beforeForward = result; result = undefined; player = undefined; error = ''; status = 'Preparing captured input and checkpoint…';
@@ -834,7 +845,8 @@ function render(): void {
   document.body.classList.toggle("instrument-mode", !spatialActive);
   if (spatialActive) {
     const displayed = attract && exhibitEntry ? attractReplay?.result : result;
-    const source = displayed && sourceBinding(displayed.run, config.vocabulary, sourceSnapshot(displayed.run.manifest.startingSnapshotId??"")?.state.optimizer.step??displayed.trainingStep, liveRunId, documentText, "SPATIAL ATTENTION");
+    let source = displayed && sourceBinding(displayed.run, config.vocabulary, sourceSnapshot(displayed.run.manifest.startingSnapshotId??"")?.state.optimizer.step??displayed.trainingStep, liveRunId, documentText, "SPATIAL ATTENTION");
+    if (source && releaseLearning && displayed === attractReplay?.result) source = {...source, relationship: 'REPLAY'};
     const evidenceRun=spatialEvidenceRunId?archive.evidence.get(spatialEvidenceRunId):undefined;
     const compositeExperiment=evidenceRun?undefined:[...archive.modelVariantExperiments.values()].filter(isCompositeVariantExperiment).find(experiment=>[experiment.baselineRun.manifest.runId,experiment.initializedRun.manifest.runId,experiment.trainedRun.manifest.runId].includes(displayed?.run.manifest.runId??''));
     const compositeState=compositeExperiment?(displayed?.run.manifest.runId===compositeExperiment.initializedRun.manifest.runId?compositeExperiment.initialState:compositeExperiment.trainedState):undefined;
@@ -853,9 +865,11 @@ function render(): void {
     const experimentList=[...archive.learningExperiments.values()].map(e=>({id:e.id,step:e.update.step+1})),experimentWindow=presentationWindow(experimentList,spatialExperimentOffset,PRESENTATION_WORK.spatialExperiments),selectedExperiment=experimentList.find(e=>e.id===spatialExperimentId),experimentItems=selectedExperiment&&!experimentWindow.items.includes(selectedExperiment)?[selectedExperiment,...experimentWindow.items.slice(0,PRESENTATION_WORK.spatialExperiments-1)]:experimentWindow.items;
     spatialExperimentOffset=experimentWindow.offset;
     const profile = currentProfile();
-    const publicLesson = profile === 'workbench' ? undefined : currentPublicLessonView();
+    const publicLesson = profile === 'workbench' && !releaseLearning ? undefined : currentPublicLessonView();
     mount.innerHTML = spatialPresenter.render(model, {
       profile,
+      releaseLearning,
+      releaseReplay: releaseLearning && displayed === attractReplay?.result,
       publicLesson,
       publicLessonDispatch: publicLesson ? dispatchPublicLesson : undefined,
       attract: !evidenceRun&&attract&&exhibitEntry, exhibit: !evidenceRun&&exhibitEntry, idleResetEnabled: idleResetEnabled, idleResetSeconds:exhibitConfiguration.resetAfterMs/1000,
@@ -878,6 +892,10 @@ function render(): void {
       scalar:evidenceRun?'No scalar continuation is captured for this run.':microscopeView(inspection,inspectionPath,inspectionLabel,inspectionPending,inspectionWhole,inspectionRelationship(),inspectionBinding,microscopeWindows),
     });
     bind();
+    mount.querySelector('#learn-predict')?.addEventListener('click', async () => {
+      await restartPublicTour();
+      document.querySelector<HTMLButtonElement>('#short-continue')?.focus({preventScroll:true});
+    });
     spatialPresenter.bind(model, spatialSelectionChanged, render, selectExplanationPhase);
     bindSpatialLearning();
     bindForwardControls();
@@ -1150,7 +1168,7 @@ function bindSpatialLearning() {
   mount.querySelector('#spatial-ablate')?.addEventListener('click',()=>{syncSpatialSelection();void ablateHead();});
   mount.querySelector('#spatial-patch')?.addEventListener('click',()=>{syncSpatialSelection();void patchHeadOutput();});
   const on = (id:string, action:()=>void) => mount.querySelector(id)?.addEventListener("click",action);
-  on("#spatial-learn",()=>{if(currentProfile()!=='workbench'){dispatchPublicLesson({type:'START_PART2'});render();return;}if(result?.run.manifest.runId===liveRunId&&!busy&&ready&&sourceBinding(result.run,config.vocabulary,result.trainingStep,liveRunId,documentText,"LEARN").capturedDocument===documentText)void execute("train");});
+  on("#spatial-learn",()=>{if(usesGuidedLesson()){dispatchPublicLesson({type:'START_PART2'});render();return;}if(result?.run.manifest.runId===liveRunId&&!busy&&ready&&sourceBinding(result.run,config.vocabulary,result.trainingStep,liveRunId,documentText,"LEARN").capturedDocument===documentText)void execute("train");});
   mount.querySelector("#spatial-experiment")?.addEventListener("change",event=>{
     spatialPresenter.invalidate();
     spatialExperimentId=(event.target as HTMLSelectElement).value;
@@ -1199,6 +1217,43 @@ function syncSpatialSelection(): void {
   const parameter = resolveParameter(sourceSnapshot(result?.run.manifest.startingSnapshotId ?? ""), spatialPresenter.pin);
   if (parameter) selectedParameter = parameter.index;
 }
+function bindReleaseLearningReturn(): void {
+  if (!releaseLearningEntry) return;
+  const button = document.createElement('button'); button.id = 'learn-workbench';
+  button.textContent = releaseLearning ? 'Open workbench' : 'Return to lesson';
+  button.disabled = busy || forwardDriver.active;
+  const host = mount.querySelector('header') ?? mount;
+  if (host === mount) button.className = 'release-return-action';
+  host.append(button);
+  button.addEventListener('click', () => {
+    if (busy || forwardDriver.active) {error = 'Finish or explicitly resolve active work first.'; render(); return;}
+    releaseLearning = !releaseLearning; spatialPresenter.releaseLearning = releaseLearning;
+    if (releaseLearning) {
+      spatialActive = true; spatialEvidenceRunId = ''; spatialEvidenceReplay = false;
+      clearWorldSelection(); spatialExperimentId = ''; clearDisplayedInspection();
+      dispatchPublicLesson({type:'RESUME_GUIDED'});
+      if (publicGuidedComputation) {
+        result = publicGuidedComputation.result; documentText = publicGuidedComputation.capturedDocument;
+        player = new TracePlayer(result.run);
+      }
+      spatialPresenter.prepareLessonReturn();
+      status = 'Retained lesson computation restored · no execution requested';
+    }
+    render(); document.querySelector<HTMLButtonElement>('#learn-workbench')?.focus({preventScroll:true});
+  });
+  if (releaseLearning && forwardDriver.active) {
+    const cancel = document.createElement('button'); cancel.id = 'learn-cancel-work';
+    cancel.textContent = forwardDriver.progress?.training?.phase === 'ready' ? 'Discard candidate' : 'Cancel active work';
+    cancel.disabled = forwardDriver.phase === 'cancelling';
+    cancel.addEventListener('click', () => {
+      if (currentPublicLessonView().canonicalState === 'candidate_ready') {dispatchPublicLesson({type:'DISCARD_REQUESTED'}); render();}
+      else void cancelForward();
+    });
+    host.append(cancel);
+  }
+  const classic = mount.querySelector<HTMLButtonElement>('#presentation-toggle');
+  if (classic && (busy || forwardDriver.active)) classic.disabled = true;
+}
 function bind(): void {
   const profile = currentProfile();
   const capabilities = currentCapabilities();
@@ -1212,7 +1267,7 @@ function bind(): void {
   const selectedVariant=[...archive.modelVariantExperiments.values()].filter(isActivationVariantExperiment).find(experiment=>[experiment.baselineRun.manifest.runId,experiment.variantRun.manifest.runId].includes(result?.run.manifest.runId??''));
   const selectedComposite=[...archive.modelVariantExperiments.values()].filter(isCompositeVariantExperiment).find(experiment=>[experiment.baselineRun.manifest.runId,experiment.initializedRun.manifest.runId,experiment.trainedRun.manifest.runId].includes(result?.run.manifest.runId??''));
   const selectedDataExperiment=activeDataExperimentId?archive.dataExperiments.get(activeDataExperimentId):undefined;
-  if(capabilities.researchVariants&&!attract&&result&&!selectedVariant&&!selectedComposite&&!selectedDataExperiment&&result.run.manifest.model.id==='microgpt'){
+  if(!releaseLearning&&capabilities.researchVariants&&!attract&&result&&!selectedVariant&&!selectedComposite&&!selectedDataExperiment&&result.run.manifest.model.id==='microgpt'){
     const button=document.createElement('button');button.id='open-activation-variant';button.textContent='Open Leaky ReLU variant';button.disabled=busy||forwardDriver.active;
     const compositeButton=document.createElement('button');compositeButton.id='open-composite-variant';compositeButton.textContent='Train composite A/B variant';compositeButton.disabled=busy||forwardDriver.active;
     const dataButton=document.createElement('button');dataButton.id='open-data-experiment';dataButton.textContent='Run matched data experiment';dataButton.disabled=busy||forwardDriver.active;
@@ -1256,6 +1311,7 @@ function bind(): void {
       else mount.insertAdjacentHTML('afterbegin', entry);
     }
     mount.querySelector("#presentation-toggle")?.addEventListener("click", async () => {
+      if (releaseLearningEntry && (busy || forwardDriver.active)) {error = 'Finish or explicitly resolve active work before changing presentation.'; render(); return;}
       if (forwardDriver.active) await cancelForward();
       spatialPresenter.invalidate();
       spatialActive = !spatialActive;
@@ -1271,6 +1327,7 @@ function bind(): void {
       render();
     });
   }
+  bindReleaseLearningReturn();
   mount
     .querySelectorAll<HTMLElement>(".attention-heads > section")
     .forEach((section) =>
@@ -1516,6 +1573,7 @@ function bind(): void {
     .querySelector<HTMLInputElement>("#document")
     ?.addEventListener("input", async (event) => {
       const edited = (event.target as HTMLInputElement).value;
+      if (forwardDriver.active && releaseLearningEntry) { error = 'Finish or cancel active work explicitly before editing input.'; render(); return; }
       if (forwardDriver.active) await cancelForward();
       spatialPresenter.invalidate();
       documentText = edited;
@@ -2068,7 +2126,7 @@ async function execute(
           ? `Live update complete · training step ${result.trainingStep}`
           : `Live prediction complete · ${result.tokenIds.length} positions`;
       if (count > 1) status += ` · ${step + 1}/${count} requested updates`;
-      if (command === 'predict' && currentProfile() !== 'workbench') dispatchPublicLesson({ type: 'PREDICTION_COMPLETE' });
+      if (command === 'predict' && usesGuidedLesson()) dispatchPublicLesson({ type: 'PREDICTION_COMPLETE' });
       const retain =
         true;
       recordTrainingSummary(incoming);
@@ -2390,10 +2448,11 @@ async function prepareAttract(currentOperation: number): Promise<void> {
   if (response.status !== "result")
     throw new Error("Attract bootstrap did not return a recorded Predict");
   attractReplay = bindAttractReplay(response.result);
-  attract = !spatialActive || exhibitEntry;
+  attract = !releaseLearning && (!spatialActive || exhibitEntry);
   liveRunId = "";
-  result = undefined;
-  player = undefined;
+  result = releaseLearning ? attractReplay.result : undefined;
+  player = result && new TracePlayer(result.run);
+  if (releaseLearning) publicGuidedComputation = {result: attractReplay.result, runId: response.result.run.manifest.runId, capturedDocument: fixture.document, lessonPosition: INTRO_POSITION};
   ready = true;
   busy = false;
   status = "Recorded real run. Not live.";

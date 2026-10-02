@@ -51,6 +51,9 @@ export interface PublicTrainingActionState {
 }
 
 export interface ContextualDockOptions {
+  readonly releaseIntroduction?: string;
+  readonly releaseLearning?: boolean;
+  readonly releaseBusy?: boolean;
   readonly model?: SpatialReadModel;
   readonly address: Address;
   readonly element: number;
@@ -1319,6 +1322,10 @@ function renderCompare(opts: ContextualDockOptions): string {
 }
 
 export function renderContextualDock(opts: ContextualDockOptions): string {
+  if (opts.releaseIntroduction !== undefined && opts.depth === 'explain') {
+    const opening = opts.tourContent?.state === 'cold';
+    return `<section class="contextual-dock learn-dock" data-testid="contextual-dock" data-active-depth="explain"><div class="dock-header"><div class="dock-route-info"><strong>${opening ? 'Opening' : opts.tourContent?.state === 'p1_represent' ? '2 · Representation' : '1 · Prediction'}</strong><span data-testid="selected-world-object" data-semantic-anchor="${opts.address.kind}" data-position="${opts.address.token}" data-run-id="${esc(opts.model?.source.sourceRunId ?? '')}">Lesson p3 · ${esc(opts.address.kind)}</span></div><nav class="learn-actions" aria-label="Lesson actions"><button id="dock-inspect" data-dock-depth="values" ${opts.releaseBusy ? 'disabled' : ''}>Values / Math / Source</button><button id="visitor-explore-toggle" ${opts.releaseBusy ? 'disabled' : ''}>Enter Explore</button>${opening ? `<button id="learn-predict" class="primary-action" ${opts.releaseBusy ? 'disabled' : ''}>Run a fresh prediction</button>` : `<button id="short-continue" class="primary-action" ${opts.releaseBusy ? 'disabled' : ''}>${opts.tourContent?.state === 'p1_represent' ? 'Continue to existing attention lesson' : 'How characters become numbers'}</button>`}</nav></div><div class="dock-body" data-testid="dock-body">${opts.releaseIntroduction}</div></section>`;
+  }
   // Resolve once for the summary, witness and active depth in this render.
   opts = { ...opts, resolvedTrainingDepth: resolvedPart2Depth(opts) };
   const { depth, lessonProgress, routePurpose, primaryAction, attentionAction, shortDetour, freeExplore, operatorControls, profile } = opts;
@@ -1357,6 +1364,7 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
     const position = opts.resolvedTrainingDepth.objective.selectedPosition;
     bodyContent = `<p data-testid="detail-selection-scope">${opts.publicTrainingDepthSelection?.objectivePosition === undefined ? 'Lesson occurrence' : 'Temporary detail selection · render only'} · p${position}. Lesson remains p${opts.tourContent?.selectionIntent.token}.</p>` + bodyContent;
   }
+  if (opts.releaseLearning) bodyContent = `<p class="learn-orientation">${opts.tourContent?.state === 'cold' ? 'Opening' : opts.tourContent?.state === 'p1_represent' ? '2 · Representation' : opts.tourContent?.state === 'p1_prediction_preview' ? '1 · Prediction' : 'Existing attention / forward lesson'} · ${exploring ? 'Explore · lesson retained' : 'Detail · lesson retained'} · run ${esc(opts.model?.source.sourceRunId ?? '')} · p${opts.address.token}</p>` + bodyContent;
   const isExpanded = effectiveDepth !== 'explain';
   const isFacilitator = profile === 'facilitator';
   const isPublic = profile === 'visitor' || Boolean(opts.tourContent);
@@ -1398,7 +1406,7 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
   return `<section class="contextual-dock short-guide ${isExpanded ? 'is-expanded' : ''} ${showSupport ? 'has-support-actions' : ''} ${hasCoreResult ? 'has-core-result' : ''}" data-testid="contextual-dock" data-tour-state="${esc(opts.tourContent?.state ?? '')}" data-active-depth="${effectiveDepth}" data-active-support="${showSupport ? esc(activeSupport?.id ?? 'default') : ''}" aria-label="Contextual explanation dock">
     <div class="dock-header" data-testid="dock-header">
       <div class="dock-route-info dock-slot-context">
-        ${opts.tourContent ? `<span class="lesson-progress lesson-macro-progress" data-testid="lesson-progress" aria-label="${esc(opts.tourContent.part === 1 ? 'Part 1 active; Part 2 upcoming' : opts.tourContent.state === 'tour_complete' ? 'Part 1 and Part 2 complete' : 'Part 1 complete; Part 2 active')}"><span class="${opts.tourContent.part === 1 ? 'active' : 'complete'}">1 · MAKE A PREDICTION</span><span aria-hidden="true">→</span><span class="${opts.tourContent.part === 1 ? 'upcoming' : opts.tourContent.state === 'tour_complete' ? 'complete' : 'active'}">2 · LEARN FROM ERROR</span><small><span data-testid="public-activity">${opts.publicNavigationMode === 'explore' ? 'Explore' : isExpanded ? 'Detail · lesson preserved' : 'Guided'}</span> · ${esc(lessonProgress)}</small></span>` : lessonProgress ? `<span class="lesson-progress" data-testid="lesson-progress">${esc(lessonProgress)}</span>` : ''}
+        ${opts.releaseLearning ? `<span class="lesson-progress">${opts.tourContent?.state === 'cold' ? 'Opening' : opts.tourContent?.state === 'p1_represent' ? '2 · Representation' : opts.tourContent?.state === 'p1_prediction_preview' ? '1 · Prediction' : 'Existing attention / forward lesson'}<small data-testid="public-activity"> · ${exploring ? 'Explore' : isExpanded ? 'Detail · lesson preserved' : 'Guided'}</small></span>` : opts.tourContent ? `<span class="lesson-progress lesson-macro-progress" data-testid="lesson-progress" aria-label="${esc(opts.tourContent.part === 1 ? 'Part 1 active; Part 2 upcoming' : opts.tourContent.state === 'tour_complete' ? 'Part 1 and Part 2 complete' : 'Part 1 complete; Part 2 active')}"><span class="${opts.tourContent.part === 1 ? 'active' : 'complete'}">1 · MAKE A PREDICTION</span><span aria-hidden="true">→</span><span class="${opts.tourContent.part === 1 ? 'upcoming' : opts.tourContent.state === 'tour_complete' ? 'complete' : 'active'}">2 · LEARN FROM ERROR</span><small><span data-testid="public-activity">${opts.publicNavigationMode === 'explore' ? 'Explore' : isExpanded ? 'Detail · lesson preserved' : 'Guided'}</span> · ${esc(lessonProgress)}</small></span>` : lessonProgress ? `<span class="lesson-progress" data-testid="lesson-progress">${esc(lessonProgress)}</span>` : ''}
         <span class="dock-selected-object" data-testid="selected-world-object" data-semantic-anchor="${dockAddress.kind}" data-position="${dockAddress.token}" data-layer="${dockAddress.layer ?? ''}" data-run-id="${esc(opts.model?.source.sourceRunId ?? '')}">${esc(dockLabel)}</span>
         ${opts.trainingState && opts.trainingState.frontierText ? `<span data-testid="execution-frontier" class="execution-frontier-tag">${esc(opts.trainingState.frontierText)}</span>` : ''}
         ${!opts.tourContent && shortDetour ? '<span class="dock-detour-badge">Detour</span>' : ''}

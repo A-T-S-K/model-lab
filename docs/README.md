@@ -33,6 +33,9 @@ with exact statements/sections, decision needed and affected gate.
 
 ## Release preparation
 
+- [Release learning journey](design/release-learning-journey.md): opt-in opening and introductory prediction/representation contract; later chapters remain proposed.
+- [Introductory implementation review](reviews/release-learning-introduction.md): incremental scope, rendered evidence and current validation limits.
+
 - [First release contract and roadmap](release-roadmap.md): Learn → Explore → Lab, audience outcomes, proposed curriculum, ordered gates and unresolved decisions.
 - [Browser/HTTP validation safety review](reviews/release-validation-safety.md): scoped writer ownership, current working-source verification and remaining unsafe tooling.
 

@@ -437,3 +437,58 @@ earlier focused selection at its own source identity. The initial broad attempt 
 interrupted for the final explanation-clock audit fix and retains its separate partial
 report; it is not included in these completed counts. All failures and later unreached
 assertions remain explicit.
+
+
+## 2026-10-02 release-learning introduction disposition
+
+Final opt-in introduction runtime
+`sha256:16b013519441271105843cbec11b6055d565a09aad07425a6e889645c20cc9dd`,
+branch/HEAD unchanged. [Implementation and review](release-learning-introduction.md)
+and [journey contract](../design/release-learning-journey.md) record the bounded slice.
+One complete final audited broad run passed 158, failed 16, skipped 14, zero flaky,
+188 selected in 1,132.627391 seconds. [Report](../../test-results/scratch/browser-uUZ8F4/report/results.json)
+and [exact-identity comparison](../../test-results/scratch/release-learning-t9kgdbln/browser-baseline-comparison.json)
+retain original errors/annotations/attachments. All 181 prior identities retain their
+outcomes; no prior pass newly fails, none is missing, and seven new introductory
+identities pass. An earlier interrupted broad attempt is retained as partial evidence
+in the review and is not treated as a baseline.
+
+Only BF-040 changes its stopping boundary: the corrected camera-activity assertion
+passes, then the unchanged viewport/overflow assertion fails at line 20:916. Its later
+learning checks remain unrun. BF-006's fixed-width failure and BF-039's visibility/
+overflow failure remain unresolved. Other failure stopping locations are unchanged.
+No numerical/interaction/visibility invariant, timeout, budget, fixture or prerequisite
+was weakened. Engineering execution is not full-suite, foundation, M5 or release acceptance.
+
+| ID | Actual retained test identity | Final outcome | Disposition / stopping scope |
+| --- | --- | --- | --- |
+| BF-001 | `abq-overnight.spec.ts:13` — Q01/Q03 entry and source-bound chain 1280 | FAILED | outdated test contract |
+| BF-002 | `abq-overnight.spec.ts:13` — Q01/Q03 entry and source-bound chain 1920 | FAILED | outdated test contract |
+| BF-003 | `abq-overnight.spec.ts:26` — Q02 complete public reset across completed, forward, partial, Ready, historical and intervention | FAILED | outdated test contract |
+| BF-004 | `abq-overnight.spec.ts:45` — Q04/Q05 short route detour, keyboard, reduced motion and source invalidation | FAILED | outdated test contract |
+| BF-005 | `abq-overnight.spec.ts:51` — Q08 test-only serialized-estimate fixture refuses new work visibly and Clear recovers | FAILED | outdated test contract |
+| BF-006 | `end-to-end-fixes.spec.ts:21` — five corrections: public same-session route, scalar arms, compact Ready and prediction meaning | FAILED | unresolved |
+| BF-007 | `exhibit-v2.spec.ts:44` — browser measures max-context live scalar rendering and worker responsiveness | FAILED | outdated test contract |
+| BF-008 | `exhibit-v2.spec.ts:95` — measured session budget stops new capture without deleting retained history | FAILED | outdated test contract |
+| BF-017 | `m1-witnesses.spec.ts:5` — live MLP prediction and SGD, then noncanonical multilayer selection in the same inspector | FAILED | missing prerequisite |
+| BF-018 | `m1-witnesses.spec.ts:41` — new models reopen after native shutdown without executors and refuse uncaptured actions | SKIPPED | missing prerequisite |
+| BF-019 | `m1-witnesses.spec.ts:59` — structural and opaque imports show truthful fallback and no invented numerical display | FAILED | missing prerequisite |
+| BF-020 | `m2-b-mlp-world.spec.ts:6` — M2-B live MLP prediction and SGD inhabit the shared continuous world without transformer state | FAILED | missing prerequisite |
+| BF-021 | `m2-b-mlp-world.spec.ts:35` — M2-B saved MLP evidence reopens in the world with the native executor disconnected | SKIPPED | missing prerequisite |
+| BF-022 | `m2-c-evidence-fallback.spec.ts:11` — M2-C grouped axes, shape-only and opaque evidence inhabit one truthful bounded world | SKIPPED | missing prerequisite |
+| BF-023 | `m2-c-evidence-fallback.spec.ts:39` — M2-C saved fixture replay is executor-free and switching to MicroGPT clears fallback state | SKIPPED | missing prerequisite |
+| BF-024 | `m2-d-pythia-world.spec.ts:12` — M2-D live native Pythia inhabits the shared world with truthful selected-layer coverage | SKIPPED | missing prerequisite |
+| BF-025 | `m2-d-pythia-world.spec.ts:37` — M2-D saved Pythia world replays after verified bridge shutdown with zero native requests | SKIPPED | missing prerequisite |
+| BF-026 | `m2-e-integration.spec.ts:15` — M2-E cross-world switching preserves canonical state and keeps replay inert | SKIPPED | missing prerequisite |
+| BF-028 | `m4-a-pythia-generation.spec.ts:9` — M4-A live Predict and bounded uncached Generate retain separate native occurrences | SKIPPED | missing prerequisite |
+| BF-029 | `m4-a-pythia-generation.spec.ts:24` — M4-A retained generation replays with zero native requests after bridge shutdown | SKIPPED | missing prerequisite |
+| BF-030 | `m4-b1-payload.spec.ts:7` — M4-B1 retained generation uses payload-backed bounded inspection with no executor | SKIPPED | missing prerequisite |
+| BF-031 | `m4-b2-portable-archive.spec.ts:6` — M4-B2 mixed historical archive exports, imports inertly, and survives a tampered replacement attempt | SKIPPED | missing prerequisite |
+| BF-032 | `m4-c1-retention.spec.ts:6` — M4-C1 near-limit history stays inspectable while native work refuses before transport and Clear Session restores capacity | SKIPPED | missing prerequisite |
+| BF-033 | `m4-c2-render-work.spec.ts:7` — M4-C2 retained navigation stays bounded and truthful without execution | SKIPPED | missing prerequisite |
+| BF-034 | `model-lab-v2.spec.ts:92` — bounded training retains real checkpoints and complete capture displays statistics | FAILED | outdated test contract |
+| BF-036 | `shared-slice.spec.ts:4` — two real producers share admission, inspection, sources and saved evidence | FAILED | missing prerequisite |
+| BF-037 | `shared-slice.spec.ts:44` — saved native evidence replays after shutdown and canonical operation requires no Python endpoint | SKIPPED | missing prerequisite |
+| BF-038 | `shared-slice.spec.ts:58` — a real native reply delayed past a model switch cannot enter retained evidence | FAILED | missing prerequisite |
+| BF-039 | `spatial-wave1b.spec.ts:5` — B01–B09 complete source-bound forward route and contextual exploration over real HTTP | FAILED | unresolved |
+| BF-040 | `spatial-wave1d.spec.ts:4` — D01–D05 source-bound explanations, interruption and static arithmetic | FAILED | unresolved overflow at line 20:916; outdated line-17 camera assertion reconciled, later learning checks NOT_RUN |
