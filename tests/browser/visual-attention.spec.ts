@@ -1,4 +1,5 @@
-import { test, expect } from "@playwright/test";
+import { evidenceDirectory } from '../support/browser-evidence.js';
+import { test, expect } from "../support/browser-evidence.js";
 for (const [width, height] of [
   [1920, 1080],
   [1280, 720],
@@ -38,7 +39,7 @@ for (const [width, height] of [
         .locator(".attention-page > footer")
         .evaluate((el) => el.getBoundingClientRect().bottom <= innerHeight),
     ).toBe(true);
-    await page.screenshot({ path: `test-results/gate5-prefix-${width}.png` });
+    await page.screenshot({ path: `${await evidenceDirectory(test.info())}/gate5-prefix-${width}.png` });
     await page.locator("#attention-full").click();
     await expect(page.getByTestId("attention-scope")).toContainText("5×5");
     for (const matrix of await matrices.all())
@@ -48,7 +49,7 @@ for (const [width, height] of [
         .locator(".attention-page > footer")
         .evaluate((el) => el.getBoundingClientRect().bottom <= innerHeight),
     ).toBe(true);
-    await page.screenshot({ path: `test-results/gate5-full-${width}.png` });
+    await page.screenshot({ path: `${await evidenceDirectory(test.info())}/gate5-full-${width}.png` });
     await page
       .locator(
         '.instrument-attention-matrix[data-head="1"] [data-query="3"][data-key="1"]',
@@ -64,7 +65,7 @@ for (const [width, height] of [
         .locator(".attention-page > footer")
         .evaluate((el) => el.getBoundingClientRect().bottom <= innerHeight),
     ).toBe(true);
-    await page.screenshot({ path: `test-results/gate5-cell-${width}.png` });
+    await page.screenshot({ path: `${await evidenceDirectory(test.info())}/gate5-cell-${width}.png` });
     await matrices.first().locator(".causal-mask").first().focus();
     await expect(
       matrices.first().locator(".causal-mask").first(),
@@ -74,7 +75,7 @@ for (const [width, height] of [
         .locator(".attention-page > footer")
         .evaluate((el) => el.getBoundingClientRect().bottom <= innerHeight),
     ).toBe(true);
-    await page.screenshot({ path: `test-results/gate5-mask-${width}.png` });
+    await page.screenshot({ path: `${await evidenceDirectory(test.info())}/gate5-mask-${width}.png` });
     await page.locator("#close-attention").click();
     await expect(page.locator("#teach")).toBeEnabled();
     await page.locator("#teach").click();
@@ -112,7 +113,7 @@ for (const [width, height] of [
         .locator(".attention-page > footer")
         .evaluate((el) => el.getBoundingClientRect().bottom <= innerHeight),
     ).toBe(true);
-    await page.screenshot({ path: `test-results/gate5-history-${width}.png` });
+    await page.screenshot({ path: `${await evidenceDirectory(test.info())}/gate5-history-${width}.png` });
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,

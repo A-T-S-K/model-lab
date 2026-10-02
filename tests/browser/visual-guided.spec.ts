@@ -1,4 +1,5 @@
-import { test, expect } from "@playwright/test";
+import { evidenceDirectory } from '../support/browser-evidence.js';
+import { test, expect } from "../support/browser-evidence.js";
 for (const [width, height] of [
   [1920, 1080],
   [1280, 720],
@@ -37,7 +38,7 @@ for (const [width, height] of [
             .top,
       ),
     ).toBe(true);
-    await page.screenshot({ path: `test-results/gate4-A1-${width}.png` });
+    await page.screenshot({ path: `${await evidenceDirectory(test.info())}/gate4-A1-${width}.png` });
     const anchors = await page.locator("[data-anchor]").evaluateAll((nodes) =>
       nodes.map((n) => ({
         x: n.getBoundingClientRect().x,
@@ -81,7 +82,7 @@ for (const [width, height] of [
             .top,
       ),
     ).toBe(true);
-    await page.screenshot({ path: `test-results/gate4-A2-${width}.png` });
+    await page.screenshot({ path: `${await evidenceDirectory(test.info())}/gate4-A2-${width}.png` });
     await page.locator("#teach").click();
     await expect(page.getByTestId("guided-completed")).toHaveText("10");
     await expect(page.getByTestId("guided-after")).toHaveText("91.4%");
@@ -104,7 +105,7 @@ for (const [width, height] of [
             .top,
       ),
     ).toBe(true);
-    await page.screenshot({ path: `test-results/gate4-A3-${width}.png` });
+    await page.screenshot({ path: `${await evidenceDirectory(test.info())}/gate4-A3-${width}.png` });
     await page.emulateMedia({ reducedMotion: "reduce" });
     expect(
       await page.evaluate(
@@ -117,7 +118,7 @@ for (const [width, height] of [
       ),
     ).toBe(true);
     await page.screenshot({
-      path: `test-results/gate4-A3-reduced-${width}.png`,
+      path: `${await evidenceDirectory(test.info())}/gate4-A3-reduced-${width}.png`,
     });
     await page.locator("#clear-session").click();
     await expect(page.locator("#activate-attract")).toBeEnabled();
@@ -134,7 +135,7 @@ for (const [width, height] of [
             .top,
       ),
     ).toBe(true);
-    await page.screenshot({ path: `test-results/gate4-reset-A1-${width}.png` });
+    await page.screenshot({ path: `${await evidenceDirectory(test.info())}/gate4-reset-A1-${width}.png` });
     await page.locator("#activate-attract").click();
     await expect(page.locator("#teach")).toBeEnabled();
     await page
@@ -185,7 +186,7 @@ for (const width of [1920, 1280])
             .top,
       ),
     ).toBe(true);
-    await page.screenshot({ path: `test-results/gate4-teach0-${width}.png` });
+    await page.screenshot({ path: `${await evidenceDirectory(test.info())}/gate4-teach0-${width}.png` });
     for (let n = 1; n <= 4; n++) {
       await expect
         .poll(() =>
@@ -218,7 +219,7 @@ for (const width of [1920, 1280])
             .top,
       ),
     ).toBe(true);
-    await page.screenshot({ path: `test-results/gate4-teach4-${width}.png` });
+    await page.screenshot({ path: `${await evidenceDirectory(test.info())}/gate4-teach4-${width}.png` });
     await page.emulateMedia({ reducedMotion: "reduce" });
     expect(
       await page.evaluate(
@@ -231,7 +232,7 @@ for (const width of [1920, 1280])
       ),
     ).toBe(true);
     await page.screenshot({
-      path: `test-results/gate4-teach4-reduced-${width}.png`,
+      path: `${await evidenceDirectory(test.info())}/gate4-teach4-reduced-${width}.png`,
     });
     await page.locator("#cancel-teach").click();
     await expect(page.getByTestId("guided-completed")).toHaveText("4");
@@ -249,7 +250,7 @@ for (const width of [1920, 1280])
             .top,
       ),
     ).toBe(true);
-    await page.screenshot({ path: `test-results/gate4-cancel4-${width}.png` });
+    await page.screenshot({ path: `${await evidenceDirectory(test.info())}/gate4-cancel4-${width}.png` });
   });
 
 test("tenth accepted update publishes its count, source and endpoint atomically during archive admission", async ({

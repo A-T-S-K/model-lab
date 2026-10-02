@@ -1,4 +1,5 @@
-import { test, expect } from '@playwright/test';
+import { evidenceDirectory } from '../support/browser-evidence.js';
+import { test, expect } from '../support/browser-evidence.js';
 import fixture from '../../fixtures/canonical.initial.json' with { type: 'json' };
 import { loadModel, createOptimizerState } from '../../model/state.js';
 import { predict, tokenize } from '../../model/microgpt.js';
@@ -40,7 +41,7 @@ test('fresh Guided predicts, teaches ten real updates, reveals measured change, 
   expect(Number(await page.getByTestId('guided-after').getAttribute('data-value'))).toBeCloseTo(measured(10), 12);
   await expect(page.getByTestId('training-step')).toHaveText('10');
   await expect(page.locator('#parameter-select')).toHaveCount(0);
-  await page.screenshot({ path: 'test-results/model-lab-v2.1-guided-desktop.png', fullPage: true });
+  await page.screenshot({ path: `${await evidenceDirectory(test.info())}/model-lab-v2.1-guided-desktop.png`, fullPage: true });
   await page.getByRole('button', { name: 'Why did that change? · Explore', exact: true }).click();
   await expect(page.locator('#parameter-select')).toBeVisible();
   await expect(page.getByTestId('learn-evidence')).toContainText('Gradient used by Adam');
@@ -111,7 +112,7 @@ test('Guided narrow touch lesson has no overflow and retains progressive disclos
   await expect(page.locator('#teach')).toBeEnabled();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await expect(page.locator('#parameter-select')).toHaveCount(0);
-  await page.screenshot({ path: 'test-results/model-lab-v2.1-guided-mobile.png', fullPage: true });
+  await page.screenshot({ path: `${await evidenceDirectory(test.info())}/model-lab-v2.1-guided-mobile.png`, fullPage: true });
   await context.close();
 });
 

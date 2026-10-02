@@ -5,10 +5,10 @@ import { allocateTestOutput } from './test-output.js';
 // Runner CLI/reporter environment overrides take precedence over config. Refuse
 // them before allocation/cleanup; the scoped public override is SLICE_EVIDENCE_DIR.
 export function refuseRunnerOutputOverrides(argv: readonly string[], env: NodeJS.ProcessEnv) {
-  if (argv.some(arg => /^--(?:output|reporter)(?:=|$)/.test(arg))) {
+  if (argv.some(arg => /^--(?:output|reporter|add-reporter|last-failed-file)(?:=|$)/.test(arg))) {
     throw Error('Output/reporter overrides refused; use a fresh SLICE_EVIDENCE_DIR');
   }
-  const unsafe = /^(?:PLAYWRIGHT_(?:JSON|HTML|BLOB)_OUTPUT_(?:FILE|DIR|NAME)|PLAYWRIGHT_HTML_REPORT|PW_TEST_REPORTER|SPATIAL_EVIDENCE_DIR|WAVE2_EVIDENCE_DIR|WAVE2C_EVIDENCE_DIR|STOP_EVIDENCE_DIR)$/;
+  const unsafe = /^(?:PLAYWRIGHT_(?:JSON|HTML|BLOB)_OUTPUT_(?:FILE|DIR|NAME)|PLAYWRIGHT_LAST_RUN_OUTPUT_FILE|PLAYWRIGHT_HTML_REPORT|PW_TEST_REPORTER|SPATIAL_EVIDENCE_DIR|WAVE2_EVIDENCE_DIR|WAVE2C_EVIDENCE_DIR|STOP_EVIDENCE_DIR)$/;
   for (const name of Object.keys(env)) if (unsafe.test(name) && env[name] !== undefined) {
     throw Error(`${name} output override refused; use a fresh SLICE_EVIDENCE_DIR`);
   }

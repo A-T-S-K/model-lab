@@ -1,4 +1,5 @@
-import { test, expect, type Page } from "@playwright/test";
+import { evidenceDirectory } from '../support/browser-evidence.js';
+import { test, expect, type Page } from "../support/browser-evidence.js";
 import approved from "../fixtures/visual/guided-anchors.json" with { type: "json" };
 async function anchors(page: Page) {
   return page.locator("[data-anchor]").evaluateAll((nodes) =>
@@ -30,7 +31,7 @@ for (const width of [1920, 1280, 390])
         ),
       ).toBe(true);
       await page.screenshot({
-        path: `test-results/release-${name}-${width}.png`,
+        path: `${await evidenceDirectory(test.info())}/release-${name}-${width}.png`,
         fullPage: width === 390,
       });
     };

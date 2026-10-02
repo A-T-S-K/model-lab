@@ -1,8 +1,9 @@
-import {test,expect} from '@playwright/test';
+import { evidenceDirectory } from '../support/browser-evidence.js';
+import {test,expect} from '../support/browser-evidence.js';
 import {mkdir,writeFile} from 'node:fs/promises';
 test.use({video:{mode:'on',size:{width:1920,height:1080}},viewport:{width:1920,height:1080}});
 test('Wave 2A paced genuine execution review',async({page})=>{
- test.setTimeout(120000);const dir=process.env.WAVE2_EVIDENCE_DIR??'test-results/wave2a-review';await mkdir(dir,{recursive:true});
+ test.setTimeout(120000);const dir=await evidenceDirectory(test.info());await mkdir(dir,{recursive:true});
  await page.addInitScript(()=>{const w=window as any;w.routeAudit=[];const original=Worker.prototype.postMessage;const seen=new WeakSet();Worker.prototype.postMessage=function(m:any,...args:any[]){w.routeAudit.push({direction:'request',message:m,time:performance.now()});if(!seen.has(this)){seen.add(this);this.addEventListener('message',e=>w.routeAudit.push({direction:'response',message:e.data,time:performance.now()}));}return Reflect.apply(original,this,[m,...args]);};});
  const pause=()=>page.waitForTimeout(3500);
  await page.goto('/?presentation=spatial');await expect(page.locator('#step-prediction')).toBeEnabled();await page.locator('#predict').click();await expect(page.locator('#step-prediction')).toBeEnabled();

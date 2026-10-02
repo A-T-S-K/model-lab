@@ -1,4 +1,5 @@
-import { test, expect } from '@playwright/test';
+import { evidenceDirectory } from '../support/browser-evidence.js';
+import { test, expect } from '../support/browser-evidence.js';
 
 test('exhibit survives 105 resets, rapid cancellation, refresh, touch and inactivity without WAN', async ({ page, context }) => {
   test.setTimeout(120000);
@@ -73,10 +74,10 @@ test('browser measures max-context live scalar rendering and worker responsivene
     note: 'Single Chromium production run, includes Playwright action/wait overhead. Page heap is Chromium-reported, not worker heap; no worker heap is asserted.' };
   await info.attach('browser-capture-measurement.json', { body: JSON.stringify(report, null, 2), contentType: 'application/json' });
   console.log('BROWSER_CAPTURE', JSON.stringify(report));
-  await page.screenshot({ path: 'test-results/model-lab-v2-microscope-desktop.png', fullPage: true });
+  await page.screenshot({ path: `${await evidenceDirectory(test.info())}/model-lab-v2-microscope-desktop.png`, fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.screenshot({ path: 'test-results/model-lab-v2-microscope-mobile.png', fullPage: true });
+  await page.screenshot({ path: `${await evidenceDirectory(test.info())}/model-lab-v2-microscope-mobile.png`, fullPage: true });
   expect(measurement.renderedElements).toBeLessThan(3000);
 });
 

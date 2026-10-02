@@ -1,9 +1,10 @@
-import {test,expect} from '@playwright/test';
+import { evidenceDirectory } from '../support/browser-evidence.js';
+import {test,expect} from '../support/browser-evidence.js';
 import {mkdir,writeFile} from 'node:fs/promises';
 test.use({video:{mode:'on',size:{width:1920,height:1080}},viewport:{width:1920,height:1080}});
 test('Wave 1B paced review route · actual controls and completed evidence',async({page})=>{
   test.setTimeout(120000);
-  const directory=process.env.SPATIAL_EVIDENCE_DIR??'/tmp/model-lab-wave1b-browser';
+  const directory=await evidenceDirectory(test.info());
   await mkdir(directory,{recursive:true});
   const pause=()=>page.waitForTimeout(4500);
   const select=async(kind:string)=>{await page.locator('#spatial-operation').selectOption(kind);await pause();};

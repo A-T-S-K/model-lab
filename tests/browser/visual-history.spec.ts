@@ -1,4 +1,5 @@
-import { test, expect } from "@playwright/test";
+import { evidenceDirectory } from '../support/browser-evidence.js';
+import { test, expect } from "../support/browser-evidence.js";
 for (const width of [1920, 1280])
   test(`history, comparison and intervention retain one instrument at ${width}`, async ({
     page,
@@ -38,7 +39,7 @@ for (const width of [1920, 1280])
     );
     await page.getByTestId("run-comparison").scrollIntoViewIfNeeded();
     await page.screenshot({
-      path: `test-results/gate8a-comparison-${width}.png`,
+      path: `${await evidenceDirectory(test.info())}/gate8a-comparison-${width}.png`,
     });
     await page.locator("#history-run").selectOption(initial!);
     await expect(page.getByTestId("training-step")).toHaveText("10");
@@ -60,7 +61,7 @@ for (const width of [1920, 1280])
     });
     await page.evaluate(() => scrollTo(0, 0));
     await page.screenshot({
-      path: `test-results/gate8a-intervention-${width}.png`,
+      path: `${await evidenceDirectory(test.info())}/gate8a-intervention-${width}.png`,
     });
     await expect(page.locator(".panel")).toHaveCount(0);
     await expect(page.locator(".instrument-spine")).toHaveCount(1);

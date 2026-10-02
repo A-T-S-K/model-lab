@@ -1,4 +1,5 @@
-import { test, expect } from "@playwright/test";
+import { evidenceDirectory } from '../support/browser-evidence.js';
+import { test, expect } from "../support/browser-evidence.js";
 for (const [width, height] of [
   [1920, 1080],
   [1280, 720],
@@ -32,19 +33,19 @@ for (const [width, height] of [
         .locator(".attention-page > footer")
         .evaluate((el) => el.getBoundingClientRect().bottom <= innerHeight),
     ).toBe(true);
-    await page.screenshot({ path: `test-results/gate6-lens-${width}.png` });
+    await page.screenshot({ path: `${await evidenceDirectory(test.info())}/gate6-lens-${width}.png` });
     await page.locator('[data-product-feature="2"]').click();
     await expect(page.locator('[data-product-feature="2"]')).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    await page.screenshot({ path: `test-results/gate6-product-${width}.png` });
+    await page.screenshot({ path: `${await evidenceDirectory(test.info())}/gate6-product-${width}.png` });
     await page.locator("#follow-q").click();
     await expect(page.getByTestId("inspection-state")).toContainText(
       "ORIGIN OBSERVED",
     );
     await page.getByTestId("scalar-operation").scrollIntoViewIfNeeded();
-    await page.screenshot({ path: `test-results/gate6-follow-q-${width}.png` });
+    await page.screenshot({ path: `${await evidenceDirectory(test.info())}/gate6-follow-q-${width}.png` });
     await page.locator("#open-q-projection").click();
     await expect(page.locator("[data-projection-term]")).toHaveCount(8);
     await page.locator('[data-contributing-parameter="147"]').click();
@@ -52,10 +53,10 @@ for (const [width, height] of [
       "[2,3] · #147",
     );
     await page.locator("#follow-contributing-parameter").click();
-    await page.screenshot({ path: `test-results/gate6-bridge-${width}.png` });
+    await page.screenshot({ path: `${await evidenceDirectory(test.info())}/gate6-bridge-${width}.png` });
     await page.locator("#close-q-projection").click();
     await page.emulateMedia({ reducedMotion: "reduce" });
-    await page.screenshot({ path: `test-results/gate6-reduced-${width}.png` });
+    await page.screenshot({ path: `${await evidenceDirectory(test.info())}/gate6-reduced-${width}.png` });
     // Switching the semantic root clears the old lens before rendering another matrix selection.
     await page
       .locator('.instrument-attention-matrix [data-query="2"][data-key="1"]')
@@ -102,7 +103,7 @@ for (const width of [1920, 1280])
       "ORIGIN OBSERVED",
     );
     await page.getByTestId("scalar-operation").scrollIntoViewIfNeeded();
-    await page.screenshot({ path: `test-results/gate6-history-${width}.png` });
+    await page.screenshot({ path: `${await evidenceDirectory(test.info())}/gate6-history-${width}.png` });
   });
 
 for (const width of [1920, 1280])
@@ -162,7 +163,7 @@ for (const width of [1920, 1280])
     );
     await expect(page.getByTestId("lens-source")).toContainText("OBSERVED");
     await page.screenshot({
-      path: `test-results/gate6-unavailable-${width}.png`,
+      path: `${await evidenceDirectory(test.info())}/gate6-unavailable-${width}.png`,
     });
   });
 

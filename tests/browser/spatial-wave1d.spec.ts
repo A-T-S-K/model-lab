@@ -1,7 +1,7 @@
-import {test,expect} from '@playwright/test';
+import {test,expect} from '../support/browser-evidence.js';
 import {mkdir,writeFile} from 'node:fs/promises';
-const directory=process.env.SPATIAL_EVIDENCE_DIR??'/tmp/model-lab-wave1d';
-test('D01–D05 source-bound explanations, interruption and static arithmetic',async({page})=>{
+
+test('D01–D05 source-bound explanations, interruption and static arithmetic',async({page,evidenceDir:directory})=>{
  test.setTimeout(90000);const errors:string[]=[];const wan:string[]=[];
  page.on('pageerror',e=>errors.push(e.message));page.on('requestfailed',r=>errors.push(r.url()));page.on('request',r=>{if(!r.url().startsWith('http://127.0.0.1:'))wan.push(r.url());});
  await page.addInitScript(()=>{const w=window as any;w.dAudit={commands:[],results:[]};const send=Worker.prototype.postMessage,seen=new WeakSet();Worker.prototype.postMessage=function(message:any,...rest:any[]){w.dAudit.commands.push(message.command);if(!seen.has(this)){seen.add(this);this.addEventListener('message',e=>{if(e.data.status==='result')w.dAudit.results.push(e.data.result);});}return Reflect.apply(send,this,[message,...rest]);};});
@@ -26,7 +26,7 @@ test('D01–D05 source-bound explanations, interruption and static arithmetic',a
  expect(errors).toEqual([]);expect(wan).toEqual([]);await writeFile(`${directory}/audit.json`,JSON.stringify({durations,errors,wan,audit:await page.evaluate(()=>(window as any).dAudit)},null,2));
 });
 
-test('D lifecycle: hidden tab and delayed inspection cannot restart guidance',async({page})=>{
+test('D lifecycle: hidden tab and delayed inspection cannot restart guidance',async({page,evidenceDir:directory})=>{
  await page.addInitScript(()=>{const w=window as any;w.held=[];w.hold=false;const send=Worker.prototype.postMessage,seen=new WeakSet();Worker.prototype.postMessage=function(m:any,...rest:any[]){if(!seen.has(this)){seen.add(this);const handler=this.onmessage;this.onmessage=e=>{if(w.hold&&e.data.status==='inspection')w.held.push(()=>handler?.call(this,e));else handler?.call(this,e);};}return Reflect.apply(send,this,[m,...rest]);};});
  await page.goto('/?presentation=spatial');await expect(page.locator('#predict')).toBeEnabled();await page.locator('#predict').click();await expect(page.locator('#spatial-learn')).toBeEnabled();await page.locator('#explanation-play').click();
  await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));});await expect(page.getByTestId('explanation-status')).toContainText('Explore detour');
@@ -37,13 +37,13 @@ test('D lifecycle: hidden tab and delayed inspection cannot restart guidance',as
  await page.locator('#explanation-play').click();await page.locator('#clear-session').click();await expect(page.getByTestId('explanation-status')).toHaveCount(0);
 });
 
-test('D05 bounded repeated playback and inspection resource sample',async({page})=>{
+test('D05 bounded repeated playback and inspection resource sample',async({page,evidenceDir:directory})=>{
  await page.goto('/?presentation=spatial');await expect(page.locator('#predict')).toBeEnabled();await page.locator('#predict').click();await expect(page.locator('#spatial-learn')).toBeEnabled();const cdp=await page.context().newCDPSession(page);const sample=async()=>{await cdp.send('HeapProfiler.collectGarbage');return {dom:await cdp.send('Memory.getDOMCounters'),heap:await cdp.send('Runtime.getHeapUsage')};};
  const batch=async()=>{for(let i=0;i<10;i++){await page.locator('#explanation-play').click();await page.locator('#explanation-play').click();await page.locator('#spatial-operation').selectOption('mlpRelu');await page.getByRole('button',{name:'Inspect selected scalar',exact:true}).click();await expect(page.getByTestId('scalar-operation')).toBeVisible();await page.locator('#waypoint-resume').click();}};
  await batch();const warm=await sample();const start=Date.now();await batch();const middle=await sample();await batch();const end=await sample();expect(end.dom.jsEventListeners).toBeLessThanOrEqual(middle.dom.jsEventListeners+10);expect(end.dom.nodes).toBeLessThanOrEqual(middle.dom.nodes+100);await mkdir(directory,{recursive:true});await writeFile(`${directory}/resources.json`,JSON.stringify({browser:page.context().browser()?.version(),procedure:'10 warmup cycles, then 2 × 10 play/pause/inspect/resume cycles; full GC before DOM/heap samples',elapsed20CyclesMs:Date.now()-start,warm,middle,end},null,2));
 });
 
-test('D selected-head emphasis and keyboard learning detours follow semantic selection',async({page})=>{
+test('D selected-head emphasis and keyboard learning detours follow semantic selection',async({page,evidenceDir:directory})=>{
  await page.goto('/?presentation=spatial');await expect(page.locator('#predict')).toBeEnabled();await page.locator('#predict').click();await expect(page.locator('#spatial-learn')).toBeEnabled();await page.locator('#spatial-head').selectOption('1');await page.locator('#explanation-restart').click();for(let i=0;i<8;i++)await page.locator('#waypoint-next').click();await expect(page.locator('.explanation-active[data-world-kind="attentionLogits"]')).toHaveAttribute('data-world-head','1');expect(await page.locator('.explanation-active [data-world-value]').evaluateAll(els=>els.every(el=>getComputedStyle(el).stroke==='none'))).toBe(true);
  await page.locator('#spatial-learn').click();await expect(page.getByTestId('spatial-live-step')).toHaveText('1');await page.locator('#explanation-route').selectOption('learning');await page.locator('#explanation-play').click();await expect(page.locator('svg .explanation-active')).toHaveAttribute('data-learning-stage','objective');await page.locator('svg [data-learning-stage="adam"]').focus();await page.keyboard.press('Enter');await expect(page.getByTestId('explanation-status')).toContainText('Explore detour');await page.locator('#waypoint-resume').click();await expect(page.locator('svg .explanation-active')).toHaveAttribute('data-learning-stage','objective');await page.locator('#spatial-operation').selectOption('mlpRelu');await page.locator('#spatial-back').click();await expect(page.getByTestId('training-objective')).toBeVisible();
 });

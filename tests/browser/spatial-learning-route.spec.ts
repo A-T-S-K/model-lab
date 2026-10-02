@@ -1,7 +1,8 @@
-import {test,expect} from '@playwright/test';import {mkdir,writeFile} from 'node:fs/promises';
+import { evidenceDirectory } from '../support/browser-evidence.js';
+import {test,expect} from '../support/browser-evidence.js';import {mkdir,writeFile} from 'node:fs/promises';
 test.use({video:{mode:'on',size:{width:1920,height:1080}},viewport:{width:1920,height:1080}});
 test('Wave 1C paced two-update learning review',async({page})=>{
- test.setTimeout(120000);const dir=process.env.SPATIAL_EVIDENCE_DIR??'/tmp/model-lab-wave1c-browser';await mkdir(dir,{recursive:true});const pause=()=>page.waitForTimeout(5000);
+ test.setTimeout(120000);const dir=await evidenceDirectory(test.info());await mkdir(dir,{recursive:true});const pause=()=>page.waitForTimeout(5000);
  await page.goto('/?presentation=spatial');await expect(page.locator('#predict')).toBeEnabled();await page.locator('#document').fill('abca');await page.locator('#predict').click();await expect(page.locator('#spatial-learn')).toBeEnabled();await page.locator('#spatial-query').selectOption('3');await page.locator('[data-world-parameter="wte"]').click();await pause();
  await page.locator('#spatial-learn').click();await expect(page.getByTestId('spatial-live-step')).toHaveText('1');const first=await page.locator('#spatial-experiment').inputValue();await pause();
  await page.locator('button[data-learning-stage="gradient"]').first().click();await page.locator('#learning-inspect-gradient').click();await expect(page.getByTestId('contribution-accounting')).toBeVisible();await pause();

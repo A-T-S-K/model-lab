@@ -1,4 +1,5 @@
-import { test, expect } from "@playwright/test";
+import { evidenceDirectory } from '../support/browser-evidence.js';
+import { test, expect } from "../support/browser-evidence.js";
 import {
   exhibitTiming,
   exhibitState,
@@ -48,7 +49,7 @@ for (const width of [1920, 1280, 390])
     expect(remaining).toBeGreaterThan(0);
     expect(remaining).toBeLessThanOrEqual(10);
     await page.screenshot({
-      path: `test-results/gate8c-warning-${width}.png`,
+      path: `${await evidenceDirectory(test.info())}/gate8c-warning-${width}.png`,
       fullPage: width === 390,
     });
     await page.keyboard.press("Shift");
@@ -62,7 +63,7 @@ for (const width of [1920, 1280, 390])
     await expect(page.getByTestId("training-step")).toHaveText("0");
     await expect(page.getByTestId("guided-completed")).toHaveCount(0);
     await expect(page.locator("#exhibit-warning")).toHaveCount(0);
-    await page.screenshot({ path: `test-results/gate8c-reset-${width}.png` });
+    await page.screenshot({ path: `${await evidenceDirectory(test.info())}/gate8c-reset-${width}.png` });
     await page.reload();
     await expect(page.locator("#activate-attract")).toBeEnabled();
     expect(

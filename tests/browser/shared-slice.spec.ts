@@ -42,7 +42,7 @@ test('two real producers share admission, inspection, sources and saved evidence
 });
 
 test('saved native evidence replays after shutdown and canonical operation requires no Python endpoint',async({page,evidenceDir:dir})=>{
-  test.skip(process.env.SLICE_PHASE!=='offline');const {saved,native}=await readReplayPair(process.cwd(),process.env.SLICE_SAVED_INPUT!,process.env.SLICE_RESPONSE_INPUT!,process.env.MODEL_LAB_SLICE_OUTPUT!);
+  test.skip(process.env.SLICE_PHASE!=='offline');const {saved,native}=await readReplayPair(process.cwd(),process.env.SLICE_SAVED_INPUT!,process.env.SLICE_RESPONSE_INPUT!,test.info().config.metadata.sliceOutput as string);
   let nativeRequests=0;page.on('request',r=>{if(r.url()===process.env.SLICE_NATIVE_ENDPOINT)nativeRequests++;});
   await page.addInitScript(saved=>localStorage.setItem('model-lab-evidence-v1',saved),saved);
   await page.setViewportSize({width:1920,height:1080});await page.goto('/?presentation=spatial');

@@ -1,4 +1,5 @@
-import { test, expect } from "@playwright/test";
+import { evidenceDirectory } from '../support/browser-evidence.js';
+import { test, expect } from "../support/browser-evidence.js";
 for (const [width, height] of [
   [1920, 1080],
   [1280, 720],
@@ -45,7 +46,7 @@ for (const [width, height] of [
         .locator(".attention-page > footer")
         .evaluate((el) => el.getBoundingClientRect().bottom <= innerHeight),
     ).toBe(true);
-    await page.screenshot({ path: `test-results/gate7-backward-${width}.png` });
+    await page.screenshot({ path: `${await evidenceDirectory(test.info())}/gate7-backward-${width}.png` });
     await page.locator("[data-backward-edge]").last().click();
     await expect(page.getByTestId("selected-contribution")).toContainText(
       "Incoming adjoint",
@@ -55,7 +56,7 @@ for (const [width, height] of [
         .locator(".attention-page > footer")
         .evaluate((el) => el.getBoundingClientRect().bottom <= innerHeight),
     ).toBe(true);
-    await page.screenshot({ path: `test-results/gate7-edge-${width}.png` });
+    await page.screenshot({ path: `${await evidenceDirectory(test.info())}/gate7-edge-${width}.png` });
     await page.locator("#toggle-fan-in").click();
     await expect(page.getByTestId("hidden-subtotal")).toContainText(
       "2 additional contributions",
@@ -66,7 +67,7 @@ for (const [width, height] of [
         .evaluate((el) => el.getBoundingClientRect().bottom <= innerHeight),
     ).toBe(true);
     await page.screenshot({
-      path: `test-results/gate7-collapsed-${width}.png`,
+      path: `${await evidenceDirectory(test.info())}/gate7-collapsed-${width}.png`,
     });
     await page.locator("#show-adam").click();
     await expect(page.getByTestId("learning-inspection")).toHaveAttribute(
@@ -99,21 +100,21 @@ for (const [width, height] of [
         .locator(".attention-page > footer")
         .evaluate((el) => el.getBoundingClientRect().bottom <= innerHeight),
     ).toBe(true);
-    await page.screenshot({ path: `test-results/gate7-adam-${width}.png` });
+    await page.screenshot({ path: `${await evidenceDirectory(test.info())}/gate7-adam-${width}.png` });
     await page.getByTestId("adam-delta").scrollIntoViewIfNeeded();
     expect(
       await page
         .locator(".attention-page > footer")
         .evaluate((el) => el.getBoundingClientRect().bottom <= innerHeight),
     ).toBe(true);
-    await page.screenshot({ path: `test-results/gate7-q-delta-${width}.png` });
+    await page.screenshot({ path: `${await evidenceDirectory(test.info())}/gate7-q-delta-${width}.png` });
     await page.emulateMedia({ reducedMotion: "reduce" });
     expect(
       await page
         .locator(".attention-page > footer")
         .evaluate((el) => el.getBoundingClientRect().bottom <= innerHeight),
     ).toBe(true);
-    await page.screenshot({ path: `test-results/gate7-reduced-${width}.png` });
+    await page.screenshot({ path: `${await evidenceDirectory(test.info())}/gate7-reduced-${width}.png` });
   });
 
 for (const width of [1920, 1280])
@@ -160,7 +161,7 @@ for (const width of [1920, 1280])
         .evaluate((el) => el.getBoundingClientRect().bottom <= innerHeight),
     ).toBe(true);
     await page.screenshot({
-      path: `test-results/gate7-historical-backward-${width}.png`,
+      path: `${await evidenceDirectory(test.info())}/gate7-historical-backward-${width}.png`,
     });
     await page.locator("#show-adam").click();
     await expect(page.getByTestId("one-step-result")).toContainText(
@@ -175,6 +176,6 @@ for (const width of [1920, 1280])
         .evaluate((el) => el.getBoundingClientRect().bottom <= innerHeight),
     ).toBe(true);
     await page.screenshot({
-      path: `test-results/gate7-historical-adam-${width}.png`,
+      path: `${await evidenceDirectory(test.info())}/gate7-historical-adam-${width}.png`,
     });
   });

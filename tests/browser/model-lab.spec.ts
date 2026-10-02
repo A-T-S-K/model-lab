@@ -1,4 +1,5 @@
-import { test, expect } from '@playwright/test';
+import { evidenceDirectory } from '../support/browser-evidence.js';
+import { test, expect } from '../support/browser-evidence.js';
 import fixture from '../../fixtures/canonical.expected.json' with { type: 'json' };
 
 test('production browser Predict exposes real arithmetic; Learn applies Adam and reset restores the fixture without WAN', async ({ page }) => {
@@ -41,7 +42,7 @@ test('production browser Predict exposes real arithmetic; Learn applies Adam and
   expect(optimizerEvidence['First moment m after']).toBeCloseTo(fixture.adam.mAfter[0], 10);
   expect(optimizerEvidence['Second moment v after']).toBeCloseTo(fixture.adam.vAfter[0], 10);
   expect(optimizerEvidence['Applied delta (after − before)']).toBeCloseTo(fixture.adam.delta[0], 10);
-  await page.screenshot({ path: 'test-results/model-lab-desktop.png', fullPage: true });
+  await page.screenshot({ path: `${await evidenceDirectory(test.info())}/model-lab-desktop.png`, fullPage: true });
   await page.getByRole('button', { name: 'Reset model', exact: true }).click();
   await expect(page.getByTestId('status')).toContainText('Model reset');
   await page.getByRole('button', { name: 'Predict', exact: true }).click();
@@ -71,5 +72,5 @@ test('mobile layout and rapid reset leave a usable fresh model', async ({ page }
   await page.getByRole('button', { name: 'Learn · one update', exact: true }).click();
   await expect(page.getByTestId('status')).toContainText('Live update complete');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.screenshot({ path: 'test-results/model-lab-mobile.png', fullPage: true });
+  await page.screenshot({ path: `${await evidenceDirectory(test.info())}/model-lab-mobile.png`, fullPage: true });
 });

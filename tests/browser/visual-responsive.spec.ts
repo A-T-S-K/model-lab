@@ -1,4 +1,5 @@
-import { test, expect, type Page } from "@playwright/test";
+import { evidenceDirectory } from '../support/browser-evidence.js';
+import { test, expect, type Page } from "../support/browser-evidence.js";
 async function tabTo(page: Page, selector: string, reverse = false) {
   for (let n = 0; n < 120; n++) {
     if (
@@ -24,7 +25,7 @@ async function reducedFrame(page: Page, name: string, width: number) {
     ),
   ).toBe(true);
   await page.screenshot({
-    path: `test-results/gate8b-${name}-${width}.png`,
+    path: `${await evidenceDirectory(test.info())}/gate8b-${name}-${width}.png`,
     fullPage: width === 390,
   });
 }

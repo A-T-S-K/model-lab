@@ -1,3 +1,4 @@
+import { writableHandoff } from '../support/browser-evidence.js';
 import {test,expect} from '../support/browser-evidence.js';
 import {mkdir,readFile,writeFile} from 'node:fs/promises';
 import {validateScratchPath} from '../support/slice-output.js';
@@ -19,7 +20,7 @@ test('M2-B live MLP prediction and SGD inhabit the shared continuous world witho
 
   await page.locator('#return-canonical-world').click();await page.locator('#open-shared-inspector').click();await page.locator('#shared-model').selectOption('mlp-native-v1');await page.locator('#native-endpoint').fill(process.env.SLICE_NATIVE_ENDPOINT!);await page.locator('#shared-action').selectOption('train');
   response=page.waitForResponse(r=>r.url()===process.env.SLICE_NATIVE_ENDPOINT&&r.request().method()==='POST');await page.locator('#shared-execute').click();const training=await (await response).json();await page.locator('#shared-save').click();
-  const saved=await page.evaluate(()=>localStorage.getItem('model-lab-evidence-v1')!);const handoff=await validateScratchPath(process.cwd(),process.env.M2B_HANDOFF_DIR!);await mkdir(`${handoff}/live`,{recursive:false});await writeFile(`${handoff}/live/mlp-saved.json`,saved);
+  const saved=await page.evaluate(()=>localStorage.getItem('model-lab-evidence-v1')!);const handoff=await writableHandoff(test.info(),'M2B_HANDOFF_DIR');await mkdir(`${handoff}/live`,{recursive:false});await writeFile(`${handoff}/live/mlp-saved.json`,saved);
   await page.locator('#shared-world').click();await page.locator('#mlp-operation').selectOption('b2.gradient');
   const before=training.record.run.points.find((p:any)=>p.id==='b2.before').values[0],gradient=training.record.run.points.find((p:any)=>p.id==='b2.gradient').values[0],delta=training.record.run.points.find((p:any)=>p.id==='b2.delta').values[0],after=training.record.run.points.find((p:any)=>p.id==='b2.after').values[0];expect(gradient).not.toBe(0);
   await expect(page.getByTestId('mlp-before')).toHaveAttribute('data-value',String(before));await expect(page.getByTestId('mlp-gradient')).toHaveAttribute('data-value',String(gradient));await expect(page.getByTestId('mlp-delta')).toHaveAttribute('data-value',String(delta));await expect(page.getByTestId('mlp-after')).toHaveAttribute('data-value',String(after));expect(after).toBe(Math.fround(before-0.0625*gradient));

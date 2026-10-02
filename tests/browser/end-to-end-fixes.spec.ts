@@ -1,8 +1,10 @@
-import {test,expect,type Page} from '@playwright/test';
+import { evidenceDirectory } from '../support/browser-evidence.js';
+import {test,expect,type Page} from '../support/browser-evidence.js';
 import {mkdir,writeFile} from 'node:fs/promises';
 test.use({video:{mode:'on',size:{width:1920,height:1080}}});
-const dir=process.env.FIXES_EVIDENCE_DIR??'test-results/end-to-end-fixes/focused';
+
 async function capture(page:Page,name:string){
+ const dir=await evidenceDirectory(test.info());
  for(const [width,height] of [[1920,1080],[1280,720]]){
   await page.setViewportSize({width,height});await page.waitForTimeout(300);
   await page.screenshot({path:`${dir}/${name}-${width}.png`});
@@ -16,7 +18,7 @@ async function scalar(page:Page,name:string){
  expect(colors).toEqual({fg:'rgb(242, 245, 247)',bg:'rgb(32, 44, 52)'});
  await capture(page,name);
 }
-test('five corrections: public same-session route, scalar arms, compact Ready and prediction meaning',async({page})=>{
+test('five corrections: public same-session route, scalar arms, compact Ready and prediction meaning',async({page,evidenceDir:dir})=>{
  test.setTimeout(180000);await mkdir(dir,{recursive:true});
  await page.addInitScript(()=>{
   const w=window as any;w.fixes={commands:[],responses:[],identity:Math.random()};
@@ -55,7 +57,7 @@ test('five corrections: public same-session route, scalar arms, compact Ready an
  await writeFile(`${dir}/route-audit.json`,JSON.stringify(audit,null,2));await capture(page,'returned');
 });
 
-test('learning instructions: manual steps reach pinned partial contribution without a phase-timed Pause',async({page})=>{
+test('learning instructions: manual steps reach pinned partial contribution without a phase-timed Pause',async({page,evidenceDir:dir})=>{
  test.setTimeout(120000);await mkdir(dir,{recursive:true});await page.setViewportSize({width:1280,height:720});
  await page.goto('/?presentation=spatial');await page.locator('#step-learning').click();await expect(page.getByTestId('learning-guidance')).toBeInViewport();
  let steps=0;
@@ -73,7 +75,7 @@ test('learning instructions: manual steps reach pinned partial contribution with
  await writeFile(`${dir}/manual-step-count.json`,JSON.stringify({steps,phaseTimedPause:false}));
 });
 
-test('public presentation entry leaves narrow source controls clickable',async({page})=>{
+test('public presentation entry leaves narrow source controls clickable',async({page,evidenceDir:dir})=>{
  await page.setViewportSize({width:390,height:844});await page.goto('/');await page.locator('#activate-attract').click();
  await page.getByRole('button',{name:'Why this prediction? · Explore'}).click();
  await page.getByText('Source controls and other evidence',{exact:true}).click();

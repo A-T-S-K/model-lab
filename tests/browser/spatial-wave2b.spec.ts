@@ -1,6 +1,6 @@
-import {test,expect,type Page} from '@playwright/test';
+import {test,expect,type Page} from '../support/browser-evidence.js';
 import {mkdir,writeFile} from 'node:fs/promises';
-const directory=process.env.WAVE2B_EVIDENCE_DIR??'test-results/wave2b-review';
+
 async function audit(page:Page) {
  await page.addInitScript(()=>{
   const w=window as any;w.trainingAudit={commands:[],responses:[],outstanding:0,max:0,durations:[]};
@@ -23,7 +23,7 @@ async function continueUntil(page:Page,target:string){
  },target);
  await page.locator('#execution-continue').click();await phase(page,target);await expect(page.locator('#execution-next')).toBeEnabled();
 }
-test('T09 real partial gradient → proposal → candidate → acceptance and second discard',async({browser,baseURL})=>{
+test('T09 real partial gradient → proposal → candidate → acceptance and second discard',async({browser,baseURL,evidenceDir:directory})=>{
  test.setTimeout(180000);await mkdir(directory,{recursive:true});
  const context=await browser.newContext({viewport:{width:1920,height:1080},recordVideo:{dir:directory,size:{width:1920,height:1080}},reducedMotion:'reduce'});
  const page=await context.newPage();await audit(page);const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
@@ -66,7 +66,7 @@ test('T09 real partial gradient → proposal → candidate → acceptance and se
  const video=page.video()!;await context.close();await video.saveAs(`${directory}/wave-2b-route.webm`);
 });
 
-test('T07/T08/T09 negative ReLU, navigation suspension, hidden tab and historical update after second acceptance',async({page})=>{
+test('T07/T08/T09 negative ReLU, navigation suspension, hidden tab and historical update after second acceptance',async({page,evidenceDir:directory})=>{
  test.setTimeout(180000);await mkdir(directory,{recursive:true});await audit(page);await page.goto('/?presentation=spatial');await expect(page.locator('#step-learning')).toBeEnabled();
  await page.locator('#document').fill('');await page.locator('#step-learning').click();
  // Baseline also uses the real forward generator. Stop at its negative ReLU example.
@@ -91,7 +91,7 @@ test('T07/T08/T09 negative ReLU, navigation suspension, hidden tab and historica
  await writeFile(`${directory}/historical-audit.json`,JSON.stringify(evidence,null,2));
 });
 
-test('T06 controlled acceptance retains receipt after archive failure; cancel and worker restart preserve accepted state',async({page})=>{
+test('T06 controlled acceptance retains receipt after archive failure; cancel and worker restart preserve accepted state',async({page,evidenceDir:directory})=>{
  test.setTimeout(90000);await audit(page);
  await page.addInitScript(()=>{const w=window as any;w.modelWorkers=[];const Native=Worker;w.Worker=class extends Native{constructor(url:any,options:any){super(url,options);w.modelWorkers.push(this);}};let fail=false;const send=Worker.prototype.postMessage,digest=crypto.subtle.digest.bind(crypto.subtle);Worker.prototype.postMessage=function(m:any,...rest:any[]){if(m.command==='acceptTraining')fail=true;return Reflect.apply(send,this,[m,...rest]);};crypto.subtle.digest=(...args:Parameters<SubtleCrypto['digest']>)=>{if(fail){fail=false;return Promise.reject(Error('controlled archive admission failure'));}return digest(...args);};});
  await page.goto('/?presentation=spatial');await expect(page.locator('#step-learning')).toBeEnabled();await page.locator('#document').fill('');
@@ -109,7 +109,7 @@ test('T06 controlled acceptance retains receipt after archive failure; cancel an
  const evidence=await page.evaluate(()=>(window as any).trainingAudit);expect(evidence.commands.filter((c:any)=>c.command==='acceptTraining')).toHaveLength(1);expect(evidence.commands.filter((c:any)=>c.command==='train')).toHaveLength(0);
 });
 
-test('T10 controlled start/cancel retains bounded DOM and listeners',async({page})=>{
+test('T10 controlled start/cancel retains bounded DOM and listeners',async({page,evidenceDir:directory})=>{
  test.setTimeout(60000);await page.goto('/?presentation=spatial');await expect(page.locator('#step-learning')).toBeEnabled();
  const cdp=await page.context().newCDPSession(page);const samples:any[]=[];
  for(let batch=0;batch<3;batch++) {

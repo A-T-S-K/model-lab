@@ -31,6 +31,11 @@ with exact statements/sections, decision needed and affected gate.
 - [Current pre-M5 public qualification](reviews/pre-M5-current-public-qualification.md): exact-candidate engineering/browser record and limits.
 - [D0 alignment report](reviews/D0-documentation-alignment.md): local documentation checks and disposition, not another specification.
 
+## Release preparation
+
+- [First release contract and roadmap](release-roadmap.md): Learn → Explore → Lab, audience outcomes, proposed curriculum, ordered gates and unresolved decisions.
+- [Browser/HTTP validation safety review](reviews/release-validation-safety.md): scoped writer ownership, current working-source verification and remaining unsafe tooling.
+
 ## Current implementation guides
 
 - [Project README](../README.md): runnable MicroGPT quickstart and limitations.

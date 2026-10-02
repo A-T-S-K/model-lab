@@ -1,3 +1,4 @@
+import { evidenceDirectory } from '../support/browser-evidence.js';
 import { test, expect, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
@@ -257,7 +258,7 @@ async function captureEvidence(
   });
   const fullPath = qualification
     ? join(qualification.captureDirectory, filename)
-    : test.info().outputPath(filename);
+    : join(await evidenceDirectory(test.info()), filename);
   await page.screenshot({ path: fullPath });
   const bytes = await readFile(fullPath);
   const sha256 = createHash('sha256').update(bytes).digest('hex');

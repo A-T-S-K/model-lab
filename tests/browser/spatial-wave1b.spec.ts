@@ -1,8 +1,8 @@
-import {test,expect} from '@playwright/test';
+import {test,expect} from '../support/browser-evidence.js';
 import {mkdir,writeFile} from 'node:fs/promises';
 import type {RunResult} from '../../app/worker/protocol.js';
-const directory=process.env.SPATIAL_EVIDENCE_DIR??'/tmp/model-lab-wave1b-browser';
-test('B01–B09 complete source-bound forward route and contextual exploration over real HTTP',async({page})=>{
+
+test('B01–B09 complete source-bound forward route and contextual exploration over real HTTP',async({page,evidenceDir:directory})=>{
   test.setTimeout(60000);
   const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));page.on('requestfailed',r=>errors.push(r.url()));
   await page.addInitScript(()=>{const w=window as any;w.forwardAudit={commands:[],results:[]};const send=Worker.prototype.postMessage,seen=new WeakSet();Worker.prototype.postMessage=function(message:any,...rest:any[]){w.forwardAudit.commands.push({command:message.command,sessionId:message.sessionId});if(!seen.has(this)){seen.add(this);this.addEventListener('message',e=>{if(e.data.status==='result')w.forwardAudit.results.push(e.data.result);});}return Reflect.apply(send,this,[message,...rest]);};});

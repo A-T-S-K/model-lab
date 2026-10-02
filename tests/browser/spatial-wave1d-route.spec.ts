@@ -1,8 +1,9 @@
-import {test,expect} from '@playwright/test';
+import { evidenceDirectory } from '../support/browser-evidence.js';
+import {test,expect} from '../support/browser-evidence.js';
 import {mkdir,writeFile} from 'node:fs/promises';
 test.use({video:{mode:'on',size:{width:1920,height:1080}},viewport:{width:1920,height:1080}});
 test('Wave 1D paced Forward and Learning explanation review',async({page})=>{
- test.setTimeout(120000);const dir=process.env.SPATIAL_EVIDENCE_DIR??'/tmp/model-lab-wave1d';await mkdir(dir,{recursive:true});const pause=()=>page.waitForTimeout(5000);
+ test.setTimeout(120000);const dir=await evidenceDirectory(test.info());await mkdir(dir,{recursive:true});const pause=()=>page.waitForTimeout(5000);
  await page.addInitScript(()=>{const w=window as any;w.routeManifests=[];const send=Worker.prototype.postMessage,seen=new WeakSet();Worker.prototype.postMessage=function(message:any,...rest:any[]){if(!seen.has(this)){seen.add(this);this.addEventListener('message',event=>{if(event.data.status==='result')w.routeManifests.push(...event.data.result.runs.map((r:any)=>r.manifest));});}return Reflect.apply(send,this,[message,...rest]);};});
  await page.goto('/?presentation=spatial');await expect(page.locator('#predict')).toBeEnabled();await page.locator('#document').fill('abca');await page.locator('#predict').click();await expect(page.locator('#spatial-learn')).toBeEnabled();await pause();
  await page.locator('#explanation-play').click();await page.waitForTimeout(7000);await page.locator('#explanation-play').click();await pause();

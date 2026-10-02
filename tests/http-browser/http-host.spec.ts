@@ -1,3 +1,5 @@
+import { evidenceDirectory } from '../support/browser-evidence.js';
+import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 
 test('complete browser-local workflow runs on an insecure non-loopback HTTP origin', async ({ page, context }, testInfo) => {
@@ -51,7 +53,7 @@ test('complete browser-local workflow runs on an insecure non-loopback HTTP orig
   await page.getByTestId('portable-archive-controls').getByText('Portable historical archive').click();
   const downloadPromise = page.waitForEvent('download');
   await page.locator('#export-archive').click();
-  const download = await downloadPromise, archivePath = testInfo.outputPath('http-host.mlarchive');
+  const download = await downloadPromise, archivePath = join(await evidenceDirectory(testInfo), 'http-host.mlarchive');
   await download.saveAs(archivePath);
   await expect(page.getByTestId('portable-archive-status')).toContainText('Portable archive exported',{timeout:60_000});
 
