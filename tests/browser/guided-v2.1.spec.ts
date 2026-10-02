@@ -1,9 +1,10 @@
 import { evidenceDirectory } from '../support/browser-evidence.js';
 import { test, expect } from '../support/browser-evidence.js';
 import fixture from '../../fixtures/canonical.initial.json' with { type: 'json' };
-import { loadModel, createOptimizerState } from '../../model/state.js';
+import { loadModel, createOptimizerState, snapshotTraining } from '../../model/state.js';
 import { predict, tokenize } from '../../model/microgpt.js';
 import { trainStep } from '../../model/training.js';
+import { archiveSnapshot } from '../../archive/snapshot.js';
 
 function measured(updates: number, document = fixture.document): number {
   const model = loadModel(fixture.config, fixture.parameters);
@@ -129,18 +130,31 @@ test('Guided preserves the declared intervention when opening a head-ablation ru
 });
 
 test('optimizer exhaustion retains the last completed partial lesson for later comparison drilldown', async ({ page }) => {
-  test.setTimeout(120000);
-  await page.goto('/'); await page.locator('#activate-attract').click(); await expect(page.locator('#teach')).toBeEnabled(); await page.locator('details.session-controls').evaluate(el => { (el as HTMLDetailsElement).open = true; }); await expect(page.getByTestId('status')).toContainText('Live prediction complete');
-  await page.getByRole('button', { name: 'Explore', exact: true }).click();
-  await page.getByTestId('document-input').fill('ab');
-  await page.getByText('Bounded learning and complete capture', { exact: true }).click();
-  for (const count of [500, 495]) {
-    await page.locator('#training-count').fill(String(count)); await page.locator('#training-count').press('Tab');
-    await page.locator('#train-many').click();
-    await expect(page.getByTestId('document-input')).toBeEnabled({ timeout: 90000 });
-  }
+  // Authentic complete continuation, produced by 995 native updates without
+  // retaining 995 browser runs. The unchanged history budget otherwise refuses
+  // long before this schedule boundary; no counter or schedule is forged.
+  const model = loadModel(fixture.config, fixture.parameters, fixture.parameterOrder);
+  const optimizer = createOptimizerState(model, fixture.optimizer);
+  const { tokenIds, targetIds } = tokenize(model, 'ab');
+  for (let step = 0; step < 995; step++) trainStep(model, optimizer, tokenIds, targetIds);
+  const snapshot = await archiveSnapshot(snapshotTraining(model, optimizer));
+  await page.addInitScript(snapshot => {
+    const post = Worker.prototype.postMessage;
+    let restored = false;
+    Worker.prototype.postMessage = function(message: any, ...rest: any[]) {
+      if (!restored && (window as any).restoreNearExhaustion && message.command === 'initialize' && message.sessionId) {
+        restored = true;
+        message = { ...message, command: 'restore', snapshot };
+      }
+      return (post as any).call(this, message, ...rest);
+    };
+  }, snapshot);
+  await page.goto('/'); await page.locator('#activate-attract').click(); await expect(page.locator('#teach')).toBeEnabled(); await page.locator('details.session-controls').evaluate(el => { (el as HTMLDetailsElement).open = true; });
+  await page.evaluate(() => { (window as any).restoreNearExhaustion = true; });
+  await page.locator('#reset').click();
   await expect(page.getByTestId('training-step')).toHaveText('995');
-  await page.getByRole('button', { name: 'Guided', exact: true }).click();
+  await page.getByTestId('document-input').fill('ab');
+  await page.locator('#predict').click(); await expect(page.getByTestId('document-input')).toBeEnabled();
   await page.locator('#teach').click();
   await expect(page.getByRole('alert')).toContainText('exhausted training schedule');
   await expect(page.getByTestId('document-input')).toBeEnabled();

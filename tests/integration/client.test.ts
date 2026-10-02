@@ -54,3 +54,35 @@ test('T06 disposable local-worker authority recovers last matching receipt, not 
   const retained=client.cancel();assert.equal(workers[2].sent[0].snapshot.id,'candidate-1');workers[2].onmessage({data:{...workers[2].sent[0],status:'ready',snapshot:{}}});await retained;client.dispose();
  }finally{globalThis.Worker=OriginalWorker;}
 });
+
+test('authentic client acknowledgement is observable before publication and cancel restores its complete continuation state', async () => {
+  const { ModelSession } = await import('../../app/worker/controller.js');
+  const original = globalThis.Worker, workers: any[] = [];
+  class ControlledWorker {
+    onmessage: any; onerror: any; sent: WorkerRequest[] = [];
+    constructor() { workers.push(this); }
+    postMessage(request: WorkerRequest) { this.sent.push(request); }
+    terminate() {}
+  }
+  globalThis.Worker = ControlledWorker as any;
+  try {
+    const client = new ModelWorkerClient(), session = new ModelSession();
+    const initial = client.initialize();
+    const initialized = await session.handle(workers[0].sent[0]); workers[0].onmessage({ data: initialized }); await initial;
+    let painted = false;
+    const pending = client.request({ command: 'train', document: 'abca' }).then(value => { painted = true; return value; });
+    const trained = await session.handle(workers[0].sent[1]); assert.equal(trained.status, 'result');
+    if (trained.status !== 'result') throw Error('No authentic training result');
+    workers[0].onmessage({ data: trained });
+    assert.equal(painted, false); assert.equal(client.acceptedResult, trained.result);
+    const acknowledged = client.acceptedResult;
+    const restored = client.cancel();
+    assert.deepEqual(workers[1].sent[0].command, 'restore');
+    assert.deepEqual((workers[1].sent[0] as any).snapshot, acknowledged!.snapshots.at(-1));
+    assert.equal(client.acceptedResult, undefined, 'reset cannot expose a prior generation result');
+    const restoredSession = new ModelSession();
+    const response = await restoredSession.handle(workers[1].sent[0]); workers[1].onmessage({ data: response }); await restored;
+    workers[0].onmessage({ data: trained }); assert.equal(client.acceptedResult, undefined);
+    await pending; client.dispose();
+  } finally { globalThis.Worker = original; }
+});

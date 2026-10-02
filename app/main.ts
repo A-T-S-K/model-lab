@@ -1927,6 +1927,12 @@ async function execute(
   suppliedTransaction?: RetentionTransaction,
 ): Promise<CanonicalReceipt> {
   if (busy || !ready || forwardDriver.active) return {status:'refused',reason:'Canonical execution unavailable while another operation is active'};
+  if (lastAcceptedResult?.experiment && !archive.learningExperiments.has(lastAcceptedResult.experiment.id)) {
+    error = 'Accepted update evidence is not retained · reconcile retention or explicitly clear the session before another execution';
+    status = 'Accepted update · evidence retention unresolved';
+    render();
+    return {status:'refused',reason:error};
+  }
   spatialPresenter.invalidate();
   if (!/^[abc]{0,7}$/.test(documentText)) {
     error = "Use up to seven characters from a, b, and c.";
@@ -1947,8 +1953,8 @@ async function execute(
   const executionDocument = documentText;
   if (!guided) guidedBatch = undefined;
   pendingModelCommand = command;
+  const previousGuidedBatch = guidedBatch;
   if (guided && result) {
-    guidedLearning = undefined;
     guidedBatch = startGuidedBatch(result, config.vocabulary);
   }
   clearDisplayedInspection();
@@ -1975,6 +1981,10 @@ async function execute(
         status = step > 0 ? `Batch stopped before update ${step + 1} · retention capacity insufficient · ${step} completed updates retained` : 'Retention capacity refused · no execution started';
         error = failure instanceof Error ? failure.message : String(failure); failureReason = status; break;
       }
+      if (currentOperation !== operation) {
+        cancelRetention(transaction);
+        return {status:'refused',reason:'Canonical execution was superseded before execution'};
+      }
       activeRetentionTransaction = transaction;
       acceptedThisIteration = undefined;
       pendingModelCommand = command;
@@ -1982,7 +1992,7 @@ async function execute(
         command, document: executionDocument,
       });
       if (currentOperation !== operation) {
-        cancelRetention(transaction);
+        if (activeRetentionTransaction === transaction) cancelRetention(transaction);
         return {status:'refused',reason:'Canonical execution was superseded'};
       }
       if (response.status !== "result")
@@ -1992,6 +2002,7 @@ async function execute(
       lastAcceptedResult = incoming;
       acceptedThisIteration = incoming;
       if (guided && incoming.learn) {
+        if (step === 0) guidedLearning = undefined;
         if (guidedBatch) {
           guidedBatch.completedCount++;
           guidedBatch.latestAfterRunId = incoming.run.manifest.runId;
@@ -2056,7 +2067,7 @@ async function execute(
         for (const snapshot of incoming.snapshots) await destination.addSnapshot(snapshot);
         for (const run of incoming.runs) await destination.addRun(run);
         if (incoming.experiment) await destination.addLearningExperiment(incoming.experiment);
-        if (currentOperation !== operation) { cancelRetention(transaction); return {status:'refused',reason:'Canonical execution was superseded'}; }
+        if (currentOperation !== operation) { if (activeRetentionTransaction === transaction) cancelRetention(transaction); return {status:'refused',reason:'Canonical execution was superseded'}; }
         await commitRetention(transaction); activeRetentionTransaction = undefined;
         completedRunId = incoming.run.manifest.runId;
       }
@@ -2089,7 +2100,8 @@ async function execute(
       }
       cancelRetention(activeRetentionTransaction); activeRetentionTransaction = undefined;
       pendingModelCommand = undefined;
-      if (guidedBatch?.status === "RUNNING") guidedBatch.status = "STOPPED";
+      if (guided && guidedBatch?.completedCount === 0 && guidedLearning) guidedBatch = previousGuidedBatch;
+      else if (guidedBatch?.status === "RUNNING") guidedBatch.status = "STOPPED";
       busy = false;
       render();
       void loadDetail();
@@ -2102,7 +2114,14 @@ async function execute(
 
 async function reset(cancelled: boolean, clear = false): Promise<void> {
   activeIntervention=undefined;
-  cancelRetention(activeRetentionTransaction); activeRetentionTransaction = undefined;
+  // Capture the client acknowledgement synchronously. execute() may still be in
+  // the Promise continuation queue with an older painted comparison.
+  const acceptedAtCancellation = cancelled ? client.acceptedResult ?? lastAcceptedResult : undefined;
+  let cancellationTransaction = cancelled && acceptedAtCancellation?.experiment
+    && !archive.learningExperiments.has(acceptedAtCancellation.experiment.id)
+    ? activeRetentionTransaction : undefined;
+  if (cancellationTransaction) activeRetentionTransaction = undefined;
+  else { cancelRetention(activeRetentionTransaction); activeRetentionTransaction = undefined; }
   discardForward();
   spatialPresenter.invalidate();
   if (cancelled && !busy && inspectionPending) {
@@ -2121,7 +2140,6 @@ async function reset(cancelled: boolean, clear = false): Promise<void> {
   busy = true;
   ready = false;
   error = "";
-  const acceptedAtCancellation = cancelled ? lastAcceptedResult : undefined;
   if (clear) {
     dispatchPublicLesson({ type: 'RESET' });
     spatialEvidenceRunId = ""; spatialEvidenceReplay = false; clearWorldSelection();
@@ -2197,9 +2215,6 @@ async function reset(cancelled: boolean, clear = false): Promise<void> {
     if (currentOperation !== operation) return;
     if (response.status !== "ready")
       throw new Error("Worker did not initialize");
-    await archive.addSnapshot(response.archivedSnapshot);
-    retentionStatus = await retention.synchronize();
-    if (currentOperation !== operation) return;
     liveTrainingStep = response.snapshot.optimizer.step;
     liveRunId = "";
     if (cancelled && guidedBatch) {
@@ -2227,9 +2242,7 @@ async function reset(cancelled: boolean, clear = false): Promise<void> {
           document: guidedBatch.capturedDocument,
           position: guidedBatch.publicPosition,
           target: guidedBatch.target,
-          before:
-            guidedLearning?.before ??
-            guidedBatch.baselineDistribution[guidedBatch.target]!,
+          before: guidedBatch.baselineDistribution[guidedBatch.target]!,
           after:
             result.probabilities[guidedBatch.publicPosition]![
               guidedBatch.target
@@ -2239,15 +2252,28 @@ async function reset(cancelled: boolean, clear = false): Promise<void> {
           afterRunId: result.run.manifest.runId,
         };
       }
-      const destination = archive;
-      for (const snapshot of result.snapshots)
-        await destination.addSnapshot(snapshot);
-      for (const run of result.runs) await destination.addRun(run);
-      if (result.experiment)
-        await destination.addLearningExperiment(result.experiment);
-      if (currentOperation !== operation) return;
-      retentionStatus = await retention.synchronize();
+      // Publish the restored acknowledgement before any fallible archive work.
+      render();
+      // Reuse the pre-execution reservation when cancellation interrupts
+      // publication. Do not append accepted evidence outside retention authority.
+      if (result.experiment && !archive.learningExperiments.has(result.experiment.id)) {
+        cancellationTransaction ??= await beginRetention('canonical');
+        if (currentOperation !== operation) return;
+        const destination = cancellationTransaction.archive;
+        for (const snapshot of result.snapshots)
+          await destination.addSnapshot(snapshot);
+        for (const run of result.runs) await destination.addRun(run);
+        if (result.experiment)
+          await destination.addLearningExperiment(result.experiment);
+        if (currentOperation !== operation) return;
+        await commitRetention(cancellationTransaction);
+        cancellationTransaction = undefined;
+      }
     }
+    if (currentOperation !== operation) return;
+    if (!archive.snapshots.has(response.archivedSnapshot.id)) await archive.addSnapshot(response.archivedSnapshot);
+    retentionStatus = await retention.synchronize();
+    if (currentOperation !== operation) return;
     ready = true;
     busy = false;
     status = cancelled
@@ -2274,8 +2300,13 @@ async function reset(cancelled: boolean, clear = false): Promise<void> {
     if (currentOperation !== operation) return;
     busy = false;
     error = failure instanceof Error ? failure.message : String(failure);
-    status = "Reset failed";
+    if (cancelled && acceptedAtCancellation && liveTrainingStep === acceptedAtCancellation.trainingStep) {
+      ready = true;
+      status = `Cancelled · restored accepted training step ${liveTrainingStep} · evidence retention failed`;
+    } else status = "Reset failed";
     render();
+  } finally {
+    cancelRetention(cancellationTransaction);
   }
 }
 

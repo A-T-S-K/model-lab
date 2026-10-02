@@ -239,3 +239,38 @@ Windows/process-tree portability, clean exact-candidate, independent M5, unfamil
 users, workshop/station and release qualification are unrun. Appropriate tooling
 safety/type checks, owned builds, HTTP, broad diagnosis and focused reproduction
 are engineering evidence only. Stop after this bounded tooling/triage delivery.
+
+## Addendum: bounded Guided lifecycle repair
+
+The original diagnostic identity, commands, 46 failures/14 skips and individual
+classifications above are preserved. The subsequent
+[Guided lifecycle repair](guided-training-lifecycle-repair.md) records incremental
+starting source, root causes, new controls, final runtime
+`sha256:7ee8d4cbfb9513e1da264d4185643d4a2fc6f354724eecd1d03762f8601c7db6`,
+exact commands, timings, failures and preservation. This adds current dispositions;
+it does not retroactively pass the old reports or grant M5/release acceptance.
+
+| Original identity | New bounded disposition |
+| --- | --- |
+| BF-009–BF-011, BF-013–BF-016 | Current Guided cases pass on final runtime, including fresh/repeated teaching, compact viewport, depth and local probability state. Count failures were slow completion dominated by repeatedly validating retained immutable history during archive fork. New admissions and hard budgets remain validated and unchanged. |
+| BF-012 | Current exhaustion regression passes from an authentic native-produced complete step-995 snapshot restored after initial Attract. Original retain-995 browser setup would hit legitimate capacity first and remains an outdated-contract diagnosis. All original five-update terminal/exhaustion/numerical/history assertions remain. |
+| BF-041 | Current state/history regression passes; source step stays separate from accepted live step and promotion clears inspection. |
+| BF-048–BF-050 | Both desktop ten-count routes and held tenth-admission atomic publication pass in final serial and two-worker focused checks. Held digest still intercepts actual new-record admission after the tenth acknowledged result. |
+| BF-051 | Original test withheld the third result **before** acknowledgement. Correct outcome is restoration to step two and old-epoch reply rejection. The current control delays the actual restore acknowledgement rather than relying on a digest absent for an already-retained snapshot; it passes serially and concurrently with exact step-two values/source. A separate authentic handler-then-synchronous-Cancel control reproduced and repaired the real acknowledged-step-three/displayed-step-two defect. Additional controls cover cancellation after repeated teaching and accepted cancellation with archive failure. |
+| Other BF identities and CG-01/CG-02 | No disposition transferred. Full broad suite and unavailable native/mixed-archive branches remain unrun in this repair; unrelated confirmed defects remain outside its authorization. |
+
+The broader final engineering selection retains **35 passed / 1 failed**: its stale
+restoration digest predicate is explicitly retained as a failed test-instrumentation
+attempt. The corrected identical focused ten-case selection passes **10/10** with
+one worker and **10/10** with two. Core checks pass **145**, with **5** missing-input
+skips; independent portable Python reference passes; final HTTP passes **1/1**.
+See the repair report for actual coverage and limits, including M4-E's unexecuted
+optional B/C branches. No failure was suppressed or converted to a skip.
+
+Fresh ten-update button-to-terminal observation changes from about 6.92 to 2.25
+seconds; raw phase/timing precision lives in the linked artifacts. Legitimate actual
+history capacity stops the repeated Guided lesson at step 26 in both final concurrency
+conditions, preserving six accepted updates from its step-20 baseline and refusing
+transport for update 27. Original step-29 refusal observations retain their different
+source/setup identity; neither count is a universal capacity threshold. No resource
+limit, numerical policy, accepted update history or independent oracle was weakened.

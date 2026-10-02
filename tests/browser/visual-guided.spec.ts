@@ -336,96 +336,60 @@ test("tenth accepted update publishes its count, source and endpoint atomically 
   await expect(page.locator("#teach")).toBeEnabled();
 });
 
-test("cancellation retains a result accepted after the last painted count but before client restoration", async ({
-  page,
-}) => {
+test("cancellation rejects a withheld unacknowledged result after client restoration", async ({ page }) => {
   await page.addInitScript(() => {
     const state = window as unknown as {
-      third?: () => void;
-      holdArchive: boolean;
-      heldArchive: boolean;
-      releaseArchive?: () => void;
-      after?: number;
-      run?: string;
+      third?: () => void; restoringRunId?: string; heldRestoration?: boolean;
+      releaseRestoration?: () => void; after?: number; run?: string; withheldRun?: string;
     };
-    state.holdArchive = false;
-    state.heldArchive = false;
-    const digest = crypto.subtle.digest.bind(crypto.subtle);
-    crypto.subtle.digest = (...args: Parameters<SubtleCrypto["digest"]>) => {
-      const value = digest(...args);
-      if (state.holdArchive && !state.heldArchive) {
-        state.heldArchive = true;
-        return new Promise<ArrayBuffer>((resolve, reject) => {
-          state.releaseArchive = () => {
-            value.then(resolve, reject);
-          };
-        });
-      }
-      return value;
+    const post = Worker.prototype.postMessage;
+    Worker.prototype.postMessage = function(message: any, ...rest: any[]) {
+      if (message.command === 'restore') state.restoringRunId = message.runId;
+      return (post as any).call(this, message, ...rest);
     };
-    const descriptor = Object.getOwnPropertyDescriptor(
-      Worker.prototype,
-      "onmessage",
-    )!;
+    const descriptor = Object.getOwnPropertyDescriptor(Worker.prototype, "onmessage")!;
     Object.defineProperty(Worker.prototype, "onmessage", {
-      configurable: true,
-      get: descriptor.get,
+      configurable: true, get: descriptor.get,
       set(handler: (event: MessageEvent) => void) {
         descriptor.set!.call(this, (event: MessageEvent) => {
-          if (
-            event.data.status === "result" &&
-            event.data.result.learn &&
-            event.data.result.trainingStep === 3
-          ) {
-            state.after = event.data.result.probabilities[3][0];
-            state.run = event.data.result.run.manifest.runId;
+          if (event.data.status === 'ready' && event.data.runId === state.restoringRunId) {
+            state.heldRestoration = true;
+            state.releaseRestoration = () => handler(event);
+          } else if (event.data.status === "result" && event.data.result.learn && event.data.result.trainingStep === 3) {
+            state.withheldRun = event.data.result.run.manifest.runId;
             state.third = () => handler(event);
-          } else handler(event);
+          } else {
+            handler(event);
+            if (event.data.status === 'result' && event.data.result.learn && event.data.result.trainingStep === 2) {
+              state.after = event.data.result.probabilities[3][0];
+              state.run = event.data.result.run.manifest.runId;
+            }
+          }
         });
       },
     });
   });
-  await page.goto("/");
-  await page.locator("#activate-attract").click();
-  await expect(page.locator("#teach")).toBeEnabled();
-  await page.locator("#teach").click();
-  await expect
-    .poll(() =>
-      page.evaluate(() => !!(window as unknown as { third?: unknown }).third),
-    )
-    .toBe(true);
+  await page.goto("/"); await page.locator("#activate-attract").click();
+  await expect(page.locator("#teach")).toBeEnabled(); await page.locator("#teach").click();
+  await expect.poll(() => page.evaluate(() => !!(window as unknown as { third?: unknown }).third)).toBe(true);
   await expect(page.getByTestId("teach-progress")).toContainText("2 / 10");
-  await page.evaluate(() => {
-    (window as unknown as { holdArchive: boolean }).holdArchive = true;
-  });
   await page.locator("#cancel-teach").click();
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () => (window as unknown as { heldArchive: boolean }).heldArchive,
-      ),
-    )
-    .toBe(true);
-  await page.evaluate(() =>
-    (window as unknown as { third: () => void }).third(),
-  );
-  await page.evaluate(() =>
-    (window as unknown as { releaseArchive: () => void }).releaseArchive(),
-  );
-  await expect(page.getByTestId("training-step")).toHaveText("3");
-  await expect(page.getByTestId("guided-completed")).toHaveText("3");
+  // Delay the actual current restoration acknowledgement, not a digest that may
+  // be absent when the restored immutable snapshot is already retained.
+  await expect.poll(() => page.evaluate(() => (window as unknown as { heldRestoration?: boolean }).heldRestoration)).toBe(true);
+  await page.evaluate(() => (window as unknown as { third: () => void }).third());
+  await page.evaluate(() => (window as unknown as { releaseRestoration: () => void }).releaseRestoration());
+  await expect(page.getByTestId('document-input')).toBeEnabled({ timeout: 15000 });
+  await expect(page.getByTestId("training-step")).toHaveText("2");
+  await expect(page.getByTestId("guided-completed")).toHaveText("2");
   const expected = await page.evaluate(() => ({
     after: (window as unknown as { after: number }).after,
     run: (window as unknown as { run: string }).run,
+    withheldRun: (window as unknown as { withheldRun: string }).withheldRun,
   }));
-  await expect(page.getByTestId("guided-after")).toHaveAttribute(
-    "data-value",
-    String(expected.after),
-  );
-  await expect(page.getByTestId("source-binding")).toHaveAttribute(
-    "data-source-run",
-    expected.run,
-  );
+  expect(expected.run).not.toBe(expected.withheldRun);
+  await expect(page.getByTestId("guided-after")).toHaveAttribute("data-value", String(expected.after));
+  await expect(page.getByTestId("source-binding")).toHaveAttribute("data-source-run", expected.run);
 });
 
 test("cancelling initialization still reaches a usable canonical Attract binding", async ({

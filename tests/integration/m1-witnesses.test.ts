@@ -26,6 +26,9 @@ test('live native noncanonical forward preserves both layers, every head and cau
       }
     }
   }
+  const fork = store.fork();
+  assert.deepEqual(fork.get(run.id), run); assert.equal(fork.contentId(run.id), store.contentId(run.id));
+  assert.deepEqual(fork.envelope(run.id), store.envelope(run.id));
   const disconnected=new EvidenceStore(integrations());await disconnected.admit(parseEvidence(serializeEvidence(envelope)));
   assert.deepEqual(disconnected.get(run.id),run);
   assert.match(disconnected.capability(run.id,run.points[0].id,'train'),/Unsupported train/);

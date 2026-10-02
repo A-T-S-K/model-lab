@@ -95,6 +95,8 @@ test('payload-backed M4-A generation round-trips through registered retained val
   const envelope=JSON.parse(await readFile(generationPath!,'utf8')),source=new SessionArchive(),run=await source.evidence.admit(envelope),originalId=source.evidence.contentId(run.id);
   const exported=await exportPortableArchive(source);assert(exported.payloadCount>0);assert(exported.uniquePayloadBytes>0);
   const measured=await measurePortableArchive(source);assert.equal(measured.archiveBytes,exported.bytes.length);assert.equal(measured.payloadEntries,18);assert.equal(measured.uniquePayloadBytes,438272);
+  const generationFork = await source.fork();
+  assert.deepEqual((await exportPortableArchive(generationFork)).bytes, exported.bytes);
   const {archive}=await importPortableArchive(exported.bytes);assert.equal(archive.evidence.contentId(run.id),originalId);assert.equal(archive.evidence.hasEnvelope(run.id),false);
   assert.deepEqual(archive.evidence.slice(run.id,'generation:2/logits',50303,1),[-3.8919265270233154]);
   assert.deepEqual(archive.evidence.slice(run.id,'generation:2/attention.qkv',511,8),[-0.14655473828315735,2.905082941055298,3.862351417541504,-7.279216766357422,-12.423630714416504,1.786351203918457,-6.3037872314453125,-0.3044796884059906]);
@@ -114,4 +116,28 @@ test('payload-backed M4-A generation round-trips through registered retained val
   const badLength=new Uint8Array(exported.bytes),view=new DataView(badLength.buffer),manifestLength=view.getUint32(10,false);view.setUint32(18+manifestLength,1_000_000,false);await assert.rejects(importPortableArchive(badLength),/remaining archive bytes/);
   const duplicatePayload=new Uint8Array(exported.bytes),duplicateView=new DataView(duplicatePayload.buffer),length=duplicateView.getUint32(10,false),manifest=JSON.parse(new TextDecoder().decode(duplicatePayload.slice(18,18+length)));manifest.payloads[1].contentId=manifest.payloads[0].contentId;const duplicateManifest=new TextEncoder().encode(JSON.stringify(manifest));assert.equal(duplicateManifest.length,length);duplicatePayload.set(duplicateManifest,18);await assert.rejects(importPortableArchive(duplicatePayload),/Duplicate payload identity/);
   for(const index of [Math.floor(exported.bytes.length/2),exported.bytes.length-1]){const tampered=new Uint8Array(exported.bytes);tampered[index]^=1;await assert.rejects(importPortableArchive(tampered));}
+});
+
+test('immutable archive fork preserves original bytes, comparisons and identities while isolating new writes and failures', async () => {
+  const { archive, runId } = await canonicalArchive();
+  const original = await exportPortableArchive(archive), fork = await archive.fork();
+  const copied = await exportPortableArchive(fork);
+  assert.deepEqual(copied.bytes, original.bytes); assert.equal(copied.archiveId, original.archiveId);
+  assert.equal(fork.runs.get(runId), archive.runs.get(runId), 'validated frozen records may be shared');
+  assert.equal(fork.evidence.contentId(runId), archive.evidence.contentId(runId));
+  assert.deepEqual(fork.evidence.get(runId), archive.evidence.get(runId));
+  const invalid = structuredClone(archive.runs.get(runId)!); (invalid.manifest as { startingSnapshotId: string }).startingSnapshotId = 'missing';
+  await assert.rejects(fork.addRun(invalid));
+  assert.deepEqual((await exportPortableArchive(archive)).bytes, original.bytes);
+  assert.deepEqual((await exportPortableArchive(fork)).bytes, original.bytes);
+  const extra = structuredClone(archive.runs.get(runId)!); (extra.manifest as { runId: string }).runId = 'fork-only';
+  await fork.addRun(extra); assert.equal(archive.runs.has('fork-only'), false);
+  const parentOnly = structuredClone(extra); (parentOnly.manifest as { runId: string }).runId = 'parent-only';
+  await archive.addRun(parentOnly); assert.equal(fork.runs.has('parent-only'), false);
+  assert.equal(fork.evidence.compare(runId, 'fork-only').compatible, true);
+  assert.throws(() => { (fork.runs.get(runId)!.artifacts[0].values as number[])[0] = 0; }, TypeError);
+  const payload = await fork.evidence.payloads.put('float64', [1, -0, 3]);
+  assert.equal(archive.evidence.payloads.has(payload.contentId), false, 'new payload bytes remain transaction-local');
+  const bytes = fork.evidence.payloads.exportBytes(payload); bytes.fill(0);
+  assert.deepEqual(fork.evidence.payloads.slice(payload, 0, 3), [1, -0, 3]);
 });

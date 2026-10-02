@@ -1,7 +1,7 @@
 import { canonicalBytes } from '../archive/snapshot.js';
 import { immutableCopy } from './types.js';
 import { sha256Id } from './sha256.js';
-import { INLINE_VALUE_LIMIT, InMemoryNumericalPayloadStore, MAX_PAYLOAD_SLICE_VALUES, validatePayloadForPoint,
+import { INLINE_VALUE_LIMIT, InMemoryNumericalPayloadStore, LayeredNumericalPayloadStore, MAX_PAYLOAD_SLICE_VALUES, validatePayloadForPoint,
   type NumericalDType, type NumericalPayloadDescriptor, type NumericalPayloadStorage } from './payload.js';
 
 export const MAX_RECORD_BYTES = 4_000_000;
@@ -130,6 +130,13 @@ function retainBoundedCodecMetadata(value:unknown):unknown{
 export class EvidenceStore {
   #runs=new Map<string,{run:EvidenceRun;envelope?:EvidenceEnvelope;metadata:EvidenceEnvelope;contentId:string}>();
   constructor(readonly registry:IntegrationRegistry,readonly payloads:NumericalPayloadStorage=new InMemoryNumericalPayloadStore()){}
+  /** Isolated membership over already validated immutable records and payload bytes.
+   * New admissions still use the codecs; imported data cannot enter this path. */
+  fork(): EvidenceStore {
+    const fork = new EvidenceStore(this.registry, new LayeredNumericalPayloadStore(this.payloads));
+    fork.#runs = new Map(this.#runs);
+    return fork;
+  }
   async admit(value:unknown, expected?:ExecutionRequest, current:()=>boolean=()=>true):Promise<EvidenceRun>{
     const envelope=fields(value,['version','codec','record']);check(envelope.version===1,'Unknown envelope version');text(envelope.codec);
     const json=JSON.stringify(value);check(new TextEncoder().encode(json).length<=MAX_RECORD_BYTES,'Recording byte budget');

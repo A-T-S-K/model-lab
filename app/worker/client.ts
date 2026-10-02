@@ -1,6 +1,6 @@
 import { canonicalIntent } from './execution-intent.js';
 import { randomUuid } from './random-uuid.js';
-import type { WorkerRequest, WorkerResponse } from './protocol.js';
+import type { RunResult, WorkerRequest, WorkerResponse } from './protocol.js';
 import type { ArchivedSnapshot } from '../../archive/session.js';
 type Command = WorkerRequest extends infer R ? R extends WorkerRequest ? Omit<R, 'sessionId' | 'runId' | 'generationId'> : never : never;
 
@@ -13,6 +13,9 @@ export class ModelWorkerClient {
   private sequence = 0;
   private worker: Worker;
   private completedSnapshot?: ArchivedSnapshot;
+  private completedResult?: RunResult;
+  /** Synchronous acknowledgement, before request Promise continuations publish. */
+  get acceptedResult(): RunResult | undefined { return this.completedResult; }
   private pending = new Map<string, { resolve: (value: WorkerResponse) => void; reject: (error: Error) => void }>();
 
   constructor() { this.worker = this.spawn(); }
@@ -25,7 +28,10 @@ export class ModelWorkerClient {
       if (!pending) return;
       this.pending.delete(response.runId);
       if (response.status === 'ready' && response.archivedSnapshot) this.completedSnapshot = response.archivedSnapshot;
-      if (response.status === 'result') this.completedSnapshot = response.result.snapshots.at(-1);
+      if (response.status === 'result') {
+        this.completedSnapshot = response.result.snapshots.at(-1);
+        this.completedResult = response.result;
+      }
       if (response.status === 'error') pending.reject(new Error(response.error)); else pending.resolve(response);
     };
     worker.onerror = event => {
@@ -52,6 +58,7 @@ export class ModelWorkerClient {
     this.worker.terminate();
     for (const pending of this.pending.values()) pending.reject(new Error('Run cancelled by reset'));
     this.pending.clear(); this.generationId++;
+    this.completedResult = undefined;
     this.failure = undefined; this.worker = this.spawn();
     return snapshot ? this.request({ command: 'restore', snapshot }) : this.initialize();
   }

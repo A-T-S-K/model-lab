@@ -133,6 +133,10 @@ test('Sequence G: portable round-trip of M3 experiment receipts preserves purpos
 
   // Export to portable bytes and import into fresh isolated archive
   const exported = await exportPortableArchive(archive);
+  const fork = await archive.fork();
+  const forked = await exportPortableArchive(fork);
+  assert.deepEqual(forked.bytes, exported.bytes, 'all experiment families retain exact portable bytes through an immutable fork');
+  assert.equal(forked.archiveId, exported.archiveId);
   const { archive: imported } = await importPortableArchive(exported.bytes);
 
   // Verify head ablation receipt & comparison

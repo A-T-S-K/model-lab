@@ -1,5 +1,5 @@
 import { EvidenceStore } from '../trace/evidence.js';
-import { InMemoryNumericalPayloadStore, LayeredNumericalPayloadStore, type NumericalPayloadStorage } from '../trace/payload.js';
+import { InMemoryNumericalPayloadStore, type NumericalPayloadStorage } from '../trace/payload.js';
 import { integrations } from '../trace/integrations.js';
 import { validateLegacyRun } from './legacy-run.js';
 import { immutableCopy, type RecordedRun } from '../trace/types.js';
@@ -35,7 +35,8 @@ class ArchiveView<K, V> implements ReadonlyMap<K, V> {
 
 /** Immutable browser-session history. Validate complete records before insertion. */
 export class SessionArchive {
-  readonly evidence: EvidenceStore;
+  #evidence: EvidenceStore;
+  get evidence(): EvidenceStore { return this.#evidence; }
   readonly #snapshots = new Map<string, ArchivedSnapshot>();
   readonly #runs = new Map<string, RecordedRun>();
   readonly #learningExperiments = new Map<string, LearningExperiment>();
@@ -50,31 +51,21 @@ export class SessionArchive {
   readonly dataExperiments: ReadonlyMap<string, MatchedDataExperimentReceipt> = new ArchiveView(this.#dataExperiments);
 
   constructor(payloads: NumericalPayloadStorage = new InMemoryNumericalPayloadStore()) {
-    this.evidence = new EvidenceStore(integrations(), payloads);
+    this.#evidence = new EvidenceStore(integrations(), payloads);
   }
 
-  /**
-   * Build an isolated transaction view over immutable payload bytes. Record maps are
-   * replayed through their normal validators; publishing the returned archive is the
-   * caller's single commit boundary.
-   */
+  /** Isolated map membership over records validated and frozen on admission.
+   * Sharing immutable values preserves original identities without decoding all
+   * retained history again. New writes and portable imports retain full validation. */
   async fork(): Promise<SessionArchive> {
-    const fork = new SessionArchive(new LayeredNumericalPayloadStore(this.evidence.payloads));
-    for (const snapshot of this.#snapshots.values()) await fork.addSnapshot(snapshot);
-    const variantRunIds = this.#variantRunIds();
-    for (const run of this.#runs.values()) {
-      if (variantRunIds.has(run.manifest.runId)) continue;
-      await fork.addRun(run);
-    }
-    for (const experiment of this.#learningExperiments.values()) await fork.addLearningExperiment(experiment);
-    for (const experiment of this.#interventionExperiments.values()) await fork.addInterventionExperiment(experiment);
-    for (const experiment of this.#modelVariantExperiments.values()) await fork.addModelVariantExperiment(experiment);
-    for (const experiment of this.#dataExperiments.values()) await fork.addDataExperiment(experiment);
-    for (const run of this.evidence.list()) {
-      if (this.#runs.has(run.id)) continue;
-      if (this.evidence.hasEnvelope(run.id)) await fork.evidence.admit(this.evidence.envelope(run.id));
-      else await fork.evidence.admitPortable(await this.evidence.portableEntry(run.id));
-    }
+    const fork = new SessionArchive();
+    fork.#evidence = this.evidence.fork();
+    for (const [id, value] of this.#snapshots) fork.#snapshots.set(id, value);
+    for (const [id, value] of this.#runs) fork.#runs.set(id, value);
+    for (const [id, value] of this.#learningExperiments) fork.#learningExperiments.set(id, value);
+    for (const [id, value] of this.#interventionExperiments) fork.#interventionExperiments.set(id, value);
+    for (const [id, value] of this.#modelVariantExperiments) fork.#modelVariantExperiments.set(id, value);
+    for (const [id, value] of this.#dataExperiments) fork.#dataExperiments.set(id, value);
     return fork;
   }
 
