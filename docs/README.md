@@ -33,6 +33,8 @@ with exact statements/sections, decision needed and affected gate.
 
 ## Release preparation
 
+- [Reviewed local implementation checkpoints](reviews/release-implementation-checkpoints.md): pass ownership, local commits, preserved bytes and retained engineering limits.
+
 - [Release learning journey](design/release-learning-journey.md): opt-in opening and prediction, representation, context/attention and output contracts; redesigned learning/experiment chapters remain proposed.
 - [Forward-tour implementation review](reviews/release-learning-forward-tour.md): chapters 3–4, authentic arithmetic, rendered evidence, explicit learning handoff and current verification limits.
 - [Introductory implementation review](reviews/release-learning-introduction.md): incremental scope, rendered evidence and current validation limits.
