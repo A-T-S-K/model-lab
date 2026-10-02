@@ -776,6 +776,17 @@ function render(): void {
       : undefined;
   const focusId = focused?.id;
   const focusAttributes = [
+    "data-dock-depth",
+    "data-depth-member",
+    "data-depth-key",
+    "data-depth-head",
+    "data-depth-element",
+    "data-depth-hidden-feature",
+    "data-depth-output-feature",
+    "data-training-objective-position",
+    "data-training-contribution-ordinal",
+    "data-training-candidate-position",
+    "data-support-action",
     "data-map",
     "data-open-attention",
     "data-query",

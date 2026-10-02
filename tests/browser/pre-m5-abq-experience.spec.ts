@@ -370,7 +370,8 @@ test('1. Visitor profile DOM omissions hide unneeded workbench controls', async 
   await expect(page.getByTestId('lesson-progress')).not.toContainText('Step 1');
   await expect(page.locator('#short-continue')).toBeVisible();
   await expect(page.locator('#short-continue')).toContainText('See how it made the prediction');
-  await expect(page.locator('#visitor-explore-toggle')).toHaveCount(0);
+  // Explore is an explicit activity action; camera gestures keep Guided active.
+  await expect(page.locator('#visitor-explore-toggle')).toHaveText('Enter Explore');
   await expect(page.locator('#operator-controls')).toHaveCount(0);
 
   // Selecting a world object enters Explore without exposing Workbench controls.
@@ -1371,7 +1372,8 @@ test('6. 44px minimum touch targets and keyboard accessibility across qualified 
   await assertMin44('#short-continue', 'Opening Continue button');
   await assertMin44('#clear-session', 'Public Reset button');
   await assertMin44('#dock-inspect', 'Dock inspect button');
-  await expect(page.locator('#visitor-explore-toggle')).toHaveCount(0);
+  // Explore is an explicit activity action; camera gestures keep Guided active.
+  await expect(page.locator('#visitor-explore-toggle')).toHaveText('Enter Explore');
 
   await page.locator('#dock-inspect').click();
   for (const depth of ['math', 'values', 'source']) {
@@ -1401,7 +1403,7 @@ test('6. 44px minimum touch targets and keyboard accessibility across qualified 
   await expect(page.locator('.output-comparison')).toHaveCount(0);
   await page.locator('#dock-inspect').click();
   await page.locator('button[data-dock-depth="compare"]').click();
-  await expect(page.locator('.contextual-dock .output-comparison')).toHaveCount(1);
+  await expect(page.getByTestId('contextual-dock').getByTestId('public-candidate-values')).toHaveCount(1);
   await assertMin44('.dock-tab-close', 'Candidate comparison Return button');
   await page.locator('.dock-tab-close').click();
   await page.locator('#execution-cancel').click();
@@ -1447,7 +1449,7 @@ test('6. 44px minimum touch targets and keyboard accessibility across qualified 
   await page.locator('#dock-inspect').click();
   await page.locator('button[data-dock-depth="compare"]').click();
   await expect(page.getByTestId('dock-compare')).toContainText('Current / Candidate');
-  await expect(page.locator('.contextual-dock .output-comparison')).toHaveCount(1);
+  await expect(page.getByTestId('contextual-dock').getByTestId('public-candidate-values')).toHaveCount(1);
   await page.locator('.dock-tab-close').click();
   await page.locator('#execution-accept').click();
   await expectPublicLesson(page, { canonicalState: 'tour_complete', outcome: 'accepted' });

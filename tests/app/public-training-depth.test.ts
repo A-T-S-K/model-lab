@@ -43,7 +43,7 @@ class LiveTrainingHarness {
     this.executionId = name + ':training';
   }
 
-  static async create(name: string, pin: ParameterPin): Promise<LiveTrainingHarness> {
+  static async create(name: string, pin: ParameterPin, document = 'abca'): Promise<LiveTrainingHarness> {
     const harness = new LiveTrainingHarness(name);
     const initialized = await harness.session.handle({ ...harness.tag, runId: name + ':init', command: 'initialize' });
     assert.equal(initialized.status, 'ready');
@@ -52,7 +52,7 @@ class LiveTrainingHarness {
       ...harness.tag,
       runId: harness.executionId,
       command: 'startTraining',
-      document: 'abca',
+      document,
     });
     assert.equal(started.status, 'forward');
     if (started.status !== 'forward' || !started.progress.start) throw new Error('live training start unavailable');
@@ -1006,4 +1006,58 @@ test('PD1-3C public inspection handlers are explicit-source read-only handoffs w
   ] as const) {
     assert.doesNotMatch(handler, prohibited, label + ' inspection handler must remain read-only');
   }
+});
+
+test('shared context summary and witness resolve the same source-bound p3/a occurrence', async () => {
+  const harness = await LiveTrainingHarness.create('shared-context-reproduction', { name: 'wte', row: 0, column: 0 });
+  await harness.ready();
+  const html = await publicTrainingDock(harness, 'candidate_ready', 'explain');
+  assert.match(html, /Target 'a' at p3/);
+  assert.match(html, /Same example · p3 target a/);
+  const candidate = context('candidate_ready', harness).candidate!;
+  assert.equal(candidate.selectedPosition, 3);
+  assert.equal(candidate.selectionScope, 'lesson');
+  const alternative = context('candidate_ready', harness, {candidatePosition: 4}).candidate!;
+  assert.equal(alternative.lessonPosition, 3);
+  assert.equal(alternative.selectedPosition, 4);
+  assert.equal(alternative.selectionScope, 'temporary-detail');
+  const math = await publicTrainingDock(harness, 'candidate_ready', 'math', {candidatePosition: 4});
+  assert.match(math, /Temporary detail selection · render only/);
+  assert.match(math, /p4 target END/);
+  assert.match(math, /Lesson remains p3/);
+  assert.equal(candidate.candidateProbabilityInspection?.sourceRunId, candidate.candidateRunId);
+  assert.equal(candidate.rows[3].candidateDerivedLoss, -Math.log(candidate.rows[3].candidateTargetProbability));
+  assert.equal(context('candidate_ready', harness, {candidatePosition: 99}).available, false);
+  const content = getPublicTourContent('candidate_ready');
+  const unavailable = resolvePublicTrainingDepthContext({...content, selectionIntent: {...content.selectionIntent, token: 99}}, harness.progress, harness.starting, harness.preview);
+  assert.equal(unavailable?.available, false);
+  assert.match(unavailable?.reason ?? '', /source-bound lesson position/);
+  const rows = context('candidate_ready', harness).candidate!.rows;
+  assert.notEqual(rows[3].target, rows[4].target);
+});
+
+
+test('shared context short input and incompatible model refuse without substituting another position', async () => {
+  const short = await LiveTrainingHarness.create('shared-context-short', {name:'wte',row:0,column:0}, 'a');
+  await short.ready();
+  const missing = context('candidate_ready', short);
+  assert.equal(missing.available, false);
+  assert.match(missing.reason ?? '', /source-bound lesson position/);
+  const html = await publicTrainingDock(short, 'candidate_ready', 'explain');
+  assert.match(html, /source-bound lesson position/);
+  assert.doesNotMatch(html, /candidate-summary|Target '.*' at p/);
+  const harness = await LiveTrainingHarness.create('shared-context-model', {name:'wte',row:0,column:0});
+  await harness.ready();
+  const training=harness.progress.training!, ready=training.readyOutputs!;
+  const changed = withTraining(harness.progress, {...training, readyOutputs:{...ready,
+    after:{...ready.after, manifest:{...ready.after.manifest, model:{...ready.after.manifest.model,id:'different-model'}}}}});
+  assert.equal(context('candidate_ready', harness, {}, changed).available, false);
+  const staleRun = withTraining(harness.progress, {...training, sourceRunId:'another-run'});
+  assert.equal(context('candidate_ready', harness, {}, staleRun).available, false);
+  const absent = withTraining(harness.progress, {...training, readyOutputs:{...ready,
+    after:{...ready.after, artifacts:ready.after.artifacts.filter(artifact=>!(artifact.kind==='probabilities'&&artifact.concept.token===3))}}});
+  const refused=context('candidate_ready', harness, {}, absent);
+  assert.equal(refused.available, false);
+  assert.match(refused.reason ?? '', /probability support is unavailable/);
+  assert.equal(refused.candidate, undefined);
 });

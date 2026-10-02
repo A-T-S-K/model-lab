@@ -46,6 +46,8 @@ export interface PublicCandidateDepthRow {
   readonly targetLabel: string;
   readonly baselineDistribution: readonly number[];
   readonly candidateDistribution: readonly number[];
+  readonly baselineArtifactId: string;
+  readonly candidateArtifactId: string;
   readonly baselineTargetProbability: number;
   readonly candidateTargetProbability: number;
   readonly baselineDerivedLoss?: number;
@@ -64,6 +66,8 @@ export interface PublicCandidateDepth {
   readonly candidateRuntimeRevision: string;
   readonly outputLabels: readonly string[];
   readonly rows: readonly PublicCandidateDepthRow[];
+  readonly lessonPosition: number;
+  readonly selectionScope: 'lesson' | 'temporary-detail';
   readonly selectedPosition: number;
   readonly candidateProbabilityInspection?: PublicArtifactInspectionTarget;
   readonly baselineDerivedMean?: number;
@@ -363,8 +367,10 @@ export function resolvePublicTrainingDepthContext(
         derivedLoss: derivedNegativeLog(probability),
       };
     });
-    const requested = selection.objectivePosition;
-    const selectedPosition = rows.some(row => row.position === requested) ? requested! : (rows.at(-1)?.position ?? 0);
+    const selectedPosition = selection.objectivePosition ?? content.selectionIntent.token;
+    if (selectedPosition === undefined || !rows.some(row => row.position === selectedPosition)) {
+      return unavailable(content, kind, 'The selected lesson/detail position is unavailable in the objective evidence.', progress);
+    }
     const selectedRow = rows.find(row => row.position === selectedPosition);
     const inspectableSource = trainingRun && isPublicTrainingSourceInspectable(progress, training.gradientSourceRunId)
       ? training.gradientSourceRunId
@@ -426,7 +432,11 @@ export function resolvePublicTrainingDepthContext(
     if (!sameNumbers(beforeInput, afterInput) || !sameNumbers(beforeTargets, afterTargets)) {
       return unavailable(content, kind, 'Baseline and candidate inputs or targets do not match.', progress);
     }
-    if (!sameJson(before.model, after.model)
+    if (!sameJson(before.model.architecture, startingSnapshot.state.config)
+      || !sameJson(before.numeric, after.numeric)
+      || before.sessionId !== after.sessionId
+      || before.generationId !== after.generationId
+      || !sameJson(before.model, after.model)
       || before.runtimeVersion !== after.runtimeVersion
       || before.runtimeRevision !== after.runtimeRevision) {
       return unavailable(content, kind, 'Baseline and candidate model/runtime identities are incompatible.', progress);
@@ -446,6 +456,8 @@ export function resolvePublicTrainingDepthContext(
         || target < 0 || target >= outputLabels.length) {
         return unavailable(content, kind, 'Complete baseline/candidate probability support is unavailable.', progress);
       }
+      const baselineArtifactId = availableArtifact(ready.before, 'probabilities', position)!.id;
+      const candidateArtifactId = availableArtifact(ready.after, 'probabilities', position)!.id;
       const baselineTargetProbability = baselineDistribution[target];
       const candidateTargetProbability = candidateDistribution[target];
       rows.push({
@@ -456,14 +468,24 @@ export function resolvePublicTrainingDepthContext(
         targetLabel: targetTokenLabel(target, startingSnapshot),
         baselineDistribution,
         candidateDistribution,
+        baselineArtifactId,
+        candidateArtifactId,
         baselineTargetProbability,
         candidateTargetProbability,
         baselineDerivedLoss: derivedNegativeLog(baselineTargetProbability),
         candidateDerivedLoss: derivedNegativeLog(candidateTargetProbability),
       });
     }
-    const requested = selection.candidatePosition;
-    const selectedPosition = rows.some(row => row.position === requested) ? requested! : (rows.at(-1)?.position ?? 0);
+    // The public recipe binds the lesson occurrence; a detail choice only changes
+    // this render's inspected row. Neither a last row nor another run is a fallback.
+    const lessonPosition = content.selectionIntent.token;
+    if (lessonPosition === undefined || !rows.some(row => row.position === lessonPosition)) {
+      return unavailable(content, kind, 'The source-bound lesson position is unavailable in this training example.', progress);
+    }
+    const selectedPosition = selection.candidatePosition ?? lessonPosition;
+    if (!rows.some(row => row.position === selectedPosition)) {
+      return unavailable(content, kind, 'The requested detail position is unavailable in this comparison.', progress);
+    }
     const selectedRow = rows.find(row => row.position === selectedPosition);
     const candidateProbabilityInspection = livePreview
       && isPublicTrainingSourceInspectable(progress, after.runId)
@@ -486,6 +508,8 @@ export function resolvePublicTrainingDepthContext(
         candidateRuntimeRevision: after.runtimeRevision,
         outputLabels,
         rows,
+        lessonPosition,
+        selectionScope: selection.candidatePosition === undefined ? 'lesson' : 'temporary-detail',
         selectedPosition,
         candidateProbabilityInspection,
         baselineDerivedMean: completeMean(rows.map(row => row.baselineDerivedLoss)),

@@ -62,6 +62,7 @@ function sameBox(a:CameraBox,b:CameraBox){
 }
 
 export class SpatialCamera {
+  manuallyPositioned = false;
   box:CameraBox={...HOME};
   private svg?:SVGSVGElement;
   private frame=0;
@@ -98,7 +99,7 @@ export class SpatialCamera {
   }
   private publicSemanticFrame():CameraBox|undefined {
     const svg=this.svg;
-    if(!svg)return undefined;
+    if(!svg || this.manuallyPositioned)return undefined;
     const shell=svg.closest<HTMLElement>('.spatial-shell');
     const profile=shell?.dataset.experienceProfile;
     const mode=shell?.dataset.publicNavigationMode;

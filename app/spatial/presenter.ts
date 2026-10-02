@@ -195,6 +195,7 @@ export class SpatialPresenter {
     this.publicTrainingDepthSelection = {};
     this.invalidate(); this.playback.cursor=0; this.playback.phase=2; this.playback.follow=true; this.playback.route="forward"; this.camera.detach();
     this.worldPaneObserver?.disconnect(); this.worldPaneObserver = undefined;
+    this.camera.manuallyPositioned = false;
     this.camera.box = wasPublic ? this.getResponsivePublicFrame() : { ...HOME };
     this.camera.move(this.camera.box, false);
     this.history=[]; this.boundSelection=undefined; this.boundPin=undefined;
@@ -221,6 +222,7 @@ export class SpatialPresenter {
     if (!this.model) return;
     if (!force && key === this.publicLessonVisualKey) return;
     this.publicLessonVisualKey = key;
+    this.camera.manuallyPositioned = false;
     this.publicDepthSelection = {};
     this.publicTrainingDepthSelection = {};
     const intent = view.content.selectionIntent;
@@ -237,7 +239,7 @@ export class SpatialPresenter {
     this.shortDetour = false;
     this.shortMessage = '';
     if (visualState === 'candidate_ready') {
-      this.go({ kind: 'probabilities', token: intent.token ?? 3 }, true);
+      this.go({ kind: 'probabilities', token: intent.token }, true);
     } else if (intent.derivedReverseStop === 5) {
       const pin = runtimePin ?? this.pin;
       const ownerKind = parameterOwners[pin.name] ?? 'tokenEmbedding';
@@ -821,6 +823,7 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
         learningRouteStop: isPublicProfile ? this.derivedLearningRouteStop : this.learningRouteStop,
         selectedLabel: label,
         tourContent,
+        publicNavigationMode,
         publicDepthSelection: this.publicDepthSelection,
         publicTrainingDepthSelection: this.publicTrainingDepthSelection,
         trainingStartingSnapshot: state.trainingStartingSnapshot,
@@ -878,6 +881,7 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
         this.dispatchPublicLesson({ type: navigation === 'explore' ? 'RESUME_GUIDED' : 'ENTER_EXPLORE' });
       } else this.freeExplore=!this.freeExplore;
       changed(); render();
+      document.querySelector<HTMLButtonElement>('#visitor-explore-toggle')?.focus({preventScroll:true});
     });
     root.querySelectorAll<HTMLElement>('[data-public-lesson-state]').forEach(el=>el.addEventListener('click',()=>{
       const target = el.dataset.publicLessonState as PublicTourState | undefined;
@@ -954,7 +958,14 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
     on("#spatial-lens",()=>{this.lens=true;this.construction=false;this.go({kind:"attentionLogits",token:this.selection.query,head:this.selection.head});change();});
     on("#open-spatial-detail",()=>{this.lens=true;this.construction=false;this.frame();render();});
     on("#close-spatial-lens",()=>{this.lens=false;render();});
-    const gesture=()=>{if(this.isPublicProfile()&&this.state?.publicLesson?.navigation.mode==='guided')this.dispatchPublicLesson({type:'ENTER_EXPLORE'});this.interrupt();const status=root.querySelector('[data-testid="explanation-status"]');if(status&&this.playback.source)status.textContent=`Explore detour · ${this.playback.cursor+1}/${this.playback.length}`;this.remember();this.detour=this.guided;const label=root.querySelector("#waypoint-status");if(label&&this.guided)label.textContent=`Explore detour · ${this.playback.cursor+1}/${this.playback.length} · Resume explanation to return`;};
+    const gesture=()=>{
+      this.camera.manuallyPositioned = true;
+      this.playback.pause(this.playback.exploring);
+      this.camera.stop();
+      this.pendingBox = undefined;
+      const status=root.querySelector('[data-testid="explanation-status"]');
+      if(status&&this.playback.source)status.textContent=`Camera adjusted · explanation paused · ${this.playback.cursor+1}/${this.playback.length}`;
+    };
     const svg=root.querySelector<SVGSVGElement>("#spatial-world");
     this.worldPaneObserver?.disconnect();
     const wp = root.querySelector<HTMLElement>(".world-workspace.is-public-profile > .world-pane") ?? root.querySelector<HTMLElement>(".world-pane");
@@ -962,7 +973,7 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
       this.worldPaneObserver = new ResizeObserver(entries => {
         for (const entry of entries) {
           const { width, height } = entry.contentRect;
-          if (width > 0 && height > 0 && this.isPublicProfile() && !this.freeExplore) {
+          if (width > 0 && height > 0 && this.isPublicProfile() && !this.freeExplore && !this.camera.manuallyPositioned) {
             const frame = responsivePublicFrame(width, height, PUBLIC_CONTENT_BOUNDS);
             if (
               this.camera.box.x !== frame.x ||
@@ -999,9 +1010,12 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
           if(this.isPublicProfile()){
             const navigation = this.state?.publicLesson?.navigation.mode;
             if(nextDepth==='explain'&&navigation==='detail'){if(!this.dispatchPublicLesson({type:'RETURN_FROM_DETAIL'}))return;}
+            else if(nextDepth==='explain'&&navigation==='explore'){if(!this.dispatchPublicLesson({type:'RESUME_GUIDED'}))return;}
             else if(nextDepth!=='explain'&&navigation==='guided'){if(!this.dispatchPublicLesson({type:'OPEN_DETAIL'}))return;}
           }
           this.dockDepth=nextDepth; render();
+          const focusSelector = nextDepth==='explain' ? '#dock-inspect' : `[data-dock-depth="${nextDepth}"]`;
+          document.querySelector<HTMLButtonElement>(focusSelector)?.focus({preventScroll:true});
         }
       });
     });
@@ -1023,15 +1037,16 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
         if(el.dataset.depthKey!==undefined){
           const key=Number(el.dataset.depthKey);
           next.key=key;
-          this.selection.key=key;
-          if(this.kind==='attentionLogits')this.element=key;
+
         }
         if(el.dataset.depthHead!==undefined) next.head=Number(el.dataset.depthHead);
         if(el.dataset.depthElement!==undefined) next.element=Number(el.dataset.depthElement);
         if(el.dataset.depthHiddenFeature!==undefined) next.hiddenFeature=Number(el.dataset.depthHiddenFeature);
         if(el.dataset.depthOutputFeature!==undefined) next.outputFeature=Number(el.dataset.depthOutputFeature);
         this.publicDepthSelection=next;
-        changed();render();
+        render();
+        const attribute = ['depth-member','depth-key','depth-head','depth-element','depth-hidden-feature','depth-output-feature'].find(attribute=>el.hasAttribute(`data-${attribute}`));
+        if(attribute)document.querySelector<HTMLButtonElement>(`[data-${attribute}="${el.getAttribute(`data-${attribute}`)}"]`)?.focus({preventScroll:true});
       });
     });
     root.querySelectorAll<HTMLElement>('[data-training-objective-position],[data-training-contribution-ordinal],[data-training-candidate-position]').forEach(el=>{
@@ -1043,6 +1058,8 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
         if(el.dataset.trainingCandidatePosition!==undefined) next.candidatePosition=Number(el.dataset.trainingCandidatePosition);
         this.publicTrainingDepthSelection=next;
         render();
+        const attribute=['training-objective-position','training-contribution-ordinal','training-candidate-position'].find(attribute=>el.hasAttribute(`data-${attribute}`));
+        if(attribute)document.querySelector<HTMLButtonElement>(`[data-${attribute}="${el.getAttribute(`data-${attribute}`)}"]`)?.focus({preventScroll:true});
       });
     });
     const select=(el:HTMLElement|SVGElement)=>{
@@ -1061,6 +1078,8 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
               ...(member.occurrence?.kind==='causal-keys'?{key:this.selection.key}:{}),
               ...(member.occurrence?.kind==='all-heads'&&el.dataset.worldHead!==undefined?{head:Number(el.dataset.worldHead)}:{}),
             };
+            render();
+            return;
           }
         }
         this.go({kind:worldKind,token:["k","v"].includes(worldKind)?this.selection.key:this.selection.query,...(el.dataset.worldLayer===undefined?{}:{layer:Number(el.dataset.worldLayer)}),...(el.dataset.worldHead===undefined?{}:{head:Number(el.dataset.worldHead)})});

@@ -84,6 +84,8 @@ export interface ContextualDockOptions {
   readonly selectedLabel?: string;
   readonly tourContent?: PublicTourContent;
   readonly publicDepthSelection?: PublicDepthSelection;
+  readonly publicNavigationMode?: 'guided' | 'detail' | 'explore' | 'facilitator';
+  readonly resolvedTrainingDepth?: ResolvedPublicTrainingDepthContext;
   readonly publicTrainingDepthSelection?: PublicTrainingDepthSelection;
   readonly trainingStartingSnapshot?: ArchivedSnapshot;
   readonly trainingPreview?: RunResult;
@@ -132,7 +134,7 @@ function renderPublicSupport(opts: ContextualDockOptions, action: PublicSupportA
   } else if (action.id === 'candidate') {
     const candidate = training?.candidate;
     if (candidate) calculation = `<div data-testid="support-calculation" data-baseline-run-id="${esc(candidate.baselineRunId)}" data-candidate-run-id="${esc(candidate.candidateRunId)}">${candidate.outputLabels.map((label, index) => {
-      const row = candidate.rows.find(item => item.position === candidate.selectedPosition) ?? candidate.rows[0];
+      const row = candidate.rows.find(item => item.position === candidate.selectedPosition);
       return `<div class="support-observation support-short-row"><strong>${esc(label)}</strong><span>${fmt(row?.baselineDistribution[index])} → ${fmt(row?.candidateDistribution[index])}</span></div>`;
     }).join('')}<small>Selected p${candidate.selectedPosition}; accepted → provisional candidate, same example.</small></div>`;
   } else if (action.id === 'stages') {
@@ -254,7 +256,7 @@ function renderPart2NumericalSupport(ctx: ResolvedPublicTrainingDepthContext, fa
         'One-example comparison only · candidate not accepted · no general improvement claim.') :
       '<p data-evidence-origin="unavailable">Compatible candidate comparison unavailable.</p>';
   }
-  return `<aside id="dock-context-support" class="dock-context-support part2-numerical-witness" data-testid="dock-context-support" data-support-action="default" aria-label="Part 2 numerical witness"><div data-testid="part2-numerical-witness" data-training-depth-kind="${esc(ctx.kind)}" data-execution-id="${esc(ctx.executionId ?? '')}" data-source-run-id="${esc(ctx.sourceRunId ?? '')}" data-gradient-source-run-id="${esc(ctx.gradientSourceRunId ?? '')}" data-starting-snapshot-id="${esc(ctx.startingSnapshotId ?? '')}" data-candidate-run-id="${esc(ctx.candidate?.candidateRunId ?? '')}" data-baseline-run-id="${esc(ctx.candidate?.baselineRunId ?? '')}" data-parameter-index="${ctx.parameter?.index ?? ''}" data-contribution-ordinal="${ctx.selectedContribution?.ordinal ?? ''}"><strong>${esc(ctx.kind.replaceAll('-', ' '))}${ctx.parameter && ctx.kind !== 'objective' && ctx.kind !== 'candidate' ? ` · ${esc(ctx.parameter.name)}[${ctx.parameter.row},${ctx.parameter.column}]` : ''}</strong>${body || `<p>${esc(fallback ?? 'Numerical evidence unavailable.')}</p>`}</div></aside>`;
+  return `<aside id="dock-context-support" class="dock-context-support part2-numerical-witness" data-testid="dock-context-support" data-support-action="default" aria-label="Part 2 numerical witness"><div data-testid="part2-numerical-witness" data-training-depth-kind="${esc(ctx.kind)}" data-position="${ctx.candidate?.selectedPosition ?? ''}" data-target="${ctx.candidate?.rows.find(row => row.position === ctx.candidate?.selectedPosition)?.target ?? ''}" data-execution-id="${esc(ctx.executionId ?? '')}" data-source-run-id="${esc(ctx.sourceRunId ?? '')}" data-gradient-source-run-id="${esc(ctx.gradientSourceRunId ?? '')}" data-starting-snapshot-id="${esc(ctx.startingSnapshotId ?? '')}" data-candidate-run-id="${esc(ctx.candidate?.candidateRunId ?? '')}" data-baseline-run-id="${esc(ctx.candidate?.baselineRunId ?? '')}" data-parameter-index="${ctx.parameter?.index ?? ''}" data-contribution-ordinal="${ctx.selectedContribution?.ordinal ?? ''}"><strong>${esc(ctx.kind.replaceAll('-', ' '))}${ctx.parameter && ctx.kind !== 'objective' && ctx.kind !== 'candidate' ? ` · ${esc(ctx.parameter.name)}[${ctx.parameter.row},${ctx.parameter.column}]` : ''}</strong>${body || `<p>${esc(fallback ?? 'Numerical evidence unavailable.')}</p>`}</div></aside>`;
 }
 
 function renderDefaultSupport(opts: ContextualDockOptions): string {
@@ -401,25 +403,16 @@ function renderExplain(opts: ContextualDockOptions): string {
         </div>`;
       }
     } else if (tc.state === 'candidate_ready') {
-      const pair = trainingProgress?.readyOutputs ? { before: trainingProgress.readyOutputs.before, after: trainingProgress.readyOutputs.after } : undefined;
-      if (pair && pair.before?.manifest?.input && pair.after?.manifest?.input) {
-        const ma = outputMetrics(pair.before);
-        const mb = outputMetrics(pair.after);
-        const vocab = (pair.before.manifest.model.architecture.vocabulary ?? []) as readonly string[];
-        const targetPos = typeof a.token === 'number' && a.token >= 0 && a.token < ma.targets.length ? a.token : 3;
-        const targetTokenId = ma.targets[targetPos];
-        const targetTokenLabel = outputTokenName(targetTokenId, vocab);
-        const probBefore = ma.rows[targetPos]?.[targetTokenId];
-        const probAfter = mb.rows[targetPos]?.[targetTokenId];
-
-        stageResult = `<div class="dock-stage-result">
-          <div class="teaching-step">
-            <small class="stage-result-label">PROVISIONAL CANDIDATE OUTCOME</small>
-            <p class="candidate-outcome-summary">Mean loss on this example (derived from observed target probabilities): <span data-testid="before-mean" data-value="${ma.mean}">${fmt(ma.mean)}</span> → <span data-testid="after-mean" data-value="${mb.mean}">${fmt(mb.mean)}</span></p>
-            <p class="candidate-prediction-change">Target '${esc(targetTokenLabel)}' at p${targetPos}: accepted ${fmt(probBefore)} → provisional candidate ${fmt(probAfter)}</p>
-          </div>
-        </div>`;
-      }
+      const ctx = resolvedPart2Depth(opts);
+      const comparison = ctx?.candidate;
+      const row = comparison?.rows.find(row => row.position === comparison.lessonPosition);
+      stageResult = comparison && row ? `<div class="dock-stage-result">
+        <div class="teaching-step" data-testid="candidate-summary" data-position="${row.position}" data-target="${row.target}" data-baseline-run-id="${esc(comparison.baselineRunId)}" data-candidate-run-id="${esc(comparison.candidateRunId)}">
+          <small class="stage-result-label">PROVISIONAL CANDIDATE OUTCOME · LESSON OCCURRENCE</small>
+          <p class="candidate-outcome-summary">Mean loss on this example (derived from observed target probabilities): <span data-testid="before-mean" data-value="${comparison.baselineDerivedMean ?? ''}">${fmt(comparison.baselineDerivedMean)}</span> → <span data-testid="after-mean" data-value="${comparison.candidateDerivedMean ?? ''}">${fmt(comparison.candidateDerivedMean)}</span></p>
+          <p class="candidate-prediction-change">Target '${esc(row.targetLabel)}' at p${row.position}: accepted ${fmt(row.baselineTargetProbability)} → provisional candidate ${fmt(row.candidateTargetProbability)}</p>
+        </div>
+      </div>` : `<p data-evidence-origin="unavailable">${esc(ctx?.reason ?? 'Compatible candidate comparison unavailable.')}</p>`;
     }
 
     return `<div class="dock-explain-content" data-testid="dock-explain">
@@ -555,6 +548,7 @@ function resolvedPart1Depth(opts: ContextualDockOptions): ResolvedPublicDepthCon
 }
 
 function resolvedPart2Depth(opts: ContextualDockOptions): ResolvedPublicTrainingDepthContext | undefined {
+  if (opts.resolvedTrainingDepth) return opts.resolvedTrainingDepth;
   if (opts.tourContent?.part !== 2 || !opts.tourContent.depthSpec) return undefined;
   return resolvePublicTrainingDepthContext(
     opts.tourContent,
@@ -564,6 +558,11 @@ function resolvedPart2Depth(opts: ContextualDockOptions): ResolvedPublicTraining
     opts.publicTrainingDepthSelection,
     opts.trainingInspection,
   );
+}
+
+function candidateSelectionLabel(candidate: NonNullable<ResolvedPublicTrainingDepthContext['candidate']>): string {
+  const row = candidate.rows.find(row => row.position === candidate.selectedPosition)!;
+  return `<p data-testid="candidate-selection-scope" data-selection-scope="${candidate.selectionScope}" data-position="${row.position}" data-target="${row.target}">${candidate.selectionScope === 'lesson' ? 'Lesson occurrence' : 'Temporary detail selection · render only'} · p${row.position} target ${esc(row.targetLabel)}. Lesson remains p${candidate.lessonPosition}. Input-position → target vocabulary coordinate; observed binary64 probabilities, derived −log loss.</p>`;
 }
 
 function publicTrainingUnavailable(ctx: ResolvedPublicTrainingDepthContext, depth: 'values' | 'math' | 'source'): string {
@@ -650,7 +649,7 @@ function renderPublicPart2Values(opts: ContextualDockOptions, ctx: ResolvedPubli
   }
   const candidate = ctx.candidate!;
   return `<div class="dock-values-content" data-testid="dock-values" data-public-training-depth-kind="candidate">
-    <h3>Baseline vs provisional candidate · same training example</h3>
+    <h3>Baseline vs provisional candidate · same training example</h3>${candidateSelectionLabel(candidate)}
     <table data-testid="public-candidate-values"><thead><tr><th>Position</th><th>Input → target</th><th>Baseline full distribution</th><th>Candidate full distribution</th><th>P(target)</th></tr></thead><tbody>
       ${candidate.rows.map(row => `<tr><th><button data-training-candidate-position="${row.position}" ${row.position === candidate.selectedPosition ? 'aria-pressed="true"' : ''}>p${row.position}</button></th><td>${esc(row.inputLabel)} → ${esc(row.targetLabel)}</td><td>${publicTrainingDistribution(row.baselineDistribution, candidate.outputLabels)}</td><td>${publicTrainingDistribution(row.candidateDistribution, candidate.outputLabels)}</td><td>${fmt(row.baselineTargetProbability)} → ${fmt(row.candidateTargetProbability)}</td></tr>`).join('')}
     </tbody></table>
@@ -723,9 +722,9 @@ function renderPublicPart2Math(opts: ContextualDockOptions, ctx: ResolvedPublicT
     </div>`;
   }
   const candidate = ctx.candidate!;
-  const row = candidate.rows.find(item => item.position === candidate.selectedPosition) ?? candidate.rows[0];
+  const row = candidate.rows.find(item => item.position === candidate.selectedPosition);
   return `<div class="dock-math-content" data-testid="dock-math" data-public-training-depth-kind="candidate">
-    <h3>Derived candidate comparison · p${row?.position ?? 0}</h3>
+    <h3>Derived candidate comparison · p${row?.position}</h3>${candidateSelectionLabel(candidate)}
     ${row?.baselineDerivedLoss === undefined || row?.candidateDerivedLoss === undefined ? '<p>DERIVED per-position loss unavailable because complete authentic target probability support is unavailable.</p>' : `<p>DERIVED baseline loss = −log(${fmt(row.baselineTargetProbability)}) = ${fmt(row.baselineDerivedLoss)}</p><p>DERIVED candidate loss = −log(${fmt(row.candidateTargetProbability)}) = ${fmt(row.candidateDerivedLoss)}</p>`}
     <p>DERIVED baseline mean: ${candidate.baselineDerivedMean === undefined ? 'unavailable' : fmt(candidate.baselineDerivedMean)}</p>
     <p>DERIVED candidate mean: ${candidate.candidateDerivedMean === undefined ? 'unavailable' : fmt(candidate.candidateDerivedMean)}</p>
@@ -762,11 +761,12 @@ function renderPublicPart2Source(ctx: ResolvedPublicTrainingDepthContext): strin
     detail = `<p>Proposal identity matches the exact runtime parameter index/name/row/column.</p><p>Status: PROVISIONAL · ACCEPTED MODEL UNCHANGED.</p>`;
   } else if (ctx.candidate) {
     const c = ctx.candidate;
-    detail = `<p>Candidate snapshot: <code>${esc(c.candidateSnapshotId)}</code></p>
+    const row = c.rows.find(row => row.position === c.selectedPosition)!;
+    detail = `${candidateSelectionLabel(c)}<p>Candidate snapshot: <code>${esc(c.candidateSnapshotId)}</code></p>
       <p>Baseline run: <code>${esc(c.baselineRunId)}</code></p><p>Training run: <code>${esc(c.trainingRunId)}</code></p><p>Candidate run: <code>${esc(c.candidateRunId)}</code></p>
       <p>Baseline runtime: <code>${esc(c.baselineRuntimeVersion)}</code> · revision <code>${esc(c.baselineRuntimeRevision)}</code></p>
       <p>Candidate runtime: <code>${esc(c.candidateRuntimeVersion)}</code> · revision <code>${esc(c.candidateRuntimeRevision)}</code></p>
-      <p>Comparison compatibility: COMPATIBLE · candidate evaluated · candidate provisional · candidate not accepted · candidate not live.</p>`;
+      <p>Selected probability artifacts: baseline <code>${esc(row.baselineArtifactId)}</code> · candidate <code>${esc(row.candidateArtifactId)}</code>.</p><p>Comparison compatibility: COMPATIBLE · candidate evaluated · candidate provisional · candidate not accepted · candidate not live.</p>`;
   }
   return `<div class="dock-source-content" data-testid="dock-source" data-public-training-depth-kind="${esc(ctx.kind)}">${common}${detail}</div>`;
 }
@@ -1291,6 +1291,11 @@ function renderSource(opts: ContextualDockOptions): string {
 }
 
 function renderCompare(opts: ContextualDockOptions): string {
+  const training = resolvedPart2Depth(opts);
+  if (training?.kind === 'candidate') {
+    const candidate = training.candidate;
+    return `<div class="dock-compare-content" data-testid="dock-compare"><h3>Current / Candidate · matched training example</h3>${candidate ? `<p>Whole-example derived mean loss: <span data-testid="before-mean" data-value="${candidate.baselineDerivedMean ?? ''}">${fmt(candidate.baselineDerivedMean)}</span> → <span data-testid="after-mean" data-value="${candidate.candidateDerivedMean ?? ''}">${fmt(candidate.candidateDerivedMean)}</span></p>` : ''}${renderPublicPart2Values(opts, training)}</div>`;
+  }
   const { address: a, comparison, comparisonLabels, outputPair } = opts;
   const labels = comparisonLabels ?? ['Before', 'After'];
   let outputContent = '';
@@ -1314,6 +1319,8 @@ function renderCompare(opts: ContextualDockOptions): string {
 }
 
 export function renderContextualDock(opts: ContextualDockOptions): string {
+  // Resolve once for the summary, witness and active depth in this render.
+  opts = { ...opts, resolvedTrainingDepth: resolvedPart2Depth(opts) };
   const { depth, lessonProgress, routePurpose, primaryAction, attentionAction, shortDetour, freeExplore, operatorControls, profile } = opts;
 
   const canRenderOutput = Boolean(opts.outputPair && opts.outputPair.before?.manifest?.input && opts.outputPair.after?.manifest?.input);
@@ -1321,35 +1328,45 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
   const hasComparison = Boolean(opts.hasComparison && (canRenderOutput || canRenderComponent));
   const effectiveDepth: DockDepth = (depth === 'compare' && !hasComparison) ? 'explain' : depth;
 
+  const exploring = opts.publicNavigationMode === 'explore';
+  const bodyOptions = exploring ? {...opts, tourContent: undefined, resolvedTrainingDepth: undefined, learningRouteStop: undefined} : opts;
   let bodyContent = '';
   switch (effectiveDepth) {
     case 'explain':
-      bodyContent = renderExplain(opts);
+      bodyContent = renderExplain(bodyOptions);
       break;
     case 'values':
-      bodyContent = renderValues(opts);
+      bodyContent = renderValues(bodyOptions);
       break;
     case 'math':
-      bodyContent = renderMath(opts);
+      bodyContent = renderMath(bodyOptions);
       break;
     case 'source':
-      bodyContent = renderSource(opts);
+      bodyContent = renderSource(bodyOptions);
       break;
     case 'compare':
       bodyContent = renderCompare(opts);
       break;
   }
 
+  if (!exploring && effectiveDepth !== 'explain' && opts.tourContent?.part === 1) {
+    const temporary = Object.keys(opts.publicDepthSelection ?? {}).length > 0;
+    bodyContent = `<p data-testid="detail-selection-scope">${temporary ? 'Temporary detail selection · render only' : 'Lesson occurrence'} · lesson p${opts.tourContent.selectionIntent.token} remains the world occurrence.</p>` + bodyContent;
+  }
+  if (!exploring && effectiveDepth !== 'explain' && opts.resolvedTrainingDepth?.objective) {
+    const position = opts.resolvedTrainingDepth.objective.selectedPosition;
+    bodyContent = `<p data-testid="detail-selection-scope">${opts.publicTrainingDepthSelection?.objectivePosition === undefined ? 'Lesson occurrence' : 'Temporary detail selection · render only'} · p${position}. Lesson remains p${opts.tourContent?.selectionIntent.token}.</p>` + bodyContent;
+  }
   const isExpanded = effectiveDepth !== 'explain';
   const isFacilitator = profile === 'facilitator';
   const isPublic = profile === 'visitor' || Boolean(opts.tourContent);
-  const publicDepthContext = resolvedPart1Depth(opts);
-  const publicTrainingDepthContext = resolvedPart2Depth(opts);
+  const publicDepthContext = resolvedPart1Depth(bodyOptions);
+  const publicTrainingDepthContext = resolvedPart2Depth(bodyOptions);
   const dockAddress = publicDepthContext?.canonical.anchor ?? opts.address;
   const dockLabel = publicDepthContext || publicTrainingDepthContext ? (opts.tourContent?.headline ?? addressLabel(dockAddress)) : (opts.selectedLabel ?? addressLabel(opts.address));
-  const supportActions = opts.tourContent && !isExpanded ? publicSupportActions(opts.tourContent) : [];
+  const supportActions = opts.tourContent && !isExpanded && !exploring ? publicSupportActions(opts.tourContent) : [];
   const activeSupport = supportActions.find(action => action.id === opts.supportAction);
-  const showSupport = supportActions.length > 0 || (!isExpanded && (opts.tourContent?.state === 'p1_complete' || opts.tourContent?.state === 'p2_objective'));
+  const showSupport = !exploring && (supportActions.length > 0 || (!isExpanded && (opts.tourContent?.state === 'p1_complete' || opts.tourContent?.state === 'p2_objective')));
   const hasCoreResult = showSupport && bodyContent.includes('class="dock-stage-result"');
   if (showSupport) bodyContent = `<div class="dock-guided-core">${bodyContent}</div><div class="dock-support-column"><span class="dock-support-heading">EXPLORE THIS STEP</span>${activeSupport ? renderPublicSupport(opts, activeSupport) : renderDefaultSupport(opts)}${supportActions.length ? `<nav class="dock-support-actions" aria-label="Contextual support">${activeSupport ? '<button type="button" data-support-action="default" aria-pressed="false" aria-controls="dock-context-support">Overview</button>' : ''}${supportActions.map(action => `<button type="button" data-support-action="${esc(action.id)}" aria-pressed="${activeSupport?.id === action.id}" aria-controls="dock-context-support">${esc(action.label)}</button>`).join('')}</nav>` : ''}</div>`;
 
@@ -1381,21 +1398,21 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
   return `<section class="contextual-dock short-guide ${isExpanded ? 'is-expanded' : ''} ${showSupport ? 'has-support-actions' : ''} ${hasCoreResult ? 'has-core-result' : ''}" data-testid="contextual-dock" data-tour-state="${esc(opts.tourContent?.state ?? '')}" data-active-depth="${effectiveDepth}" data-active-support="${showSupport ? esc(activeSupport?.id ?? 'default') : ''}" aria-label="Contextual explanation dock">
     <div class="dock-header" data-testid="dock-header">
       <div class="dock-route-info dock-slot-context">
-        ${opts.tourContent ? `<span class="lesson-progress lesson-macro-progress" data-testid="lesson-progress" aria-label="${esc(opts.tourContent.part === 1 ? 'Part 1 active; Part 2 upcoming' : opts.tourContent.state === 'tour_complete' ? 'Part 1 and Part 2 complete' : 'Part 1 complete; Part 2 active')}"><span class="${opts.tourContent.part === 1 ? 'active' : 'complete'}">1 · MAKE A PREDICTION</span><span aria-hidden="true">→</span><span class="${opts.tourContent.part === 1 ? 'upcoming' : opts.tourContent.state === 'tour_complete' ? 'complete' : 'active'}">2 · LEARN FROM ERROR</span><small>${esc(lessonProgress)}</small></span>` : lessonProgress ? `<span class="lesson-progress" data-testid="lesson-progress">${esc(lessonProgress)}</span>` : ''}
+        ${opts.tourContent ? `<span class="lesson-progress lesson-macro-progress" data-testid="lesson-progress" aria-label="${esc(opts.tourContent.part === 1 ? 'Part 1 active; Part 2 upcoming' : opts.tourContent.state === 'tour_complete' ? 'Part 1 and Part 2 complete' : 'Part 1 complete; Part 2 active')}"><span class="${opts.tourContent.part === 1 ? 'active' : 'complete'}">1 · MAKE A PREDICTION</span><span aria-hidden="true">→</span><span class="${opts.tourContent.part === 1 ? 'upcoming' : opts.tourContent.state === 'tour_complete' ? 'complete' : 'active'}">2 · LEARN FROM ERROR</span><small><span data-testid="public-activity">${opts.publicNavigationMode === 'explore' ? 'Explore' : isExpanded ? 'Detail · lesson preserved' : 'Guided'}</span> · ${esc(lessonProgress)}</small></span>` : lessonProgress ? `<span class="lesson-progress" data-testid="lesson-progress">${esc(lessonProgress)}</span>` : ''}
         <span class="dock-selected-object" data-testid="selected-world-object" data-semantic-anchor="${dockAddress.kind}" data-position="${dockAddress.token}" data-layer="${dockAddress.layer ?? ''}" data-run-id="${esc(opts.model?.source.sourceRunId ?? '')}">${esc(dockLabel)}</span>
         ${opts.trainingState && opts.trainingState.frontierText ? `<span data-testid="execution-frontier" class="execution-frontier-tag">${esc(opts.trainingState.frontierText)}</span>` : ''}
-        ${shortDetour ? `<span class="dock-detour-badge">Detour</span>` : ''}
+        ${!opts.tourContent && shortDetour ? '<span class="dock-detour-badge">Detour</span>' : ''}
       </div>
       <div class="dock-route-actions dock-slot-actions"${opts.trainingState ? ` id="execution-controls" data-execution-id="${esc(opts.trainingState.executionId)}" data-sequence="${opts.trainingState.sequence}" data-training-phase="${esc(opts.trainingState.phase)}"` : ''}>
         <div class="dock-slot-secondary">
           ${inspectAction}
+          ${opts.tourContent && !isExpanded && !opts.attract ? `<button id="visitor-explore-toggle" class="secondary-action">${freeExplore ? 'Resume Guided' : 'Enter Explore'}</button>` : ''}
           ${opts.tourContent ? (
             opts.tourContent.state === 'candidate_ready' ? (
               shortDetour ? `
                 <button id="short-resume" class="secondary-action">Resume route</button>
               ` : ''
             ) : opts.tourContent.state === 'tour_complete' ? `
-              ${!isFacilitator && !opts.attract ? `<button id="visitor-explore-toggle" class="secondary-action">${freeExplore ? 'Close exploration' : 'Explore the Model'}</button>` : ''}
               ${isFacilitator ? `<button id="operator-controls" class="secondary-action">${operatorControls ? 'Hide operator controls' : 'Show operator controls'}</button>` : ''}
             ` : `
               ${attentionAction}

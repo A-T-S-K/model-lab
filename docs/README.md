@@ -38,6 +38,7 @@ with exact statements/sections, decision needed and affected gate.
 
 - [Owned runner lifecycle closure](reviews/runner-lifecycle-closure.md): bounded child/log failure cleanup and deterministic regressions.
 - [Browser failure triage](reviews/browser-failure-triage.md): retained and current failure/skip dispositions, reproduction and repair scopes.
+- [Shared computation context and intentional navigation](reviews/shared-context-navigation-repair.md): bounded selection/comparison, render-only detail and explicit activity transitions.
 - [Canonical workflow correctness](reviews/canonical-workflow-correctness.md): shared publication ownership, reset-to-workbench activity, executed source navigation and the refreshed browser baseline.
 
 ## Current implementation guides
