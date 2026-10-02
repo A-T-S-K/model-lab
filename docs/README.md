@@ -36,6 +36,9 @@ with exact statements/sections, decision needed and affected gate.
 - [First release contract and roadmap](release-roadmap.md): Learn → Explore → Lab, audience outcomes, proposed curriculum, ordered gates and unresolved decisions.
 - [Browser/HTTP validation safety review](reviews/release-validation-safety.md): scoped writer ownership, current working-source verification and remaining unsafe tooling.
 
+- [Owned runner lifecycle closure](reviews/runner-lifecycle-closure.md): bounded child/log failure cleanup and deterministic regressions.
+- [Browser failure triage](reviews/browser-failure-triage.md): retained and current failure/skip dispositions, reproduction and repair scopes.
+
 ## Current implementation guides
 
 - [Project README](../README.md): runnable MicroGPT quickstart and limitations.
