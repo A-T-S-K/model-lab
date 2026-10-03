@@ -916,7 +916,15 @@ function render(): void {
       canLearn: !evidenceRun&&!forwardDriver.active&&!!result&&result.run.manifest.runId===liveRunId&&source?.capturedDocument===documentText&&!busy&&ready,
       scalar:evidenceRun?'No scalar continuation is captured for this run.':microscopeView(inspection,inspectionPath,inspectionLabel,inspectionPending,inspectionWhole,inspectionRelationship(),inspectionBinding,microscopeWindows),
     });
-    if (releaseLearning && labOpen) { const dock=mount.querySelector('.contextual-dock'); if(dock) dock.outerHTML=renderLab(); mount.querySelector('.spatial-shell')?.classList.add('lab-active'); }
+    if (releaseLearning && labOpen) {
+      const dock=mount.querySelector('.contextual-dock');
+      if(dock) dock.outerHTML=renderLab();
+      else if(ready) {
+        const empty=mount.querySelector('.spatial-empty');
+        if(empty) empty.outerHTML=`<div class="world-workspace is-public-profile">${renderLab()}</div>`;
+      }
+      mount.querySelector('.spatial-shell')?.classList.add('lab-active');
+    }
     bind();
     mount.querySelector('#learn-predict')?.addEventListener('click', async () => {
       await restartPublicTour();
