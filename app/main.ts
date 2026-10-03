@@ -1292,6 +1292,7 @@ function closeLab(path:'learn'|'explore'|'workbench') {
   if (busy || forwardDriver.active) return;
   labOpen=false;releaseLearning=path!=='workbench';spatialPresenter.releaseLearning=releaseLearning;
   if (path==='learn') {
+    spatialEvidenceRunId='';spatialEvidenceReplay=false;clearWorldSelection();spatialExperimentId='';clearDisplayedInspection();
     if(publicGuidedComputation) {result=publicGuidedComputation.result;documentText=publicGuidedComputation.capturedDocument;player=new TracePlayer(result.run);}
     dispatchPublicLesson({type:'RESUME_GUIDED'});spatialPresenter.prepareLessonReturn();
   } else if(path==='explore') dispatchPublicLesson({type:'ENTER_EXPLORE'});
