@@ -44,9 +44,14 @@ test('five corrections: public same-session route, scalar arms, compact Ready an
  const construction=page.locator('[data-testid="live-local-construction"]>rect').first();
  expect(await construction.evaluate(el=>Number(el.getAttribute('width'))/Number(el.getAttribute('height')))).toBe(700/260);
  await expect(page.getByTestId('live-proposal')).toContainText('Stored Δ');
+ const bridge=page.locator('.learning-bridge-disclosure');await bridge.locator('summary').press('Enter');await expect(bridge.locator('.bridge-step')).toHaveCount(7);await expect(bridge.locator('.learning-bridge')).toBeVisible();await bridge.locator('summary').press('Enter');
  for(const [width,height] of [[1920,1080],[1280,720],[390,844]]){
-  await page.setViewportSize({width,height});await page.emulateMedia({reducedMotion:'reduce'});
+  await page.setViewportSize({width,height});await page.emulateMedia({reducedMotion:'reduce'});await page.locator('#spatial-focus').click();
   await arithmeticLayout(page,dir,`ready-readable-${width}`,'live-proposal');
+  if(width>850)expect((await construction.boundingBox())!.width).toBeGreaterThan(400);
+  const glyphs=await page.locator('[data-testid="live-local-construction"] .learning-value').evaluateAll(els=>els.map(el=>{const text=el as unknown as SVGGraphicsElement;const matrix=text.getScreenCTM()!;return {font:parseFloat(getComputedStyle(el).fontSize)*Math.hypot(matrix.a,matrix.b),rect:el.getBoundingClientRect().toJSON(),text:el.textContent};}));
+  expect(glyphs.every(g=>g.font>=12)).toBe(true);
+  const clear=await page.locator('[data-testid="live-local-construction"] text').evaluateAll(els=>{const masks=[document.querySelector('.camera-controls'),document.querySelector('.world-minimap'),document.querySelector('.selection-card')].filter(Boolean).map(el=>el!.getBoundingClientRect());return els.every(el=>{const r=el.getBoundingClientRect();return masks.every(m=>!(r.left<m.right&&r.right>m.left&&r.top<m.bottom&&r.bottom>m.top));});});expect(clear).toBe(true);
   await availableAction(page,'#execution-accept');await availableAction(page,'#execution-cancel');
  }
  await page.setViewportSize({width:1280,height:720});

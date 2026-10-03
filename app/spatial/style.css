@@ -1983,3 +1983,5 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
 #portable-archive-host input { max-width:100%; min-width:0; }
 /* Leave room to scroll the last source disclosure above the saved-evidence action. */
 .context-lens .lens-scroll { padding-bottom:64px; }
+
+.learning-bridge-disclosure > summary { cursor:pointer; padding:4px 0; }

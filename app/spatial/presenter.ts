@@ -503,7 +503,10 @@ export class SpatialPresenter {
     const capabilities = experienceCapabilities(profile, this.freeExplore);
     if(e?.progress?.training) {
       const t=e.progress.training,ready=t.phase==='ready',disabled=e.phase!=='paused'||e.pending;
-      const bridge = `<div class="learning-bridge" data-testid="learning-bridge" aria-label="Prediction to learning causal bridge"><div class="bridge-chain"><span class="bridge-step">1 · Predictions for known targets</span><span class="bridge-arrow" aria-hidden="true">→</span><span class="bridge-step">2 · Per-position losses combine into training objective</span><span class="bridge-arrow" aria-hidden="true">→</span><span class="bridge-step">3 · Backpropagation carries backward signal</span><span class="bridge-arrow" aria-hidden="true">→</span><span class="bridge-step">4 · Parameter uses produce gradient contributions</span><span class="bridge-arrow" aria-hidden="true">→</span><span class="bridge-step">5 · Contributions accumulate into final gradient</span><span class="bridge-arrow" aria-hidden="true">→</span><span class="bridge-step">6 · Adam uses final gradient for parameter proposal</span><span class="bridge-arrow" aria-hidden="true">→</span><span class="bridge-step">7 · Provisional candidate: Accept or Discard</span></div><p class="bridge-scope">We follow one selected parameter (${esc(parameterLabel(this.pin))}) to observe one real contribution arrive and accumulate into its partial gradient. The combined training objective uses losses across all target positions, and candidate proposals remain provisional until accepted.</p></div>`;
+      const bridgeContent = `<div class="learning-bridge" data-testid="learning-bridge" aria-label="Prediction to learning causal bridge"><div class="bridge-chain"><span class="bridge-step">1 · Predictions for known targets</span><span class="bridge-arrow" aria-hidden="true">→</span><span class="bridge-step">2 · Per-position losses combine into training objective</span><span class="bridge-arrow" aria-hidden="true">→</span><span class="bridge-step">3 · Backpropagation carries backward signal</span><span class="bridge-arrow" aria-hidden="true">→</span><span class="bridge-step">4 · Parameter uses produce gradient contributions</span><span class="bridge-arrow" aria-hidden="true">→</span><span class="bridge-step">5 · Contributions accumulate into final gradient</span><span class="bridge-arrow" aria-hidden="true">→</span><span class="bridge-step">6 · Adam uses final gradient for parameter proposal</span><span class="bridge-arrow" aria-hidden="true">→</span><span class="bridge-step">7 · Provisional candidate: Accept or Discard</span></div><p class="bridge-scope">We follow one selected parameter (${esc(parameterLabel(this.pin))}) to observe one real contribution arrive and accumulate into its partial gradient. The combined training objective uses losses across all target positions, and candidate proposals remain provisional until accepted.</p></div>`;
+      const bridge = ready && !this.isPublicProfile()
+        ? `<details class="learning-bridge-disclosure"><summary>Prediction → learning computation</summary>${bridgeContent}</details>`
+        : bridgeContent;
       if(!capabilities.executionDiagnostics) {
         return `<section class="explanation execution" id="execution-controls" data-execution-id="${esc(e.progress.executionId)}" data-sequence="${e.progress.sequence}" data-training-phase="${t.phase}">${bridge}<nav aria-label="Live training execution">${ready?`<button id="execution-accept" ${disabled?'disabled':''}>Accept update</button>`:`<button id="execution-continue" ${disabled?'disabled':''}>Continue</button>${!t.final || t.phase==='optimizer proposal'?`<button id="execution-pin" ${disabled?'disabled':''}>${t.phase==='optimizer proposal'?'Continue to next proposal to pinned parameter':'Run to next gradient contribution'}</button>`:''}`}<button id="execution-cancel" ${e.phase==='cancelling'?'disabled':''}>${ready?'Discard candidate':'Cancel training'}</button><span data-testid="execution-frontier">${ready?'Candidate ready — not accepted':`${esc(t.phase)} · ${e.phase}${e.runningToGradient?' · seeking pinned contribution':''}${t.stopped?(t.final?(t.phase==='optimizer proposal'&&t.count===0?' · backward complete — no remaining contributions for this parameter in this pass':' · stopped at pinned proposal boundary'):' · stopped after matching backward node'):''}`}</span></nav>${!ready?'<p class="learning-guidance" data-testid="learning-guidance">Run to next gradient contribution runs the required phases, then pauses after the next matching backward node for the pinned parameter. Repeated operands in one node finish together. Continue runs to Candidate ready; Accept / Discard remains your decision.</p>':""}${t.final&&!ready?'<p data-testid="gradient-stop-unavailable">No future backward contributions in this transaction. Continue toward Ready or inspect the completed gradient; new learning is a separate action.</p>':''}<p>Accepted step ${t.acceptedStep} · pinned ${esc(parameterLabel(this.pin))} → proposed step ${t.acceptedStep+1} · candidate remains provisional${t.proposal?` · θ ${t.proposal.before} → ${t.proposal.after} (one part of the full update)`:""}</p></section>`;
       }
@@ -524,12 +527,21 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
   pin:ParameterPin={name:"wte",row:0,column:0};
   expanded=false;
   openLearning(stage:LearningStage){if(this.shortStop>=0)this.shortDetour=true;this.learningStage=stage;this.lens=true;this.construction=false;}
-  focusLearning(stage:LearningStage){if(this.shortStop>=0)this.shortDetour=true;this.interrupt();this.remember();this.openLearning(stage);const node=learningStations.find(s=>s.stage===stage)??learningStations[2];this.pendingBox={x:node.x-50,y:1160,width:820,height:460};}
+  private learningFrame(stage: LearningStage): CameraBox {
+    const node = learningStations.find(s => s.stage === stage) ?? learningStations[2];
+    // Live arithmetic is a 700×260 card at y1260, with its owner label at y1225.
+    // Frame that actual construction closely; the connected world stays pannable.
+    const narrow = typeof window !== 'undefined' && window.innerWidth <= 850;
+    return this.state?.execution?.progress?.training
+      ? { x: node.x - (narrow ? 25 : 110), y: 1110, width: narrow ? 750 : 880, height: 420 }
+      : { x: node.x - 50, y: 1160, width: 820, height: 460 };
+  }
+  focusLearning(stage:LearningStage){if(this.shortStop>=0)this.shortDetour=true;this.interrupt();this.remember();this.openLearning(stage);this.pendingBox=this.learningFrame(stage);}
   followLearning(stage: LearningStage) {
     if (this.isPublicProfile()) return;
     if (this.learningStage === stage && this.lens) return;
-    this.openLearning(stage); const node = learningStations.find(s => s.stage === stage) ?? learningStations[2];
-    this.pendingBox = { x: node.x-50, y:1160, width:820, height:460 };
+    this.openLearning(stage);
+    this.pendingBox = this.learningFrame(stage);
   }
   followPublicLearning(phase: TrainingPhase, rowsCount = 4) {
     if (this.isPublicProfile()) {
@@ -599,7 +611,7 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
         return;
       }
     }
-    if(this.learningStage){const node=learningStations.find(s=>s.stage===this.learningStage)??learningStations[2];this.pendingBox={x:node.x-50,y:1160,width:820,height:460};return;}
+    if(this.learningStage){this.pendingBox=this.learningFrame(this.learningStage);return;}
     const s=this.model?stationForWorld(this.model.forward,this.parameter??this.kind,this.selection.head,this.selection.layer):stationFor(this.parameter??this.kind,this.selection.head);
     this.pendingBox={x:s.x-440,y:s.y-260,width:1040,height:740};
   }
