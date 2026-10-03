@@ -892,6 +892,7 @@ function render(): void {
     const publicLesson = profile === 'workbench' && !releaseLearning ? undefined : currentPublicLessonView();
     mount.innerHTML = spatialPresenter.render(model, {
       profile,
+      labActive: releaseLearning && labOpen,
       releaseLearning,
       releaseReplay: releaseLearning && displayed === attractReplay?.result,
       publicLesson,
