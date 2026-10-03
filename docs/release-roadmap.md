@@ -153,3 +153,15 @@ explicit handoff to existing learning computation. [Forward-tour review](reviews
 records incremental scope, current-candidate checks and rendered evidence. Chapters
 5–6 remain proposed; default entry, release packaging and qualification gates remain
 unchanged. No learning gains, full-suite success, foundation or M5 acceptance claimed.
+
+
+## 2026-10-02 chapter 5 implementation increment
+
+The opt-in Learn route now continues the forward tour into error, sensitivity,
+contribution, completed gradient, Adam proposal and explicit candidate decision.
+[Implemented learner contract](design/release-learning-journey.md#implemented-chapter-5-contract)
+and [verification review](reviews/release-learning-training-chapter.md) separate this
+engineering increment from qualification. Each beat has a readable bound result
+and visible optional Values/Math/Source; exact original numbers remain available.
+Chapter 6 redesign, default-route promotion, M5, learning-gain testing and M6 release
+acceptance remain pending. Forward chapter density is inventoried for later work.

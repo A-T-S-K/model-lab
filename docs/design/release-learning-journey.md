@@ -1,7 +1,8 @@
 # Release learning journey
 
-Status: implemented opening and forward-prediction engineering slice, provisional pending the
-[forward-tour review](../reviews/release-learning-forward-tour.md). Foundation acceptance,
+Status: implemented opening, forward tour and chapter 5 engineering slices; see the
+[forward-tour review](../reviews/release-learning-forward-tour.md) and
+[training chapter review](../reviews/release-learning-training-chapter.md). Foundation acceptance,
 independent M5 and unfamiliar-user learning evidence remain ungranted. See
 [authority](../README.md), [foundation ledger](../foundation-status.md),
 [release roadmap](../release-roadmap.md) and design §§3–5/8 in the
@@ -37,7 +38,7 @@ arithmetic, native source, axes, source identities and experiment contracts rema
 | Representation | How can the model calculate with a character and its position? Know that a vocabulary lists possible tokens; introduce ID, lookup, component and vector. | Selected p3 c → ID 2 → `tokenEmbedding`/wte row, `positionEmbedding`/wpe p3 → `embeddingSum` → `embeddingNorm` → layer0 `preAttentionNorm`. | Tables turn character/position into numerical lists; add corresponding components and rescale. Signs are not quality judgments; dimensions have no established human meanings; initial weights are not trained semantics. | All original components, actual component-zero addition; both RMS norms, full feature reductions, epsilon 1e-5, source-bound artifacts, saved embeddingNorm residual identity. | Read one worked numeric example; open component details. Continue explicitly into the context/attention chapter, or Explore/return. | Implemented introductory chapter; native mathematics preserved. Forward attention sequence uses the same public lesson states. |
 | Context / attention | How does earlier context affect this position? Vectors and current versus earlier positions. | Existing Q/K/V, causal scores, attention weights, full weighted-value contributors, head concatenation, projection and saved residual. | Causality restricts future keys; attention weights mix vectors. They are not proof of semantic circuits or causal explanations of learned behavior. | Actual dot products, head/key coordinates, scaling, softmax support, signed weighted sums, residual source and native code. | Five implemented beats: Q/K/V, causal comparison, position weights, Value mixture, head integration. Optional causal/importance check gives explanatory feedback. | Implemented release chapter; complete p3/head0/key0 comparison, causal row and full contributors, source-bound projections and residual. Engineering evidence in the forward-tour review. |
 | Output | How do numbers become possible outputs? Representation and context. | Existing MLP/ReLU, logits/unembedding and complete output softmax; distinguish known target, greedy rank and sampling. | Raw scores differ from probabilities; support and denominator matter. No sampled text or language-performance claim from a single distribution. | Native activation differences, all logits, softmax denominator, exact probabilities. | Implemented transform → logits → output probabilities → original prediction recap. Optional normalization check; explicit Start learning computation · propose one update hands off to the existing workflow. | Implemented release chapter; canonical ReLU/no-bias/RMSNorm, both saved residual sources, all output indices and denominator retained. |
-| Learning | How could this example change a later prediction? Prediction, target and error. | Existing whole-example mean loss, backward contributions/accumulation, Adam moments/schedule, provisional candidate and explicit acceptance/discard. | Sensitivity is not the applied update; candidate is not accepted state; one example improvement is not generalization. | Numerical adjoints where available, complete state/receipt lineage, optimizer arithmetic/source. | Existing bounded proposal/decision workflow. Future chapter should compare matched before/after at the same occurrence. | Existing lifecycle/comparison controls retained. New introductory learning chapter not implemented. |
+| Learning | How could this example change a later prediction? Prediction, target and error. | Existing whole-example mean loss, backward contributions/accumulation, Adam moments/schedule, provisional candidate and explicit acceptance/discard. | Sensitivity is not the applied update; candidate is not accepted state; one example improvement is not generalization. | Numerical adjoints where available, complete state/receipt lineage, optimizer arithmetic/source. | Existing bounded proposal/decision workflow. Future chapter should compare matched before/after at the same occurrence. | Existing lifecycle/comparison controls retained. Chapter 5 implemented; progressive explanation with exact optional Values/Math/Source. |
 | Experiment | What changes when we change one thing? Baseline, controlled variable and outcome. | Registered matched interventions/replacements/data experiments, compatible run/arm/state meanings, clean/treatment/defense controls where qualified. | Correlation is not causation; a null result is valid; replacement is not original execution. | Matched state/order/budgets, numerical declarations, receipt/source and explicit missing coverage. | Open existing workbench without finishing lesson. Future release experiment lesson and approachable lab recipes remain proposed. | Existing capabilities reachable; no new recipe/backend or qualification claimed. |
 
 ## Continuity and refusals
@@ -106,10 +107,75 @@ depth. These architecture declarations apply to canonical MicroGPT only.
 The recap is the unchanged chapter 1 distribution, with known target, top rank and
 absence of sampling explicit. Start learning computation · propose one update
 begins the existing learning workflow; candidate decisions remain explicit and
-unresolved work blocks activity switching. Redesigned chapters 5–6 remain proposed.
+unresolved work blocks activity switching. Chapter 5 is implemented below; redesigned chapter 6 remains proposed.
 Optional check clicks grant no comprehension evidence.
 
 The learning handoff requires complete compatible chapter evidence and a prediction
 matching the current input/accepted state. Edited input or a retained historical
 prediction disables it with an explicit refusal. The controller rejects a stale
 handoff before any runtime effect; explanation navigation remains available.
+
+
+## Implemented chapter 5 contract
+
+“How can this example change a later prediction?” continues from the explicit
+learning-handoff action. PublicLessonSession, the native training driver, retained
+computation and shared training-depth comparison remain the owners. The release
+presentation supplies no second state machine, arithmetic implementation or trace.
+
+Each beat presents a question, a short explanation, a bound readable result and its
+primary action. Visible Values / Math / Source opens optional depth. Four significant
+digits affect text only; original binary64 numbers and identities are directly
+available in an expandable exact payload, alongside existing arithmetic/source.
+Small nonzero numbers retain scientific notation rather than becoming zero.
+
+- Error: current numbers produce predictions; known targets measure error. All five
+  targets p0→a, p1→b, p2→c, p3→a, p4→END participate in the mean cross-entropy objective.
+  The selected p3 probability and position loss are explicitly separate from that mean.
+- Sensitivity: backward measures dependence of the objective on earlier calculations.
+  It does not move text backward, reverse forward execution or change parameters.
+  Structural dependencies and unavailable numerical adjoints remain distinct.
+- Contribution: one authentic retained event and before/after accumulator show a
+  partial total. The retained subset is neither complete fan-in nor arrival chronology.
+- Gradient: the runtime's completed gradient is shown independently of retained rows;
+  those rows are not summed into a reconstructed full history. Sensitivity is local,
+  distinct from the update; its sign does not guarantee finite improvement.
+- Proposal: Adam combines sensitivity with persistent moments and the learning-rate
+  schedule. One parameter witnesses updates to all 896 declared canonical trainable
+  parameters. Moments, correction, schedule step, learning rate and exact proposal
+  remain in optional depth. No parameter is accepted by navigating this explanation.
+- Decision: the shared validated context matches input, targets, occurrence, model,
+  numeric policy and runtime. Baseline and provisional p3 target probabilities are
+  observed; whole-example means are separately labeled derived from all target
+  probabilities. Lower example loss establishes no general improvement; unchanged
+  and worse results remain valid. Accept and Discard await authoritative completion.
+- Completion: the actual successful accepted/discarded outcome controls the wording.
+  A bounded render-only comparison survives resolution for exact optional inspection;
+  no resolved candidate is represented as an active transaction. Live scalar ancestry
+  is unavailable there. Return restores the lesson’s recorded accepted computation or baseline.
+  Completion describes that recorded decision; later explicit workbench training can
+  advance current accepted state without rewriting it. A later Predict uses current
+  accepted state; it does not implicitly restart a completed lesson. Explore and the existing workbench
+  supply the next handoff. Chapter 6's redesigned experiment lab is outside this pass.
+
+Optional checks give explanatory feedback and never establish learning-validation
+evidence. Detail and temporary selection remain render-only. Active work/candidates
+block activity switching; explicit cancellation/discard and reset retain their
+existing authoritative lifecycle. Global status/alerts show refusal, cancellation
+and archival failure; acknowledged acceptance is not rolled back by retention failure.
+Persistent archival failure continues to refuse subsequent mutation.
+
+### Remaining chapter 1–4 density inventory
+
+Chapter 1's full distribution and vocabulary caveats compete with the first question.
+Chapter 2 lists five representation operations and multiple normalization explanations
+before optional depth. Chapter 3's complete products, score/weight rows and Value
+contributors are mathematically honest but require substantial scanning. Chapter 4's
+projection/normalization and ReLU explanations include long derivations and exact
+operands, while the recap repeats the full distribution. Later refinement should use
+the chapter 5 question/result/depth pattern without removing full scope or evidence.
+This pass inventories those issues; it does not redesign the forward tour.
+
+See the [chapter 5 review](../reviews/release-learning-training-chapter.md) for executed
+checks, rendered evidence, failures and qualification limits. No M5/M6 or learning-gain
+claim follows from implementation or optional-check clicks.
