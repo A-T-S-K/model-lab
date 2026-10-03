@@ -641,3 +641,81 @@ native/near-limit child branches remain NOT_RUN, never qualified through canonic
 Lab recipes or a passing parent. Downstream assertions beyond failure stops are
 NOT_RUN. No assertion/timeout/tolerance/fixture/skip was suppressed, no native service
 was launched, and no release/M5/M6 or learning-gain acceptance is granted.
+
+## 2026-10-02 browser-contract and layout closure disposition
+
+Final implementation `0dcf7832fd9e919846b54eec9a7935e355d4e651`, branch
+`pre-m5-abq-experience`, runtime
+`sha256:7125e899007b2449e3b2e0d3f7bcee7910506ce8ee76918a2e1ef29225050f7d`.
+[Closure review](browser-contract-layout-closure.md) records original invariant/current
+contract mapping, production-versus-test diagnosis, downstream assertions, rendered
+measurements, exact state/source/resource controls and preservation limitations.
+
+The complete owned unfiltered `npm run test:browser -- --workers=2` baseline, using
+the documented installed Chromium adapter, completed **189 passed / 5 failed /
+14 skipped**, **208 selected**, zero flaky, **1324.284156 seconds**.
+[Report](../../test-results/scratch/browser-aagvJO/report/results.json), [source/argv](../../test-results/scratch/browser-aagvJO/source.json),
+[failed exit/cleanup receipt](../../test-results/scratch/browser-aagvJO/failure.json). The suite remains unsuccessful;
+the five remaining failures are not marked expected or suppressed.
+
+[Exact identity comparison](../../test-results/scratch/contract-layout-m5ovc0he/browser-baseline-comparison.json)
+and [all 206 prior identities](../../test-results/scratch/contract-layout-m5ovc0he/all-prior-identity-accounting.json)
+find no missing identity, no changed previous pass or prerequisite skip, and exactly
+eleven FAILED → PASSED outcomes: BF-001–008, BF-034, BF-039 and BF-040. All downstream
+assertions now run. Two additional passing controls cover held late prediction after
+reset and desktop/compact/mobile/enlarged-text arithmetic/source/archive access.
+No new browser failure remains in this completed baseline. Earlier interrupted
+attempts and newly reached failures, including the over-broad workbench frame and
+its dependent serial skips, remain separately recorded in the closure review.
+
+BF-007/008 separate retained evidence, bounded derived cache and rendered scope;
+whole maximum-context refusal is truthful, smaller whole detail is supported,
+durable reservation refusal adds zero transport and Clear recovers. BF-034 checks
+actual accepted steps/checkpoints and ordered retained-summary semantics. BF-001–005
+use current public lesson controls; actual stepping/archived transition/intervention
+capabilities intentionally use workbench. BF-006 retains >400px at original desktop/
+compact sizes with actual font/overlay checks; BF-039/040 repair archive-host overflow
+and execute their later numerical/source/learning controls. Full mappings are in
+the review, not a deletion of difficult assertions.
+
+| Retained BF | Exact original identity | Old → current outcome |
+| --- | --- | --- |
+| BF-002 | `abq-overnight.spec.ts` — Q01/Q03 entry and source-bound chain 1920 | FAILED → PASSED |
+| BF-001 | `abq-overnight.spec.ts` — Q01/Q03 entry and source-bound chain 1280 | FAILED → PASSED |
+| BF-003 | `abq-overnight.spec.ts` — Q02 complete public reset across completed, forward, partial, Ready, historical and intervention | FAILED → PASSED |
+| BF-004 | `abq-overnight.spec.ts` — Q04/Q05 short route detour, keyboard, reduced motion and source invalidation | FAILED → PASSED |
+| BF-005 | `abq-overnight.spec.ts` — Q08 test-only serialized-estimate fixture refuses new work visibly and Clear recovers | FAILED → PASSED |
+| BF-006 | `end-to-end-fixes.spec.ts` — five corrections: public same-session route, scalar arms, compact Ready and prediction meaning | FAILED → PASSED |
+| BF-007 | `exhibit-v2.spec.ts` — browser measures max-context live scalar rendering and worker responsiveness | FAILED → PASSED |
+| BF-008 | `exhibit-v2.spec.ts` — measured session budget stops new capture without deleting retained history | FAILED → PASSED |
+| BF-034 | `model-lab-v2.spec.ts` — bounded training retains real checkpoints and complete capture displays statistics | FAILED → PASSED |
+| BF-039 | `spatial-wave1b.spec.ts` — B01–B09 complete source-bound forward route and contextual exploration over real HTTP | FAILED → PASSED |
+| BF-040 | `spatial-wave1d.spec.ts` — D01–D05 source-bound explanations, interruption and static arithmetic | FAILED → PASSED |
+| BF-017 | `m1-witnesses.spec.ts` — live MLP prediction and SGD, then noncanonical multilayer selection in the same inspector | FAILED → FAILED · missing native prerequisite |
+| BF-019 | `m1-witnesses.spec.ts` — structural and opaque imports show truthful fallback and no invented numerical display | FAILED → FAILED · missing native prerequisite |
+| BF-020 | `m2-b-mlp-world.spec.ts` — M2-B live MLP prediction and SGD inhabit the shared continuous world without transformer state | FAILED → FAILED · missing native prerequisite |
+| BF-036 | `shared-slice.spec.ts` — two real producers share admission, inspection, sources and saved evidence | FAILED → FAILED · missing native prerequisite |
+| BF-038 | `shared-slice.spec.ts` — a real native reply delayed past a model switch cannot enter retained evidence | FAILED → FAILED · missing native prerequisite |
+| BF-018 | `m1-witnesses.spec.ts` — new models reopen after native shutdown without executors and refuse uncaptured actions | SKIPPED → SKIPPED · prerequisite unavailable |
+| BF-021 | `m2-b-mlp-world.spec.ts` — M2-B saved MLP evidence reopens in the world with the native executor disconnected | SKIPPED → SKIPPED · prerequisite unavailable |
+| BF-022 | `m2-c-evidence-fallback.spec.ts` — M2-C grouped axes, shape-only and opaque evidence inhabit one truthful bounded world | SKIPPED → SKIPPED · prerequisite unavailable |
+| BF-023 | `m2-c-evidence-fallback.spec.ts` — M2-C saved fixture replay is executor-free and switching to MicroGPT clears fallback state | SKIPPED → SKIPPED · prerequisite unavailable |
+| BF-024 | `m2-d-pythia-world.spec.ts` — M2-D live native Pythia inhabits the shared world with truthful selected-layer coverage | SKIPPED → SKIPPED · prerequisite unavailable |
+| BF-025 | `m2-d-pythia-world.spec.ts` — M2-D saved Pythia world replays after verified bridge shutdown with zero native requests | SKIPPED → SKIPPED · prerequisite unavailable |
+| BF-026 | `m2-e-integration.spec.ts` — M2-E cross-world switching preserves canonical state and keeps replay inert | SKIPPED → SKIPPED · prerequisite unavailable |
+| BF-028 | `m4-a-pythia-generation.spec.ts` — M4-A live Predict and bounded uncached Generate retain separate native occurrences | SKIPPED → SKIPPED · prerequisite unavailable |
+| BF-029 | `m4-a-pythia-generation.spec.ts` — M4-A retained generation replays with zero native requests after bridge shutdown | SKIPPED → SKIPPED · prerequisite unavailable |
+| BF-030 | `m4-b1-payload.spec.ts` — M4-B1 retained generation uses payload-backed bounded inspection with no executor | SKIPPED → SKIPPED · prerequisite unavailable |
+| BF-031 | `m4-b2-portable-archive.spec.ts` — M4-B2 mixed historical archive exports, imports inertly, and survives a tampered replacement attempt | SKIPPED → SKIPPED · prerequisite unavailable |
+| BF-032 | `m4-c1-retention.spec.ts` — M4-C1 near-limit history stays inspectable while native work refuses before transport and Clear Session restores capacity | SKIPPED → SKIPPED · prerequisite unavailable |
+| BF-033 | `m4-c2-render-work.spec.ts` — M4-C2 retained navigation stays bounded and truthful without execution | SKIPPED → SKIPPED · prerequisite unavailable |
+| BF-037 | `shared-slice.spec.ts` — saved native evidence replays after shutdown and canonical operation requires no Python endpoint | SKIPPED → SKIPPED · prerequisite unavailable |
+
+No native service, download or synthetic native substitution was supplied. Native
+Pythia/MLP, grouped/shape-only/opaque, disconnected-generation and mixed near-limit
+witnesses remain unavailable and unqualified. The alternate Chromium 1234/Playwright
+1.63 pairing, omitted contemporaneous generated-file backup, and one retained
+intermediate runner PID assertion are explicit limitations in the closure review.
+Final core passes 384 with 12 prerequisites skipped; reference passes 17 with zero
+differing floats; final-source HTTP is separately scoped. No M5, learning-gain,
+heterogeneous foundation, workshop/station or release acceptance is granted.

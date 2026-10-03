@@ -45,6 +45,7 @@ with exact statements/sections, decision needed and affected gate.
 - [Browser/HTTP validation safety review](reviews/release-validation-safety.md): scoped writer ownership, current working-source verification and remaining unsafe tooling.
 
 - [Owned runner lifecycle closure](reviews/runner-lifecycle-closure.md): bounded child/log failure cleanup and deterministic regressions.
+- [Browser contract and layout closure](reviews/browser-contract-layout-closure.md): current public/resource contracts, rendered layout repairs and retained qualification gaps.
 - [Browser failure triage](reviews/browser-failure-triage.md): retained and current failure/skip dispositions, reproduction and repair scopes.
 - [Shared computation context and intentional navigation](reviews/shared-context-navigation-repair.md): bounded selection/comparison, render-only detail and explicit activity transitions.
 - [Canonical workflow correctness](reviews/canonical-workflow-correctness.md): shared publication ownership, reset-to-workbench activity, executed source navigation and the refreshed browser baseline.
