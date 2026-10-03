@@ -1,3 +1,4 @@
+import { arithmeticLayout, availableAction } from '../support/layout-contract.js';
 import { evidenceDirectory } from '../support/browser-evidence.js';
 import {test,expect,type Page} from '../support/browser-evidence.js';
 import {mkdir,writeFile} from 'node:fs/promises';
@@ -38,14 +39,30 @@ test('five corrections: public same-session route, scalar arms, compact Ready an
  await page.locator('[data-forward-element="3"]').click();await expect(page.getByTestId('prediction-summary')).toContainText('Inspected component: END [3]');await page.getByTestId('prediction-summary').scrollIntoViewIfNeeded();await capture(page,'prediction');
  await page.locator('#step-learning').click();await expect(page.getByTestId('learning-guidance')).toContainText('Run to next gradient contribution');await capture(page,'guidance');
  await page.locator('#execution-continue').click();await expect(page.locator('#execution-controls')).toHaveAttribute('data-training-phase','ready',{timeout:60000});await capture(page,'ready');
- const rect=await page.locator('[data-testid="live-local-construction"]>rect').first().boundingBox();expect(rect!.width).toBeGreaterThan(400);
+ // The SVG is a camera-scaled scalar slice; preserve its geometry and require
+ // readable, accessible bound arithmetic in the adjacent inspector.
+ const construction=page.locator('[data-testid="live-local-construction"]>rect').first();
+ expect(await construction.evaluate(el=>Number(el.getAttribute('width'))/Number(el.getAttribute('height')))).toBe(700/260);
+ await expect(page.getByTestId('live-proposal')).toContainText('Stored Δ');
+ for(const [width,height] of [[1920,1080],[1280,720],[390,844]]){
+  await page.setViewportSize({width,height});await page.emulateMedia({reducedMotion:'reduce'});
+  await arithmeticLayout(page,dir,`ready-readable-${width}`,'live-proposal');
+  await availableAction(page,'#execution-accept');await availableAction(page,'#execution-cancel');
+ }
+ await page.setViewportSize({width:1280,height:720});
+ await page.getByTestId('live-proposal').scrollIntoViewIfNeeded();
  await expect(page.locator('#execution-accept')).toBeInViewport();await expect(page.locator('#execution-cancel')).toBeInViewport();await expect(page.getByTestId('inspected-arm')).toBeInViewport();
  for(const arm of ['before','after','pair'])await page.locator(`[data-compare-arm="${arm}"]`).click();
  await page.locator('#execution-accept').click();await expect(page.getByTestId('spatial-live-step')).toHaveText('1');
  const history=await page.locator('#spatial-experiment').innerText();
  await page.locator('#presentation-toggle').click();await page.locator('#presentation-toggle').click();await expect(page.getByTestId('spatial-live-step')).toHaveText('1');expect(await page.locator('#spatial-experiment').innerText()).toBe(history);
  await page.locator('#spatial-operation').selectOption('headOutput');await page.locator('#spatial-head').selectOption('1');await page.locator('#spatial-ablate').click();await expect(page.getByTestId('spatial-intervention')).toBeVisible();await capture(page,'head');
- await expect(page.getByTestId('teaching-step')).toBeInViewport({ratio:1});await expect(page.getByTestId('inspected-arm')).toBeInViewport();
+ // A bounded lens may scroll a long explanation; every Inputs / Calculation /
+ // Result paragraph must be readable, rather than requiring its border to have
+ // an exact IntersectionObserver ratio of one at fractional camera dimensions.
+ const teaching=page.getByTestId('teaching-step');await expect(teaching.locator('p')).toHaveCount(3);
+ for(const paragraph of await teaching.locator('p').all()){await paragraph.evaluate(el=>el.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'}));await expect(paragraph).toBeInViewport({ratio:1});}
+ await expect(teaching).toContainText('Declared intervention');await expect(page.getByTestId('inspected-arm')).toBeInViewport();
  await page.locator('#spatial-operation').selectOption('probabilities');await scalar(page,'scalar-reconstructed-intervention');await expect(page.locator('#microscope')).toContainText('RECOMPUTED');
  await page.locator('[data-compare-arm="before"]').click();await expect(page.locator('#microscope')).not.toContainText('RECOMPUTED');await scalar(page,'scalar-reconstructed-baseline');
  await page.locator('#spatial-current').click();await page.locator('#step-learning').click();await page.locator('#presentation-toggle').click();await page.locator('#presentation-toggle').click();await expect(page.locator('#execution-controls')).toHaveCount(0);await expect(page.getByTestId('spatial-live-step')).toHaveText('1');
@@ -81,4 +98,25 @@ test('public presentation entry leaves narrow source controls clickable',async({
  await page.getByText('Source controls and other evidence',{exact:true}).click();
  await expect(page.locator('.attention-controls')).toHaveAttribute('open','');
  await page.locator('#presentation-toggle').click();await expect(page.locator('#step-learning')).toBeEnabled();
+});
+
+test('layout closure: arithmetic, source and archive access at desktop, compact, mobile and enlarged text',async({page,evidenceDir:dir})=>{
+ await page.addInitScript(()=>{const w=window as any;w.layoutCommands=[];const post=Worker.prototype.postMessage;Worker.prototype.postMessage=function(m:any,...rest:any[]){w.layoutCommands.push(m.command);return Reflect.apply(post,this,[m,...rest]);};});
+ await page.goto('/?presentation=spatial');await page.locator('#predict').click();await expect(page.getByTestId('status')).toContainText('Live prediction complete');
+ await page.emulateMedia({reducedMotion:'reduce'});
+ for(const size of [{width:1920,height:1080},{width:1280,height:720},{width:390,height:844}]){
+  await page.setViewportSize(size);await page.locator('#spatial-operation').selectOption('mlpRelu');
+  await arithmeticLayout(page,dir,`layout-${size.width}`,'relu-calculation');
+  await availableAction(page,'.lens-scroll details:has(> .source) > summary');if(await page.locator('.lens-scroll details:has(> .source)').getAttribute('open')===null)await page.locator('.lens-scroll details:has(> .source) > summary').click();await availableAction(page,'.lens-scroll .source summary');if(await page.locator('.lens-scroll .source').getAttribute('open')===null)await page.locator('.lens-scroll .source summary').click();await expect(page.locator('.lens-scroll .source pre')).toBeVisible();await page.locator('.lens-scroll .source pre').scrollIntoViewIfNeeded();await page.screenshot({path:`${dir}/source-${size.width}.png`});
+  await page.locator('#portable-archive-host summary').focus();await page.keyboard.press('Enter');
+  await availableAction(page,'#export-archive');await availableAction(page,'#import-archive');
+  await page.screenshot({path:`${dir}/archive-${size.width}.png`});await page.locator('#portable-archive-host summary').press('Enter');
+  await availableAction(page,'.spatial-header #open-shared-inspector');await page.locator('#open-shared-inspector').press('Enter');await expect(page.locator('#shared-model')).toBeFocused();await page.keyboard.press('Escape');await expect(page.locator('#open-shared-inspector')).toBeFocused();
+ }
+ await page.setViewportSize({width:1280,height:720});await page.locator('#spatial-operation').selectOption('mlpRelu');
+ await page.evaluate(()=>{const sizes=[...document.querySelectorAll<HTMLElement>('.spatial-shell *')].filter(el=>el.namespaceURI==='http://www.w3.org/1999/xhtml').map(el=>[el,parseFloat(getComputedStyle(el).fontSize)] as const);for(const [el,size]of sizes)el.style.fontSize=`${size*1.5}px`;});
+ await arithmeticLayout(page,dir,'layout-enlarged-150-percent','relu-calculation');await availableAction(page,'.lens-scroll details:has(> .source) > summary');await availableAction(page,'#clear-session');
+ const pane=await page.locator('.world-pane').boundingBox();expect(pane!.height).toBeGreaterThan(150);
+ const commands=await page.evaluate(()=>(window as any).layoutCommands);expect(commands.filter((c:string)=>c==='predict')).toHaveLength(2);expect(commands.some((c:string)=>/train|ablate/i.test(c))).toBe(false);
+ await writeFile(`${dir}/commands.json`,JSON.stringify(commands),{flag:'wx'});
 });

@@ -38,6 +38,8 @@ export class SharedInspector {
       }
     });
     this.#root.id='shared-inspector';document.body.append(this.#root);}
+  /** Move the same inspector host; modal, focus and evidence state stay owned here. */
+  attachControlHost(parent?: HTMLElement | null) { (parent ?? document.body).append(this.#root); }
   sync(store:EvidenceStore,liveId:string|undefined,canSwitch:boolean,onCanonical:CanonicalExecution,onWorld?:(runId:string,replay:boolean)=>void,worldAvailability?:(runId:string)=>string|undefined,retention?:SharedEvidenceRetention,allowOpen=true){
     this.#retention=retention;
     this.#allowOpen=allowOpen;

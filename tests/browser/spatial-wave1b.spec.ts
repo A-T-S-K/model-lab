@@ -1,3 +1,4 @@
+import { arithmeticLayout, availableAction } from '../support/layout-contract.js';
 import {test,expect} from '../support/browser-evidence.js';
 import {mkdir,writeFile} from 'node:fs/promises';
 import type {RunResult} from '../../app/worker/protocol.js';
@@ -57,7 +58,7 @@ test('B01–B09 complete source-bound forward route and contextual exploration o
   await page.waitForTimeout(300);await page.screenshot({path:`${directory}/output-1920x1080.png`});
   const count=await page.evaluate(()=>(window as any).forwardAudit.commands.length);await page.locator('#spatial-home').click();await page.locator('#spatial-back').click();await page.locator('#presentation-toggle').click();await page.locator('#presentation-toggle').click();expect(await page.evaluate(()=>(window as any).forwardAudit.commands.length)).toBe(count);
   await page.setViewportSize({width:1280,height:720});await page.locator('#spatial-home').click();await page.waitForTimeout(300);await page.screenshot({path:`${directory}/overview-1280x720.png`});await page.locator('#spatial-operation').selectOption('mlpRelu');await page.waitForTimeout(300);await page.screenshot({path:`${directory}/mlp-1280x720.png`});
-  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&document.documentElement.scrollHeight<=innerHeight)).toBe(true);
+  await arithmeticLayout(page,directory,'forward-compact','relu-calculation');await availableAction(page,'#predict');await availableAction(page,'#explanation-play');
   const audit=await page.evaluate(()=>(window as any).forwardAudit);expect(audit.commands.filter((x:any)=>x.command==='initialize')).toHaveLength(1);expect(errors).toEqual([]);
   await writeFile(`${directory}/source-identity.json`,JSON.stringify({incoming:first.run.manifest,final:final.run.manifest,commands:audit.commands,errors},null,2));
 });

@@ -872,6 +872,12 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
     this.redraw=render;this.phase=phase;this.guideApply=()=>{this.guide();changed();};
     if(m)this.headWidth=m.width;
     const root=document.querySelector<HTMLElement>(".spatial-shell")!;
+    // The bounded arithmetic lens is independently keyboard-scrollable.
+    for (const region of root.querySelectorAll<HTMLElement>('.lens-scroll')) {
+      region.tabIndex = 0;
+      region.setAttribute('role', 'region');
+      region.setAttribute('aria-label', 'Selected computation arithmetic and source');
+    }
     this.emphasize();
     if (this.isPublicProfile() && this.state?.publicLesson && m) {
       this.applyPublicLessonFocus(root, this.state.publicLesson.content.focus, this.state.publicLesson, m);

@@ -1454,8 +1454,9 @@ function bind(): void {
     begin:async operation=>{const transaction=await beginRetention(operation);return {store:transaction.archive.evidence,
       commit:async()=>{await commitRetention(transaction);},cancel:()=>cancelRetention(transaction)};},
   }, capabilities.sharedInspector);
+  sharedInspector.attachControlHost(spatialActive && !usesGuidedLesson() ? mount.querySelector<HTMLElement>('.spatial-header') : undefined);
   let portableHost=document.querySelector<HTMLElement>('#portable-archive-host');
-  if(spatialActive&&capabilities.portableArchive){if(!portableHost){portableHost=document.createElement('section');portableHost.id='portable-archive-host';document.body.append(portableHost);}portableHost.innerHTML=portableArchiveControls();}
+  if(spatialActive&&capabilities.portableArchive){if(!portableHost){portableHost=document.createElement('section');portableHost.id='portable-archive-host';}mount.querySelector('.spatial-header')?.append(portableHost);portableHost.innerHTML=portableArchiveControls();}
   else portableHost?.remove();
   const selectedVariant=[...archive.modelVariantExperiments.values()].filter(isActivationVariantExperiment).find(experiment=>[experiment.baselineRun.manifest.runId,experiment.variantRun.manifest.runId].includes(result?.run.manifest.runId??''));
   const selectedComposite=[...archive.modelVariantExperiments.values()].filter(isCompositeVariantExperiment).find(experiment=>[experiment.baselineRun.manifest.runId,experiment.initializedRun.manifest.runId,experiment.trainedRun.manifest.runId].includes(result?.run.manifest.runId??''));

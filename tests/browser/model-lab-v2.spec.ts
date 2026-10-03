@@ -99,8 +99,23 @@ test('bounded training retains real checkpoints and complete capture displays st
   await page.locator('#train-many').click();
   await expect(page.getByTestId('status')).toContainText('3/3 requested updates');
   await expect(page.getByTestId('training-step')).toHaveText('3');
-  await expect(page.getByTestId('training-summary')).toContainText('3 actual update summaries');
+  expect(await page.locator('#snapshot-select option').evaluateAll(options=>options.slice(1).map(option=>Number(/^step (\d+)/.exec(option.textContent!)![1])))).toEqual([0,1,2,3]);
+  await expect(page.getByTestId('training-summary')).toContainText('3 actual updates summarized · 3 cached · 0 older summaries discarded');
+  await page.getByText('Actual loss timeline', { exact: true }).click();
+  const timeline = page.getByText('Actual loss timeline', { exact: true }).locator('..').locator('tbody tr');
+  await expect(timeline).toHaveCount(3);
+  expect(await timeline.evaluateAll(rows => rows.map(row => Number(row.children[2]!.textContent)))).toEqual([1, 2, 3]);
+  expect(await timeline.evaluateAll(rows => rows.every(row => Number.isFinite(Number(row.children[3]!.textContent))))).toBe(true);
   const capturedRun = await page.locator('#history-run').inputValue();
+  const retainedHistory = await page.getByTestId('history-count').textContent();
+  await page.locator('#whole-capture').click();
+  await expect(page.getByRole('alert').last()).toContainText('Derived inspection exceeds its bounded cache reservation');
+  await expect(page.getByTestId('whole-stats')).toHaveCount(0);
+  await expect(page.getByTestId('history-count')).toHaveText(retainedHistory!);
+  // Whole detail is a recomputable cache, separately bounded from retained updates.
+  await page.getByTestId('document-input').fill('a');
+  await page.locator('#predict').click();
+  await expect(page.getByTestId('status')).toContainText('Live prediction complete');
   await page.locator('#whole-capture').click();
   await expect(page.getByTestId('whole-stats')).toContainText('scalar nodes');
   await expect(page.getByTestId('microscope-evidence').locator('button')).toHaveCount(1);
@@ -109,10 +124,12 @@ test('bounded training retains real checkpoints and complete capture displays st
   await page.locator('#history-run').selectOption(capturedRun);
   await page.locator('[data-stage="embeddingSum"]').click();
   await page.getByTestId('vector-evidence').locator('[data-element="6"]').click();
-  await expect(page.getByTestId('inspection-provenance')).toHaveText('OBSERVED SCALAR');
+  await expect(page.getByTestId('inspection-provenance')).toHaveText('VERIFIED RECOMPUTATION');
   await page.getByTestId('microscope-evidence').locator('.operand-list').first().locator('button').first().click();
-  await expect(page.getByTestId('inspection-provenance')).toHaveText('OBSERVED SCALAR');
+  await expect(page.getByTestId('inspection-provenance')).toHaveText('VERIFIED RECOMPUTATION');
   await expect(page.getByTestId('scalar-operation')).toContainText('wte');
+  await expect(page.getByTestId('verification')).toContainText('max absolute error 0');
+  await expect(page.getByTestId('training-step')).toHaveText('3');
 });
 
 test('head ablation compares fresh observed arms and inspects declared historical intervention', async ({ page }) => {

@@ -1974,3 +1974,12 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
 .instrument-header.release-return-header > button { position:static; margin-left:0; }
 .lab-active .learn-collapsed-world ~ .camera-controls,
 .lab-active .learn-collapsed-world ~ .world-minimap { display:none; }
+
+/* Archive access belongs to the shell; a body sibling below 100dvh was clipped. */
+#portable-archive-host { flex:none; max-width:100%; font-size:12px; }
+#portable-archive-host summary { cursor:pointer; min-height:44px; display:flex; align-items:center; padding:6px 10px; box-sizing:border-box; border:1px solid #3B454D; border-radius:3px; }
+#portable-archive-host details[open] { position:fixed; z-index:60; top:16px; right:16px; left:16px; max-width:720px; margin-left:auto; max-height:calc(100dvh - 32px); overflow:auto; overscroll-behavior:contain; padding:12px; background:#111820; border:1px solid #7A8791; box-sizing:border-box; }
+#portable-archive-host .controls { display:flex; flex-wrap:wrap; gap:12px; }
+#portable-archive-host input { max-width:100%; min-width:0; }
+/* Leave room to scroll the last source disclosure above the saved-evidence action. */
+.context-lens .lens-scroll { padding-bottom:64px; }

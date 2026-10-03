@@ -15,3 +15,6 @@
 #shared-inspector .shared-panel nav button[aria-pressed=true]{outline:1px solid #FFD166;outline-offset:1px}
 #shared-inspector #shared-offset{width:180px;display:block}
 #shared-inspector #native-endpoint{width:300px;max-width:100%}
+
+/* Workbench access belongs beside other header controls, above exact arithmetic. */
+.spatial-header #open-shared-inspector { position:static; min-height:44px; background:#111820; border-color:#3B454D; }
