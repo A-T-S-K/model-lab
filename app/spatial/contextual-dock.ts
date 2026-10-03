@@ -1,4 +1,5 @@
 import {releaseChapter, forwardContinue} from '../presentation/release-learning.js';
+import { releaseTrainingChapter } from '../views/release-learning.js';
 import type { SpatialReadModel } from './bindings.js';
 import type { Address, Explanation } from './forward.js';
 import { operations, parameterOwners } from './forward.js';
@@ -56,6 +57,9 @@ export interface ContextualDockOptions {
   readonly releaseLearning?: boolean;
   readonly releaseBusy?: boolean;
   readonly releaseHandoff?: {available:boolean;reason:string};
+  readonly releaseAnswer?: string;
+  readonly releaseOutcome?: string;
+  readonly releaseDecisionPending?: string;
   readonly model?: SpatialReadModel;
   readonly address: Address;
   readonly element: number;
@@ -654,7 +658,7 @@ function renderPublicPart2Values(opts: ContextualDockOptions, ctx: ResolvedPubli
   }
   const candidate = ctx.candidate!;
   return `<div class="dock-values-content" data-testid="dock-values" data-public-training-depth-kind="candidate">
-    <h3>Baseline vs provisional candidate · same training example</h3>${candidateSelectionLabel(candidate)}
+    <h3>${opts.tourContent?.state === 'tour_complete' ? 'Retained baseline/candidate comparison · resolved decision' : 'Baseline vs provisional candidate · same training example'}</h3>${candidateSelectionLabel(candidate)}
     <table data-testid="public-candidate-values"><thead><tr><th>Position</th><th>Input → target</th><th>Baseline full distribution</th><th>Candidate full distribution</th><th>P(target)</th></tr></thead><tbody>
       ${candidate.rows.map(row => `<tr><th><button data-training-candidate-position="${row.position}" ${row.position === candidate.selectedPosition ? 'aria-pressed="true"' : ''}>p${row.position}</button></th><td>${esc(row.inputLabel)} → ${esc(row.targetLabel)}</td><td>${publicTrainingDistribution(row.baselineDistribution, candidate.outputLabels)}</td><td>${publicTrainingDistribution(row.candidateDistribution, candidate.outputLabels)}</td><td>${fmt(row.baselineTargetProbability)} → ${fmt(row.candidateTargetProbability)}</td></tr>`).join('')}
     </tbody></table>
@@ -773,7 +777,9 @@ function renderPublicPart2Source(ctx: ResolvedPublicTrainingDepthContext): strin
       <p>Candidate runtime: <code>${esc(c.candidateRuntimeVersion)}</code> · revision <code>${esc(c.candidateRuntimeRevision)}</code></p>
       <p>Selected probability artifacts: baseline <code>${esc(row.baselineArtifactId)}</code> · candidate <code>${esc(row.candidateArtifactId)}</code>.</p><p>Comparison compatibility: COMPATIBLE · candidate evaluated · candidate provisional · candidate not accepted · candidate not live.</p>`;
   }
-  return `<div class="dock-source-content" data-testid="dock-source" data-public-training-depth-kind="${esc(ctx.kind)}">${common}${detail}</div>`;
+  const mechanisms = ctx.kind === 'objective' ? ['loss'] : ctx.kind === 'adam' ? ['adam']
+    : ctx.kind === 'candidate' ? ['loss', 'adam'] : ['backward'];
+  return `<div class="dock-source-content" data-testid="dock-source" data-public-training-depth-kind="${esc(ctx.kind)}">${common}${detail}${mechanisms.map(kind => sourceView(kind)).join('')}</div>`;
 }
 
 function publicDepthValues(model: SpatialReadModel, member: ResolvedPublicDepthMember): readonly number[] | undefined {
@@ -1330,6 +1336,14 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
   }
   // Resolve once for the summary, witness and active depth in this render.
   opts = { ...opts, resolvedTrainingDepth: resolvedPart2Depth(opts) };
+  if (opts.releaseLearning && opts.tourContent?.part === 2 && opts.publicNavigationMode === 'guided' && opts.depth === 'explain') {
+    const decision = opts.tourContent.state === 'candidate_ready';
+    const complete = opts.tourContent.state === 'tour_complete';
+    const beat = ({p2_objective:'Measure error',p2_backward_trace:'Follow sensitivity',p2_gradient_contribution:'One contribution',p2_final_gradient:'Completed gradient',p2_adam_proposal:'Propose a change',candidate_ready:'Candidate decision',tour_complete:'Resolved decision'} as Partial<Record<PublicTourContent['state'], string>>)[opts.tourContent.state];
+    const disabled = !opts.trainingState?.ready || opts.trainingState.disabled || Boolean(opts.releaseDecisionPending);
+    const actions = decision ? `<div class="candidate-decision-pair" role="group" aria-label="Candidate decision"><button id="execution-cancel" ${disabled ? 'disabled' : ''}>Discard candidate</button><button id="execution-accept" ${disabled ? 'disabled' : ''}>Accept update</button></div>` : complete ? '<button id="visitor-explore-toggle" class="primary-action">Enter Explore</button>' : opts.primaryAction;
+    return `<section class="contextual-dock learn-dock" data-testid="contextual-dock" data-active-depth="explain"><div class="dock-header"><div class="dock-route-info"><strong>5 · Learning and decision</strong><span data-testid="selected-world-object" data-run-id="${esc(opts.resolvedTrainingDepth?.gradientSourceRunId ?? '')}" data-position="3">Lesson p3 · ${esc(beat ?? '')}</span></div><nav class="learn-actions" aria-label="Lesson actions"><button id="dock-inspect" data-dock-depth="values">Values / Math / Source</button>${actions}</nav></div><div class="dock-body" data-testid="dock-body">${releaseTrainingChapter(opts.resolvedTrainingDepth, opts.tourContent.state, opts.releaseOutcome, opts.releaseDecisionPending, opts.releaseAnswer)}</div></section>`;
+  }
   const { depth, lessonProgress, routePurpose, primaryAction, attentionAction, shortDetour, freeExplore, operatorControls, profile } = opts;
 
   const canRenderOutput = Boolean(opts.outputPair && opts.outputPair.before?.manifest?.input && opts.outputPair.after?.manifest?.input);
@@ -1365,6 +1379,19 @@ export function renderContextualDock(opts: ContextualDockOptions): string {
   if (!exploring && effectiveDepth !== 'explain' && opts.resolvedTrainingDepth?.objective) {
     const position = opts.resolvedTrainingDepth.objective.selectedPosition;
     bodyContent = `<p data-testid="detail-selection-scope">${opts.publicTrainingDepthSelection?.objectivePosition === undefined ? 'Lesson occurrence' : 'Temporary detail selection · render only'} · p${position}. Lesson remains p${opts.tourContent?.selectionIntent.token}.</p>` + bodyContent;
+  }
+  if (opts.releaseLearning && !exploring && effectiveDepth !== 'explain' && opts.resolvedTrainingDepth) {
+    const c = opts.resolvedTrainingDepth;
+    const exact = { parameter: c.parameter, objective: c.objective, contributions: c.retainedContributions,
+      completedGradient: c.finalGradient, proposal: c.proposal, optimizer: c.optimizer, acceptedStep: c.acceptedStep, candidate: c.candidate };
+    bodyContent += `<details class="learn-exact"><summary>Exact original numbers and evidence identities · float64</summary><pre data-testid="learn-exact-values">${esc(JSON.stringify(exact, null, 2))}</pre></details>`;
+    if (opts.tourContent?.state === 'tour_complete') {
+      // Retained comparison is presentation evidence, not an active transaction.
+      bodyContent = bodyContent.replaceAll('candidate provisional · candidate not accepted · candidate not live', `resolved candidate · ${esc(opts.releaseOutcome ?? 'outcome unavailable')}`)
+        .replaceAll('LIVE TRAINING TRANSACTION', 'RETAINED RESOLVED COMPARISON')
+        .replaceAll('candidate not accepted', `resolved: ${esc(opts.releaseOutcome ?? 'unavailable')}`);
+      bodyContent = `<p data-testid="learn-resolved-evidence">Decision succeeded: ${esc(opts.releaseOutcome ?? 'unavailable')}. Retained baseline/candidate comparison; opening it does not execute or change state. Live scalar inspection is unavailable after resolution.</p>` + bodyContent;
+    }
   }
   if (opts.releaseLearning) bodyContent = `<p class="learn-orientation">${releaseChapter(opts.tourContent?.state ?? 'cold')} · ${exploring ? 'Explore · lesson retained' : 'Detail · lesson retained'} · run ${esc(opts.model?.source.sourceRunId ?? '')} · p${opts.address.token}</p>` + bodyContent;
   const isExpanded = effectiveDepth !== 'explain';

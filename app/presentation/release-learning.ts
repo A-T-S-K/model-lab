@@ -53,7 +53,7 @@ export function releaseChapter(state: PublicTourState): string {
   return state === 'cold' ? 'Opening' : state === 'p1_prediction_preview' ? '1 · Prediction'
     : state === 'p1_represent' ? '2 · Representation'
     : FORWARD_LESSON_STATES.slice(0,5).includes(state as typeof FORWARD_LESSON_STATES[0]) ? '3 · Context / attention'
-    : FORWARD_LESSON_STATES.includes(state as typeof FORWARD_LESSON_STATES[number]) ? '4 · Output' : 'Existing learning workflow';
+    : FORWARD_LESSON_STATES.includes(state as typeof FORWARD_LESSON_STATES[number]) ? '4 · Output' : '5 · Learning and decision';
 }
 export const forwardContinue: Partial<Record<PublicTourState,string>> = {
   p1_prediction_preview: 'How characters become numbers', p1_represent: 'How earlier context affects this position',

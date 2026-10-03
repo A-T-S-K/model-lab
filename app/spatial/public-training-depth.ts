@@ -109,6 +109,7 @@ export interface ResolvedPublicTrainingDepthContext {
   readonly proposal?: ParameterUpdate;
   readonly optimizer?: TrainingProgress['optimizer'];
   readonly acceptedStep?: number;
+  readonly trainableParameterCount?: number;
   readonly candidate?: PublicCandidateDepth;
 }
 
@@ -340,6 +341,7 @@ export function resolvePublicTrainingDepthContext(
     proposal: training.proposal,
     optimizer: training.optimizer,
     acceptedStep: training.acceptedStep,
+    trainableParameterCount: startingSnapshot.state.parameterOrder.reduce((count, name) => count + startingSnapshot.state.parameters[name]!.reduce((n, row) => n + row.length, 0), 0),
   };
 
   if (kind === 'objective') {

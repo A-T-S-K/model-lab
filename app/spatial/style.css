@@ -1908,3 +1908,16 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
 .release-learning .learn-table-scroll:focus-visible {outline:2px solid #ffd166;outline-offset:2px;}
 .spatial-shell.release-learning {padding-bottom:64px;}
 .release-learning .learn-table-scroll th {white-space:nowrap;overflow-wrap:normal;}
+
+/* Chapter 5 keeps the bound result readable before optional exact depth. */
+.release-learning .learn-bound-result { border-left: 3px solid #9dc6dc; padding: .6rem 1rem; background: #252d33; font-size: 1.05rem; overflow-wrap: anywhere; }
+.release-learning .learn-bound-result p { margin: .4rem 0; }
+.release-learning .learn-exact pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .85rem; }
+.release-learning .learn-actions .candidate-decision-pair { flex-wrap: wrap; }
+.release-learning .dock-values-content table { display: block; overflow-x: auto; max-width: 100%; }
+.release-learning .world-workspace.is-public-profile .spatial-world .adam-overlay-title { font-size:22px; }
+.release-learning .world-workspace.is-public-profile .spatial-world .adam-overlay-tag,
+.release-learning .world-workspace.is-public-profile .spatial-world .adam-overlay-status { font-size:18px; }
+.release-learning .world-workspace.is-public-profile .spatial-world .adam-overlay-value { font-size:20px; }
+/* Optimizer inputs are available in optional Math; the world marks the proposal. */
+.release-learning .world-workspace.is-public-profile .spatial-world .adam-overlay-inputs { display:none; }

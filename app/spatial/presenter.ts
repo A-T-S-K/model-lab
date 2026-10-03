@@ -1,5 +1,6 @@
 import {learningHandoff} from '../presentation/release-learning.js';
 import { releaseIntroduction } from '../views/release-learning.js';
+import { resolvePublicTrainingDepthContext, type ResolvedPublicTrainingDepthContext } from './public-training-depth.js';
 import { sceneConstruction } from './construction.js';
 import { outputSummary, componentComparison, type OutputPair } from './comparison.js';
 import type { ForwardModel } from './forward.js';
@@ -125,6 +126,8 @@ export class SpatialPresenter {
   releaseLearning = false;
   private releaseWorldExpanded = false;
   private checkAnswer?: string;
+  // Bounded render-only receipt view; authoritative decisions remain in PublicLessonSession.
+  private releaseResolvedComparison?: ResolvedPublicTrainingDepthContext;
   profile?: ExperienceProfile;
   dockDepth: DockDepth = 'explain';
   private supportAction?: string;
@@ -657,6 +660,14 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
     const publicCurrentState = state.publicLesson?.canonicalState ?? 'cold';
     const publicTargetState = state.publicLesson?.targetState;
     const publicNavigationMode = state.publicLesson?.navigation.mode ?? 'guided';
+    if (this.releaseLearning && (publicCurrentState === 'cold' || publicCurrentState === 'p1_prediction_preview')) this.releaseResolvedComparison = undefined;
+    if (this.releaseLearning && publicCurrentState === 'candidate_ready' && tourContent) {
+      const context = resolvePublicTrainingDepthContext(tourContent, state.execution?.progress, state.trainingStartingSnapshot, state.execution?.preview);
+      if (context?.available && context.candidate) this.releaseResolvedComparison = {
+        ...context, gradientInspection: undefined,
+        candidate: { ...context.candidate, candidateProbabilityInspection: undefined },
+      };
+    }
     const effectivePublicPin = isPublicProfile ? this.effectivePublicPin(state.publicLesson) : this.pin;
     const trainingState = computeTrainingActionState(
       state.execution,
@@ -806,6 +817,10 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
         model: m,
         releaseIntroduction: this.releaseLearning && publicNavigationMode === 'guided' ? releaseIntroduction(m.forward, publicCurrentState, state.document, Boolean(state.releaseReplay), state.busy, this.checkAnswer, m) : undefined,
         releaseLearning: this.releaseLearning,
+        releaseAnswer: this.checkAnswer,
+        releaseOutcome: state.publicLesson?.outcome,
+        releaseDecisionPending: state.publicLesson?.decisionPending,
+        resolvedTrainingDepth: this.releaseLearning && publicCurrentState === 'tour_complete' ? this.releaseResolvedComparison : undefined,
         releaseBusy: state.busy || Boolean(state.execution),
         releaseHandoff: this.releaseLearning && publicCurrentState === 'p1_complete' ? learningHandoff(m, state.document, Boolean(state.canLearn)) : undefined,
         address: a,
@@ -869,7 +884,7 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
     const on=(id:string,fn:()=>void)=>root.querySelector(id)?.addEventListener("click",fn);
     const change=()=>{if(this.isPublicProfile()&&this.state?.publicLesson?.navigation.mode==='guided'){const entered=this.dispatchPublicLesson({type:'ENTER_EXPLORE'});if(!entered&&this.state?.publicLesson)this.applyPublicLessonView(this.state.publicLesson,true);}if(this.shortStop>=0)this.shortDetour=true;this.interrupt(true);if(this.parameter&&!this.learningStage)this.pin={name:this.parameter,row:this.row,column:this.column};changed();render();};
     on('#learn-expand-world',()=>{this.releaseWorldExpanded=!this.releaseWorldExpanded;render();document.querySelector<HTMLButtonElement>('#learn-expand-world')?.focus({preventScroll:true});});
-    for (const answer of ['next','guarantee','train','positions','future','importance','outputs','sample']) on(`#learn-check-${answer}`,()=>{this.checkAnswer=answer;render();document.querySelector<HTMLButtonElement>(`#learn-check-${answer}`)?.focus({preventScroll:true});});
+    for (const answer of ['next','guarantee','train','positions','future','importance','outputs','sample','sensitivity','update','generalize']) on(`#learn-check-${answer}`,()=>{this.checkAnswer=answer;render();document.querySelector<HTMLButtonElement>(`#learn-check-${answer}`)?.focus({preventScroll:true});});
     on('#short-continue',()=>{
       this.checkAnswer=undefined;
       if (this.isPublicProfile()) { this.dispatchPublicLesson({ type: 'PRIMARY_ACTION' }); changed(); render(); if(this.releaseLearning) document.querySelector<HTMLButtonElement>('#short-continue, #short-teach')?.focus({preventScroll:true}); return; }
@@ -1082,7 +1097,7 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
       });
     });
     const select=(el:HTMLElement|SVGElement)=>{
-      if(isPublicPart2DetailRenderOnly(this.profile, this.state?.publicLesson?.content, this.state?.publicLesson?.navigation.mode)){
+      if(isPublicPart2DetailRenderOnly(this.releaseLearning ? 'visitor' : this.profile, this.state?.publicLesson?.content, this.state?.publicLesson?.navigation.mode)){
         render();
         return;
       }

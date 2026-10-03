@@ -301,7 +301,7 @@ function dispatchPublicLesson(event: PublicLessonEvent): boolean {
     error = 'Learning handoff refused: the retained prediction must match the current input and accepted state. Explicitly Predict before starting learning computation.';
     render(); return false;
   }
-  if (releaseLearning && (busy || forwardDriver.active) && (['OPEN_DETAIL','RETURN_FROM_DETAIL','ENTER_EXPLORE','RESUME_GUIDED'].includes(event.type) || event.type === 'PRIMARY_ACTION' && publicLessonSession.current.startsWith('p1_'))) {
+  if (releaseLearning && (busy || forwardDriver.active) && (['ENTER_EXPLORE','RESUME_GUIDED'].includes(event.type) || ['OPEN_DETAIL','RETURN_FROM_DETAIL'].includes(event.type) && publicLessonSession.current.startsWith('p1_') || event.type === 'PRIMARY_ACTION' && publicLessonSession.current.startsWith('p1_'))) {
     error = 'Finish or cancel active work, or explicitly accept/discard its candidate, before changing learning activity.'; render(); return false;
   }
   if (event.type === 'EXECUTION_FAILED' || event.type === 'EXECUTION_CANCELLED') publicDemo.stop();
@@ -316,8 +316,11 @@ function dispatchPublicLesson(event: PublicLessonEvent): boolean {
     config.vocabulary,
   );
   publicGuidedComputation = computation.binding && releaseLearning ? {...computation.binding, lessonPosition: INTRO_POSITION} : computation.binding;
+  if (releaseLearning && event.type === 'ACCEPT_COMPLETE' && transition.session !== before && transition.session.outcome === 'accepted' && result) {
+    publicGuidedComputation = { result, runId: result.run.manifest.runId, capturedDocument: documentText, lessonPosition: INTRO_POSITION };
+  }
   publicLessonSession = transition.session;
-  const releaseRestore = releaseLearning && publicGuidedComputation && ['RESUME_GUIDED','RETURN_FROM_DETAIL'].includes(event.type) && transition.session !== before ? publicGuidedComputation : undefined;
+  const releaseRestore = releaseLearning && !forwardDriver.active && publicGuidedComputation && ['RESUME_GUIDED','RETURN_FROM_DETAIL'].includes(event.type) && transition.session !== before ? publicGuidedComputation : undefined;
   if (computation.restore || releaseRestore) {
     result = (releaseRestore ?? computation.restore)!.result;
     player = new TracePlayer(result.run);
@@ -1135,8 +1138,8 @@ function selectGuidedComparison(): boolean {
 // Stable callbacks do not retain a render frame (including its previously focused DOM).
 function spatialSelectionChanged(){
   const profile=currentProfile();
-  const publicLesson=profile==='workbench'?undefined:currentPublicLessonView();
-  const renderOnlyDetail=isPublicPart2DetailRenderOnly(profile,publicLesson?.content,publicLesson?.navigation.mode);
+  const publicLesson=usesGuidedLesson()?currentPublicLessonView():undefined;
+  const renderOnlyDetail=isPublicPart2DetailRenderOnly(releaseLearning?'visitor':profile,publicLesson?.content,publicLesson?.navigation.mode);
   if(forwardDriver.active&&!renderOnlyDetail){
     forwardDriver.follow=false;
     const previous=forwardDriver.pin;

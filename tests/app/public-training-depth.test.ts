@@ -1061,3 +1061,36 @@ test('shared context short input and incompatible model refuse without substitut
   assert.match(refused.reason ?? '', /probability support is unavailable/);
   assert.equal(refused.candidate, undefined);
 });
+
+test('release chapter 5 binds readable results to authentic objective, partial, complete and proposal evidence', async () => {
+  const {releaseTrainingChapter, learningNumber} = await import('../../app/views/release-learning.js');
+  const h = await LiveTrainingHarness.create('release-training-chapter', {name:'wte',row:0,column:0});
+  await h.objective();
+  const o = context('p2_objective',h), html = releaseTrainingChapter(o,'p2_objective');
+  assert.equal(o.trainableParameterCount,896);
+  assert.match(html,/All 5 targets: p0 → a · p1 → b · p2 → c · p3 → a · p4 → END/);
+  assert.match(html,/p3 is only one part/);
+  assert(html.includes(`data-value="${o.objective!.observedMean}"`));
+  assert(html.includes(`data-value="${o.objective!.rows[3]!.recordedLoss}"`));
+  await h.contribution();
+  const c=context('p2_gradient_contribution',h), event=c.selectedContribution!;
+  const contribution=releaseTrainingChapter(c,'p2_gradient_contribution');
+  for(const value of [event.before,event.contribution,event.after])assert(contribution.includes(`data-value="${value}"`));
+  assert.match(contribution,/observed partial accumulation/);assert.match(contribution,/not a complete contribution history/);
+  await h.finalGradient();const g=context('p2_final_gradient',h);
+  assert(releaseTrainingChapter(g,'p2_final_gradient').includes(`data-value="${g.finalGradient}"`));
+  assert.match(releaseTrainingChapter(g,'p2_final_gradient'),/retained subset is not summed/);
+  await h.adamProposal();const a=context('p2_adam_proposal',h);
+  assert.equal(a.proposal!.name,a.parameter!.name);
+  assert(releaseTrainingChapter(a,'p2_adam_proposal').includes(`data-value="${a.proposal!.after}"`));
+  assert.match(releaseTrainingChapter(a,'p2_adam_proposal'),/persistent moments and a learning-rate schedule/);
+  await h.ready();const candidate=context('candidate_ready',h);
+  const row=candidate.candidate!.rows[3]!;
+  for(const value of [row.baselineTargetProbability,row.candidateTargetProbability,candidate.candidate!.baselineDerivedMean,candidate.candidate!.candidateDerivedMean]) assert(releaseTrainingChapter(candidate,'candidate_ready').includes(`data-value="${value}"`));
+  assert.match(releaseTrainingChapter(candidate,'candidate_ready',undefined,'accepted'),/Acceptance pending/);
+  assert.match(releaseTrainingChapter(candidate,'tour_complete','accepted'),/Acceptance succeeded/);
+  assert.match(releaseTrainingChapter(candidate,'tour_complete','discarded'),/Discard succeeded/);
+  const stale=context('candidate_ready',h,{},withTraining(h.progress,{...h.progress.training!,sourceRunId:'stale'}));
+  assert.equal(stale.available,false);assert.match(releaseTrainingChapter(stale,'candidate_ready'),/Missing evidence is not zero/);
+  assert.notEqual(learningNumber(1e-99),'0');assert.equal(learningNumber(undefined),'unavailable');
+});
