@@ -1921,3 +1921,54 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
 .release-learning .world-workspace.is-public-profile .spatial-world .adam-overlay-value { font-size:20px; }
 /* Optimizer inputs are available in optional Math; the world marks the proposal. */
 .release-learning .world-workspace.is-public-profile .spatial-world .adam-overlay-inputs { display:none; }
+
+/* Lab stays in the continuous world; its dock owns scroll, never the page. */
+.lab-dock .dock-body { overflow:auto; }
+.lab-dock h1 { font-size:clamp(1.2rem,2vw,1.8rem); margin:.4rem 0; }
+.lab-recipes { display:flex; flex-wrap:wrap; gap:.5rem; margin:1rem 0; }
+.lab-recipes button { flex:1 1 160px; min-height:44px; text-align:left; }
+.lab-recipes [aria-pressed=true] { border-color:var(--accent,#a9dcf5); background:#253b43; }
+.lab-contract { display:grid; grid-template-columns:110px 1fr; gap:.5rem; }
+.lab-contract dt { font-weight:600; }
+.lab-contract dd { margin:0; }
+.lab-draft { display:flex; flex-wrap:wrap; gap:.7rem; }
+.lab-draft label { display:grid; gap:.3rem; flex:1 1 140px; }
+.lab-draft input,.lab-draft select { min-height:44px; width:100%; box-sizing:border-box; }
+.lab-primary { display:flex; flex-wrap:wrap; gap:.5rem; padding:.7rem 0; position:sticky; bottom:0; background:#182126; z-index:2; }
+.lab-primary button { min-height:44px; }
+.lab-dock table { width:100%; font-variant-numeric:tabular-nums; }
+.lab-dock th,.lab-dock td { padding:.4rem; text-align:left; }
+.lab-dock meter { width:65px; max-width:100%; display:block; }
+.lab-dock pre { white-space:pre-wrap; overflow-wrap:anywhere; }
+#open-release-lab { min-height:44px; }
+@media(max-width:600px) { .lab-contract { grid-template-columns:1fr; } .lab-contract dd { margin-bottom:.5rem; } .lab-dock .dock-header { flex-wrap:wrap; } .lab-dock th,.lab-dock td { padding:.2rem; } .lab-dock .learn-actions { flex-wrap:wrap; } }
+.release-learning .lab-dock .lab-primary { position:static; flex-shrink:0; padding:10px 18px; border-top:1px solid #39434b; margin:0; }
+.release-learning .lab-dock .learn-actions { display:flex; flex-wrap:nowrap; gap:6px; }
+.release-learning .lab-dock .learn-actions button { min-width:0; flex:1; padding:8px; }
+.release-learning .lab-dock .dock-header > div { display:flex; gap:10px; align-items:center; }
+.release-learning .world-workspace > .lab-dock .dock-body { padding-bottom:18px; }
+.lab-active .world-pane { max-height:28vh; min-height:120px; }
+@media(max-width:600px) {
+  .release-learning .lab-dock .lab-primary { padding:8px; }
+  .release-learning .lab-dock .lab-primary button { flex:1 1 140px; padding:8px; }
+  .lab-active .world-pane { max-height:150px; min-height:110px; }
+  .lab-active .learn-overview { padding:8px; }
+}
+.release-learning .lab-dock .learn-actions { min-width:280px; }
+.release-learning .lab-dock .learn-actions button { white-space:nowrap; overflow-wrap:normal; }
+.lab-active .world-workspace.is-public-profile > .world-pane { max-height:28vh; min-height:120px; }
+@media(max-width:600px) { .lab-active .world-workspace.is-public-profile > .world-pane { max-height:150px; min-height:110px; } }
+/* Lab drafts own their controls; retained Explore selections and camera stay intact. */
+.spatial-shell.lab-active { height:100dvh; min-height:0; overflow:hidden; }
+.lab-active .spatial-selection,
+.lab-active .intervention-banner,
+.lab-active .spatial-header label,
+.lab-active #predict,
+.lab-active #spatial-focus,
+.lab-active #spatial-lens,
+.lab-active #learn-workbench,
+.lab-active #open-release-lab { display:none; }
+.lab-active .world-pane .learn-expand-world { font-size:12px; }
+/* The opt-in Classic return header has several actions, not one absolute button. */
+.instrument-header.release-return-header { flex-wrap:wrap; gap:12px; }
+.instrument-header.release-return-header > button { position:static; margin-left:0; }

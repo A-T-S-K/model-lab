@@ -17,11 +17,11 @@ export function trainingFeedback(answer: string): string {
 }
 
 export function releaseTrainingChapter(ctx: ResolvedPublicTrainingDepthContext | undefined, state: PublicTourState,
-  outcome?: string, decisionPending?: string, answer?: string): string {
+  outcome?: string, decisionPending?: string, answer?: string, document = 'abca'): string {
   const n = (v: number | undefined) => `<strong data-value="${v ?? ''}">${learningNumber(v)}</strong>`;
   const parameter = ctx?.parameter;
   const witness = parameter ? `${parameter.name}[${parameter.row},${parameter.column}]` : 'unavailable parameter';
-  const orientation = `<p class="learn-orientation" data-testid="learn-orientation" data-run="${esc(ctx?.gradientSourceRunId ?? '')}">5 · Learning and decision · abca · lesson p3 · ${state === 'tour_complete' ? `resolved: ${esc(outcome ?? 'unavailable')} · recorded decision` : 'accepted model unchanged · candidate provisional'}</p>`;
+  const orientation = `<p class="learn-orientation" data-testid="learn-orientation" data-run="${esc(ctx?.gradientSourceRunId ?? '')}">5 · Learning and decision · ${esc(document)} · lesson p3 · ${state === 'tour_complete' ? `resolved: ${esc(outcome ?? 'unavailable')} · recorded decision` : 'accepted model unchanged · candidate provisional'}</p>`;
   const scope = `<p class="learn-note">One displayed parameter: ${esc(witness)}. The optimizer proposes changes for all ${ctx?.trainableParameterCount ?? 'declared'} trainable parameters, not just this witness.</p>`;
   let body = '';
   if (state === 'tour_complete' && outcome !== 'accepted' && outcome !== 'discarded') {

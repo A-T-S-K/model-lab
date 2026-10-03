@@ -1,3 +1,7 @@
+import { compareInputConditionedOutputs } from './presentation/input-output-comparison.js';
+import { compareRuns } from '../trace/compare.js';
+import { labBaselineRefusal, labDraftRefusal, type LabRecipe, type LabBaseline } from './presentation/release-lab.js';
+import { releaseLabView, type LabOutputRow } from './views/release-lab.js';
 import { releaseLearningEnabled, INTRO_POSITION } from './presentation/release-learning.js';
 import type { CanonicalReceipt, CanonicalPublication } from './worker/executors.js';
 import { SharedInspector } from './views/shared-inspector.js';
@@ -122,6 +126,18 @@ function focusCanonicalPredict(){queueMicrotask(()=>document.querySelector<HTMLB
 const spatialPresenter = new SpatialPresenter(spatialSelection);
 spatialPresenter.releaseLearning = releaseLearning;
 let publicLessonSession = createPublicLessonSession();
+let labOpen = new URLSearchParams(location.search).get('activity') === 'lab' && releaseLearningEntry;
+let labRecipe: LabRecipe = 'input';
+let labDocument = 'abca', labChanged = 'aaca', labPosition = 3, labHead = 0;
+let labBaseline: LabBaseline | undefined;
+let labWorker: ModelWorkerClient | undefined;
+let labTraining = false;
+let labLessonReturn: {session: typeof publicLessonSession; binding?: PublicGuidedComputationBinding; comparison: ReturnType<typeof getResolvedComparison>} | undefined;
+function getResolvedComparison() { return spatialPresenter.resolvedReleaseComparison; }
+interface LabResultSelection { label: string; before: string; after: string; position: number; policy: 'input' | 'head' | 'update'; receipt?: string; outcome?: string; comparison?: ReturnType<typeof getResolvedComparison>; }
+let labResults: LabResultSelection[] = [];
+let labResultIndex = -1;
+let labHistoryOffset = 0;
 let publicGuidedComputation: PublicGuidedComputationBinding | undefined;
 let spatialExperimentId = "";
 let spatialExperimentOffset = 0;
@@ -899,6 +915,7 @@ function render(): void {
       canLearn: !evidenceRun&&!forwardDriver.active&&!!result&&result.run.manifest.runId===liveRunId&&source?.capturedDocument===documentText&&!busy&&ready,
       scalar:evidenceRun?'No scalar continuation is captured for this run.':microscopeView(inspection,inspectionPath,inspectionLabel,inspectionPending,inspectionWhole,inspectionRelationship(),inspectionBinding,microscopeWindows),
     });
+    if (releaseLearning && labOpen) { const dock=mount.querySelector('.contextual-dock'); if(dock) dock.outerHTML=renderLab(); mount.querySelector('.spatial-shell')?.classList.add('lab-active'); }
     bind();
     mount.querySelector('#learn-predict')?.addEventListener('click', async () => {
       await restartPublicTour();
@@ -1225,6 +1242,162 @@ function syncSpatialSelection(): void {
   const parameter = resolveParameter(sourceSnapshot(result?.run.manifest.startingSnapshotId ?? ""), spatialPresenter.pin);
   if (parameter) selectedParameter = parameter.index;
 }
+function labCapabilityRefusal(): string | undefined {
+  if (spatialEvidenceRunId || result?.run.manifest.modelInitialization ||
+    result && (result.run.manifest.model.id !== 'microgpt' || result.run.manifest.model.version !== fixture.reference.revision))
+    return 'This selected model has no qualified Lab action. Select a supported canonical computation explicitly.';
+  if (lastAcceptedResult?.experiment && !archive.learningExperiments.has(lastAcceptedResult.experiment.id))
+    return 'Accepted update evidence is not retained. Reconcile retention or explicitly clear the session before another execution.';
+}
+function labRefusal() {
+  return labCapabilityRefusal() ?? labDraftRefusal(labRecipe,labDocument,labChanged,labPosition) ??
+    labBaselineRefusal(labBaseline,archive.runs.get(labBaseline?.runId??''),archive.snapshots.get(labBaseline?.snapshotId??''),client.acceptedSnapshot,RUNTIME_REVISION) ??
+    (labBaseline?.document!==labDocument || labBaseline?.position!==labPosition ? 'Draft changed since preparation. Prepare a fresh baseline.' : undefined);
+}
+function labResultView() {
+  const selection=labResults[labResultIndex];
+  if (!selection) return undefined;
+  const before=archive.runs.get(selection.before),after=archive.runs.get(selection.after);
+  if (selection.policy==='update' && selection.comparison?.candidate) {
+    const ctx=selection.comparison;
+    return {label:selection.label,rows:(ctx.candidate!.rows.find(r=>r.position===selection.position)?.baselineDistribution??[]).map((v,index)=>({index,label:ctx.candidate!.outputLabels[index]!,before:v,after:ctx.candidate!.rows.find(r=>r.position===selection.position)!.candidateDistribution[index]!,delta:ctx.candidate!.rows.find(r=>r.position===selection.position)!.candidateDistribution[index]!-v})),
+      exact:ctx.candidate,mean:{before:ctx.candidate!.baselineDerivedMean,after:ctx.candidate!.candidateDerivedMean},limitation:`${selection.outcome} · recorded decision. Whole-example mean loss is separate from selected-position probability. This fixed example establishes no general improvement.`};
+  }
+  if (!before || !after) return undefined;
+  if (selection.policy==='input') {
+    const compared=compareInputConditionedOutputs(before,after,selection.position,selection.position);
+    return {label:selection.label,rows:compared.rows,exact:{...compared,before:before.manifest,after:after.manifest},limitation:compared.compatible?compared.limitations:compared.reasons.join('; ')};
+  }
+  const receipt=archive.interventionExperiments.get(selection.receipt??'');
+  if (!receipt || !receipt.comparison.compatible || !compareRuns(before,after).compatible) return undefined;
+  const a=before.artifacts.find(a=>a.kind==='probabilities'&&a.concept.token===selection.position),b=after.artifacts.find(a=>a.kind==='probabilities'&&a.concept.token===selection.position);
+  const rows:LabOutputRow[]=a?.values&&b?.values ? a.values.map((v,index)=>({index,label:index===config.vocabulary.length?'END':tokenName(index,config.vocabulary),before:v,after:b.values![index]!,delta:b.values![index]!-v})) : [];
+  return {label:selection.label,rows,exact:{receipt:receipt.receipt,policy:receipt.comparison.policy,before:before.manifest,after:after.manifest,rows},limitation:'Observed head output zeroed before concatenation across all positions. Output changes are derived from matched retained runs. Accepted state is unchanged. This example cannot establish universal head importance; unchanged results are valid.'};
+}
+function renderLab() {
+  return releaseLabView({recipe:labRecipe,document:labDocument,changed:labChanged,position:labPosition,head:labHead,baseline:labBaseline,
+    acceptedStep:client.acceptedSnapshot?.state.optimizer.step??liveTrainingStep,baselineStep:archive.snapshots.get(labBaseline?.snapshotId??'')?.state.optimizer.step,baselineDetails:{selection:labBaseline,run:archive.runs.get(labBaseline?.runId??'')?.manifest,currentAcceptedSnapshot:client.acceptedSnapshot?.id,inputTransform:'canonical character lookup with START/END shift'},chapterDecision:labLessonReturn?.session.outcome??publicLessonSession.outcome,
+    refusal:labRefusal(),busy,result:labResultView(),history:labResults.slice(labHistoryOffset,labHistoryOffset+8),historyOffset:labHistoryOffset,historyTotal:labResults.length});
+}
+function labFocus(id:string) { queueMicrotask(()=>document.getElementById(id)?.focus({preventScroll:true})); }
+function restoreLabLesson() {
+  if (labLessonReturn) {
+    publicLessonSession=labLessonReturn.session;publicGuidedComputation=labLessonReturn.binding;
+    spatialPresenter.restoreReleaseComparison(labLessonReturn.comparison);
+  }
+  labLessonReturn=undefined; labTraining=false;
+}
+function closeLab(path:'learn'|'explore'|'workbench') {
+  if (busy || forwardDriver.active) return;
+  labOpen=false;releaseLearning=path!=='workbench';spatialPresenter.releaseLearning=releaseLearning;
+  if (path==='learn') {
+    if(publicGuidedComputation) {result=publicGuidedComputation.result;documentText=publicGuidedComputation.capturedDocument;player=new TracePlayer(result.run);}
+    dispatchPublicLesson({type:'RESUME_GUIDED'});spatialPresenter.prepareLessonReturn();
+  } else if(path==='explore') dispatchPublicLesson({type:'ENTER_EXPLORE'});
+  status='Activity changed · retained computation · no execution requested';render();labFocus('open-release-lab');
+}
+function bindReleaseLab() {
+  if (!releaseLearningEntry) return;
+  const entry=document.createElement('button');entry.id='open-release-lab';entry.textContent=labTraining?'Return to Lab results':'Open Lab';
+  entry.disabled=busy||forwardDriver.active;
+  (mount.querySelector('header')??mount).append(entry);
+  entry.addEventListener('click',()=>{
+    if(busy||forwardDriver.active)return;
+    if(labTraining) {
+      const ctx=getResolvedComparison();
+      if(publicLessonSession.outcome && ctx?.candidate) {
+        labResults.push({label:`One update · ${publicLessonSession.outcome} · ${labDocument}`,before:ctx.candidate.baselineRunId,after:ctx.candidate.candidateRunId,position:labPosition,policy:'update',outcome:publicLessonSession.outcome,comparison:{available:ctx.available,state:'tour_complete',kind:'candidate',numericAdjointsAvailable:false,retainedContributions:[],fanInCompleteness:'retained-subset',backwardComplete:ctx.backwardComplete,candidate:ctx.candidate}});
+        labResultIndex=labResults.length-1;
+      }
+      restoreLabLesson();labBaseline=undefined;
+    }
+    releaseLearning=true;spatialActive=true;spatialPresenter.releaseLearning=true;labOpen=true;
+    render();labFocus('lab-prepare');
+  });
+  mount.querySelectorAll<HTMLButtonElement>('[data-lab-recipe]').forEach(b=>b.addEventListener('click',()=>{if(busy)return;labRecipe=b.dataset.labRecipe as LabRecipe;render();labFocus(b.id||'lab-prepare');}));
+  for(const id of ['lab-document','lab-changed','lab-position','lab-head'])mount.querySelector<HTMLInputElement>(`#${id}`)?.addEventListener('change',e=>{
+    if(busy)return;const value=(e.target as HTMLInputElement).value;
+    if(id==='lab-document')labDocument=value;else if(id==='lab-changed')labChanged=value;else if(id==='lab-position')labPosition=Number(value);else labHead=Number(value);
+    render();labFocus(id);
+  });
+  mount.querySelector('#lab-prepare')?.addEventListener('click',()=>void prepareLab());
+  mount.querySelector('#lab-run')?.addEventListener('click',()=>void runLab());
+  mount.querySelector('#lab-cancel')?.addEventListener('click',()=>{
+    if(pendingModelCommand){void reset(true);return;}
+    ++operation;labWorker?.dispose();labWorker=undefined;inspector.cancel();cancelRetention(activeRetentionTransaction);activeIntervention=undefined;busy=false;
+    status='Lab experiment cancelled · accepted state and completed history preserved';render();labFocus('lab-prepare');
+  });
+  for(const path of ['learn','explore','workbench'] as const)mount.querySelector(`#lab-${path}`)?.addEventListener('click',()=>closeLab(path));
+  mount.querySelector('#lab-accepted')?.addEventListener('click',()=>{if(busy)return;if(!archive.runs.has(liveRunId)){error='Current accepted state has no retained computation. Prepare a fresh baseline explicitly before viewing it.';render();return;}selectRun(liveRunId);status='Current accepted computation selected · no model restoration or execution';render();});
+  mount.querySelector('#lab-history-prev')?.addEventListener('click',()=>{labHistoryOffset=Math.max(0,labHistoryOffset-8);render();});
+  mount.querySelector('#lab-history-next')?.addEventListener('click',()=>{labHistoryOffset+=8;render();});
+  mount.querySelectorAll<HTMLButtonElement>('[data-lab-history]').forEach(b=>b.addEventListener('click',()=>{labResultIndex=Number(b.dataset.labHistory);render();}));
+  for(const arm of ['baseline','result'])mount.querySelector(`#lab-inspect-${arm}`)?.addEventListener('click',()=>{
+    const selection=labResults[labResultIndex];if(!selection||busy)return;const id=arm==='baseline'?selection.before:selection.after;
+    if(!archive.runs.has(id)){error='This resolved candidate has no retained executable run; exact resolved comparison remains available.';render();return;}
+    selectRun(id);selectedToken=selection.position;spatialSelection.query=selection.position;
+    const receipt=archive.interventionExperiments.get(selection.receipt??'');
+    if(receipt&&isHeadAblationExperiment(receipt)){spatialSelection.head=receipt.selection.head;spatialSelection.layer=receipt.selection.layer;}
+    labOpen=false;dispatchPublicLesson({type:'ENTER_EXPLORE'});spatialPresenter.lens=true;spatialPresenter.kind=selection.policy==='head'?'headOutput':'probabilities';render();labFocus('dock-inspect');
+  });
+}
+async function prepareLab() {
+  if(busy||forwardDriver.active)return;
+  const refusal=labCapabilityRefusal()??labDraftRefusal(labRecipe,labDocument,labChanged,labPosition);
+  if(refusal){error=refusal;render();return;}
+  documentText=labDocument;
+  const completed=await execute('predict');
+  if(completed.status!=='completed'||!result)return;
+  const m=result.run.manifest;
+  spatialSelection.query=labPosition;selectedToken=labPosition;
+  labBaseline={runId:m.runId,snapshotId:m.startingSnapshotId!,sessionId:m.sessionId,generationId:m.generationId,document:labDocument,position:labPosition};
+  status='Baseline prepared from current accepted state · choose Run explicitly';render();labFocus('lab-run');
+}
+async function runLab() {
+  if(busy||forwardDriver.active)return;
+  const refusal=labRefusal();if(refusal){error=refusal;render();return;}
+  const baseline=labBaseline!,snapshot=archive.snapshots.get(baseline.snapshotId)!;
+  if(labRecipe==='update') {
+    if(baseline.position!==INTRO_POSITION){error='One-update teaching requires the supported p3 occurrence.';render();return;}
+    labLessonReturn={session:publicLessonSession,binding:publicGuidedComputation,comparison:getResolvedComparison()};
+    labTraining=true;labOpen=false;selectRun(baseline.runId);documentText=baseline.document;
+    publicGuidedComputation={result:result!,runId:baseline.runId,capturedDocument:baseline.document,lessonPosition:INTRO_POSITION};
+    publicLessonSession={...createPublicLessonSession(),current:'p1_complete'};
+    dispatchPublicLesson({type:'START_PART2'});render();return;
+  }
+  if(labRecipe==='head') {
+    selectRun(baseline.runId);layer=0;head=labHead;
+    if(!Number.isInteger(head)||head<0||head>=snapshot.state.config.nHead){error='Selected head is unavailable.';render();return;}
+    await ablateHead();
+    const receipt=[...archive.interventionExperiments.values()].find(e=>e.interventionRun.manifest.runId===result?.run.manifest.runId);
+    if(receipt&&!busy){labResults.push({label:`Head ${labHead} disabled · ${baseline.document}`,before:receipt.baselineRun.manifest.runId,after:receipt.interventionRun.manifest.runId,position:baseline.position,policy:'head',receipt:receipt.id});labResultIndex=labResults.length-1;render();labFocus('lab-run');}
+    return;
+  }
+  let transaction:RetentionTransaction;
+  try{transaction=await beginRetention('canonical');}catch(failure){error=String(failure);status='Capacity refused · input comparison did not execute';render();return;}
+  activeRetentionTransaction=transaction;const currentOperation=++operation;
+  busy=true;error='';status='Running two predictions from the same complete baseline…';render();
+  const disposable=new ModelWorkerClient();labWorker=disposable;
+  try {
+    const restored=await disposable.reset(snapshot);if(restored.status!=='ready')throw Error('Baseline restore refused');
+    const before=await disposable.request({command:'predict',document:baseline.document});
+    if(currentOperation!==operation)return;
+    const after=await disposable.request({command:'predict',document:labChanged});
+    if(currentOperation!==operation)return;
+    if(before.status!=='result'||after.status!=='result')throw Error('Prediction evidence unavailable');
+    const compared=compareInputConditionedOutputs(before.result.run,after.result.run,baseline.position,baseline.position);
+    if(!compared.compatible)throw Error(compared.reasons.join('; '));
+    if(client.acceptedSnapshot?.id!==baseline.snapshotId)throw Error('Accepted state changed during comparison');
+    await transaction.archive.addRun(before.result.run);await transaction.archive.addRun(after.result.run);
+    if(currentOperation!==operation)return;
+    await commitRetention(transaction);activeRetentionTransaction=undefined;
+    if(currentOperation!==operation)return;
+    labResults.push({label:`Input ${baseline.document} → ${labChanged} · p${baseline.position}`,before:before.result.run.manifest.runId,after:after.result.run.manifest.runId,position:baseline.position,policy:'input'});
+    labResultIndex=labResults.length-1;status='Two predictions retained · derived output comparison · accepted state unchanged';
+  } catch(failure) { if(currentOperation===operation){error=String(failure);status='Input experiment failed · no success claimed';} }
+  finally {disposable.dispose();if(labWorker===disposable)labWorker=undefined;cancelRetention(transaction);if(currentOperation===operation){busy=false;render();labFocus('lab-run');}}
+}
+
 function bindReleaseLearningReturn(): void {
   if (!releaseLearningEntry) return;
   const button = document.createElement('button'); button.id = 'learn-workbench';
@@ -1232,9 +1405,11 @@ function bindReleaseLearningReturn(): void {
   button.disabled = busy || forwardDriver.active;
   const host = mount.querySelector('header') ?? mount;
   if (host === mount) button.className = 'release-return-action';
+  if(host!==mount)host.classList.add('release-return-header');
   host.append(button);
   button.addEventListener('click', () => {
     if (busy || forwardDriver.active) {error = 'Finish or explicitly resolve active work first.'; render(); return;}
+    labOpen = false;
     releaseLearning = !releaseLearning; spatialPresenter.releaseLearning = releaseLearning;
     if (releaseLearning) {
       spatialActive = true; spatialEvidenceRunId = ''; spatialEvidenceReplay = false;
@@ -1336,6 +1511,7 @@ function bind(): void {
     });
   }
   bindReleaseLearningReturn();
+  bindReleaseLab();
   mount
     .querySelectorAll<HTMLElement>(".attention-heads > section")
     .forEach((section) =>
@@ -2134,7 +2310,7 @@ async function execute(
           ? `Live update complete · training step ${result.trainingStep}`
           : `Live prediction complete · ${result.tokenIds.length} positions`;
       if (count > 1) status += ` · ${step + 1}/${count} requested updates`;
-      if (command === 'predict' && usesGuidedLesson()) dispatchPublicLesson({ type: 'PREDICTION_COMPLETE' });
+      if (command === 'predict' && usesGuidedLesson() && !labOpen) dispatchPublicLesson({ type: 'PREDICTION_COMPLETE' });
       const retain =
         true;
       recordTrainingSummary(incoming);
@@ -2217,6 +2393,9 @@ async function reset(cancelled: boolean, clear = false): Promise<void> {
     render();
     return;
   }
+  labWorker?.dispose(); labWorker = undefined; labBaseline = undefined;
+  if (labTraining) restoreLabLesson();
+  if (clear) { labResults = []; labResultIndex = -1; labHistoryOffset=0; labOpen = false; }
   const currentOperation = ++operation;
   ++inspectionOperation;
   pendingModelCommand = undefined;
@@ -2260,7 +2439,7 @@ async function reset(cancelled: boolean, clear = false): Promise<void> {
     attentionLens = false;
     qProjectionOpen = false;
     contributingParameterSelected = false;
-    attract = true;
+    attract = !releaseLearningEntry;
     guidedBatch = undefined;
     lastAcceptedResult = undefined;
     guidedLearning = undefined;
@@ -2377,6 +2556,10 @@ async function reset(cancelled: boolean, clear = false): Promise<void> {
       )
         await prepareAttract(currentOperation);
       else {
+        if(releaseLearning && attractReplay) {
+          attract=false;result=attractReplay.result;player=new TracePlayer(result.run);
+          publicGuidedComputation={result,runId:result.run.manifest.runId,capturedDocument:fixture.document,lessonPosition:INTRO_POSITION};
+        }
         status = "Recorded real run. Not live.";
         render();
       }
@@ -2559,7 +2742,7 @@ async function importSessionArchive(event: Event): Promise<void> {
   busy = true; error = ""; status = "Validating portable archive in isolated staging…"; render();
   try {
     const imported = await importPortableArchive(new Uint8Array(await file.arrayBuffer()));
-    retentionStatus = await retention.replace(imported.archive); archive = retention.archive; importedArchiveId = imported.archiveId;
+    retentionStatus = await retention.replace(imported.archive); archive = retention.archive; labBaseline=undefined; labResults=[]; labResultIndex=-1; labHistoryOffset=0; importedArchiveId = imported.archiveId;
     selectedSnapshotId = ""; comparisonRunId = ""; learningExperimentId = ""; spatialExperimentId = ""; activeDataExperimentId = ""; spatialExperimentOffset = 0;
     historyRunOffset=0;snapshotOffset=0;comparisonRunOffset=0;comparisonRowOffset=0;
     inspectionCache.clear(); trainingSummaries.length=0;trainingSummaryTotal=0;trainingSummaryDiscarded=0;clearDisplayedInspection();

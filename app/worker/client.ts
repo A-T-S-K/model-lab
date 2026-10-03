@@ -15,6 +15,7 @@ export class ModelWorkerClient {
   private completedSnapshot?: ArchivedSnapshot;
   private completedResult?: RunResult;
   /** Synchronous acknowledgement, before request Promise continuations publish. */
+  get acceptedSnapshot(): ArchivedSnapshot | undefined { return this.completedSnapshot; }
   get acceptedResult(): RunResult | undefined { return this.completedResult; }
   private pending = new Map<string, { resolve: (value: WorkerResponse) => void; reject: (error: Error) => void }>();
 

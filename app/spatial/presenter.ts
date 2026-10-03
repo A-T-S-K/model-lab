@@ -127,6 +127,8 @@ export class SpatialPresenter {
   private releaseWorldExpanded = false;
   private checkAnswer?: string;
   // Bounded render-only receipt view; authoritative decisions remain in PublicLessonSession.
+  get resolvedReleaseComparison() { return this.releaseResolvedComparison; }
+  restoreReleaseComparison(value: ResolvedPublicTrainingDepthContext | undefined) { this.releaseResolvedComparison = value; }
   private releaseResolvedComparison?: ResolvedPublicTrainingDepthContext;
   profile?: ExperienceProfile;
   dockDepth: DockDepth = 'explain';
