@@ -532,7 +532,7 @@ const p=this.playback,available=this.routeChoice==='forward'?this.model?.valid:t
     // Live arithmetic is a 700×260 card at y1260, with its owner label at y1225.
     // Frame that actual construction closely; the connected world stays pannable.
     const narrow = typeof window !== 'undefined' && window.innerWidth <= 850;
-    return this.state?.execution?.progress?.training
+    return this.state?.execution?.progress?.training?.phase === 'ready'
       ? { x: node.x - (narrow ? 25 : 110), y: 1110, width: narrow ? 750 : 880, height: 420 }
       : { x: node.x - 50, y: 1160, width: 820, height: 460 };
   }
