@@ -8,3 +8,4 @@ runtime/revision.ts
 # Optional native research profile; never part of browser deployment.
 research/pythia/.venv/
 research/pythia/cache/
+.DS_Store
