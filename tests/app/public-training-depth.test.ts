@@ -1088,7 +1088,9 @@ test('release chapter 5 binds readable results to authentic objective, partial, 
   const row=candidate.candidate!.rows[3]!;
   for(const value of [row.baselineTargetProbability,row.candidateTargetProbability,candidate.candidate!.baselineDerivedMean,candidate.candidate!.candidateDerivedMean]) assert(releaseTrainingChapter(candidate,'candidate_ready').includes(`data-value="${value}"`));
   assert.match(releaseTrainingChapter(candidate,'candidate_ready',undefined,'accepted'),/Acceptance pending/);
-  assert.match(releaseTrainingChapter(candidate,'tour_complete','accepted'),/Acceptance succeeded/);
+  assert.match(releaseTrainingChapter(candidate,'tour_complete','accepted'),/That decision accepted/);
+  assert.match(releaseTrainingChapter(candidate,'tour_complete','accepted'),/current accepted state/);
+  assert.match(releaseTrainingChapter(candidate,'tour_complete'),/No acceptance or discard is claimed/);
   assert.match(releaseTrainingChapter(candidate,'tour_complete','discarded'),/Discard succeeded/);
   const stale=context('candidate_ready',h,{},withTraining(h.progress,{...h.progress.training!,sourceRunId:'stale'}));
   assert.equal(stale.available,false);assert.match(releaseTrainingChapter(stale,'candidate_ready'),/Missing evidence is not zero/);

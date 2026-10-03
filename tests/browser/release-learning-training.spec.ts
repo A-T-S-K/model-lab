@@ -53,7 +53,14 @@ for(const size of [{name:'desktop',width:1920,height:1080,reduce:false,decision:
   const resolved=await audit();await page.locator('#dock-inspect').click();await page.locator('[data-dock-depth=source]').first().click();await expect(page.getByTestId('learn-resolved-evidence')).toContainText('Decision succeeded');await capture('resolved-source');await page.locator('#dock-inspect').click();
   await page.locator('#visitor-explore-toggle').click();await expect(shell).toHaveAttribute('data-public-navigation-mode','explore');await page.locator('#zoom-in').click();await capture('explore');await page.locator('#visitor-explore-toggle').click();await capture('return');
   await page.locator('#learn-workbench').click();await page.locator('#presentation-toggle').click();await page.locator('#learn-workbench').click();await expect(shell).toHaveAttribute('data-public-canonical-state','tour_complete');expect(await audit()).toEqual(resolved);
-  if(size.decision==='accept'){const accepted=await page.evaluate(()=>(window as any).trainingAudit.results.at(-1).run.manifest.runId);await expect(page.getByTestId('landmark-occurrence')).toHaveAttribute('data-run-id',accepted);}
+  if(size.decision==='accept'){const accepted=await page.evaluate(()=>(window as any).trainingAudit.results.at(-1).run.manifest.runId);await expect(page.getByTestId('landmark-occurrence')).toHaveAttribute('data-run-id',accepted);
+    // The lesson retains its decision evidence after later explicit workbench training.
+    await page.locator('#learn-workbench').click();await page.locator('#spatial-learn').click();await expect(page.locator('#learn-workbench')).toBeEnabled();
+    await expect.poll(()=>page.evaluate(()=>(window as any).trainingAudit.results.at(-1).trainingStep)).toBe(2);
+    const afterTraining=await audit();await page.locator('#learn-workbench').click();await expect(page.getByTestId('learn-orientation')).toContainText('recorded decision');await expect(page.getByTestId('learn-completion')).toContainText('current accepted state');expect(await audit()).toEqual(afterTraining);
+    await capture('historical-decision-after-training');await page.locator('#predict').click();await expect(page.getByTestId('status')).toContainText('Live prediction complete');
+    expect(await page.evaluate(()=>(window as any).trainingAudit.results.at(-1).trainingStep)).toBe(2);
+  }
   await writeFile(`${dir}/audit.json`,JSON.stringify(await page.evaluate(()=>(window as any).trainingAudit),null,2),{flag:'wx'});
 });
 
