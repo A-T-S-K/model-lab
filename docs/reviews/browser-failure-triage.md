@@ -612,3 +612,32 @@ grouped-axis, shape-only/opaque, generation/disconnected and mixed near-limit in
 remain qualification gaps. The [chapter review](release-learning-training-chapter.md)
 retains intermediate failures, the interrupted earlier broad run, rendered evidence,
 source identities and preservation. No full-suite, M5, learning-gain or release claim.
+
+## 2026-10-02 release-learning Lab-chapter disposition
+
+Final implementation `64ad1ed497ad90ca1d786f8f75f2177cfb9334f8`, runtime
+`sha256:84f138fbead343076a7709914011f4a6f0c0622317cd2155b3b6e56e5507b0f5`.
+The complete owned `npm run test:browser -- --workers=2` run with the documented
+installed-browser adapter completed **176 passed / 16 failed / 14 skipped**, 206
+selected, zero flaky, 1,414.758767 seconds. [Report](../../test-results/scratch/browser-EUTQ0s/report/results.json),
+[source/argv](../../test-results/scratch/browser-EUTQ0s/source.json),
+[unsuccessful exit/cleanup receipt](../../test-results/scratch/browser-EUTQ0s/failure.json).
+The broad suite remains unsuccessful; cleanup reported zero errors.
+
+[Exact identity/outcome/location comparison](../../test-results/scratch/release-lab-zeclstes/browser-baseline-comparison.json)
+against the retained 167/16/14, 197-selected training-chapter baseline finds **no missing
+identity, no changed outcome and no failure stopping-location change**. Primary and
+secondary errors supply actual locations for all 16 failures, including timeouts.
+All nine added Lab identities pass: desktop/compact/mobile controlled recipes and
+repeat decisions; accepted/discarded chapter-5 lineage; historical decision after later
+Lab acceptance; disposable cancellation/reset/late replies; failed admission; every
+unavailable action on the existing multilayer model; and explicit preparation without
+a displayed run. The [Lab review](release-learning-lab-chapter.md) records rendered
+iteration, interrupted/pre-final attempts, preservation, source identities and limits.
+
+The previous failure table and BF dispositions remain unchanged and apply to this
+run's identical stops. All 14 prerequisite skips remain omissions. Optional M4-E
+native/near-limit child branches remain NOT_RUN, never qualified through canonical
+Lab recipes or a passing parent. Downstream assertions beyond failure stops are
+NOT_RUN. No assertion/timeout/tolerance/fixture/skip was suppressed, no native service
+was launched, and no release/M5/M6 or learning-gain acceptance is granted.

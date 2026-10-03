@@ -35,7 +35,8 @@ with exact statements/sections, decision needed and affected gate.
 
 - [Reviewed local implementation checkpoints](reviews/release-implementation-checkpoints.md): pass ownership, local commits, preserved bytes and retained engineering limits.
 
-- [Release learning journey](design/release-learning-journey.md): opt-in opening and prediction, representation, context/attention and output contracts; chapter 5 adds learning and explicit decisions; the redesigned experiment chapter remains proposed.
+- [Release learning journey](design/release-learning-journey.md): opt-in opening and prediction, representation, context/attention and output contracts; chapter 5 adds learning and explicit decisions; chapter 6 adds the opt-in controlled experiment workspace.
+- [Lab chapter implementation review](reviews/release-learning-lab-chapter.md): chapter 6, current accepted baseline, output-only input comparison, registered head ablation and explicit repeated candidate decisions.
 - [Training chapter implementation review](reviews/release-learning-training-chapter.md): chapter 5, progressive disclosure, exact optional evidence and explicit candidate decisions.
 - [Forward-tour implementation review](reviews/release-learning-forward-tour.md): chapters 3–4, authentic arithmetic, rendered evidence, explicit learning handoff and current verification limits.
 - [Introductory implementation review](reviews/release-learning-introduction.md): incremental scope, rendered evidence and current validation limits.

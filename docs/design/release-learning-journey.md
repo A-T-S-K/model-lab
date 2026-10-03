@@ -1,8 +1,9 @@
 # Release learning journey
 
-Status: implemented opening, forward tour and chapter 5 engineering slices; see the
+Status: implemented opening, forward tour and chapters 5–6 engineering slices; see the
 [forward-tour review](../reviews/release-learning-forward-tour.md) and
-[training chapter review](../reviews/release-learning-training-chapter.md). Foundation acceptance,
+[training chapter review](../reviews/release-learning-training-chapter.md) and
+[Lab chapter review](../reviews/release-learning-lab-chapter.md). Foundation acceptance,
 independent M5 and unfamiliar-user learning evidence remain ungranted. See
 [authority](../README.md), [foundation ledger](../foundation-status.md),
 [release roadmap](../release-roadmap.md) and design §§3–5/8 in the
@@ -39,7 +40,7 @@ arithmetic, native source, axes, source identities and experiment contracts rema
 | Context / attention | How does earlier context affect this position? Vectors and current versus earlier positions. | Existing Q/K/V, causal scores, attention weights, full weighted-value contributors, head concatenation, projection and saved residual. | Causality restricts future keys; attention weights mix vectors. They are not proof of semantic circuits or causal explanations of learned behavior. | Actual dot products, head/key coordinates, scaling, softmax support, signed weighted sums, residual source and native code. | Five implemented beats: Q/K/V, causal comparison, position weights, Value mixture, head integration. Optional causal/importance check gives explanatory feedback. | Implemented release chapter; complete p3/head0/key0 comparison, causal row and full contributors, source-bound projections and residual. Engineering evidence in the forward-tour review. |
 | Output | How do numbers become possible outputs? Representation and context. | Existing MLP/ReLU, logits/unembedding and complete output softmax; distinguish known target, greedy rank and sampling. | Raw scores differ from probabilities; support and denominator matter. No sampled text or language-performance claim from a single distribution. | Native activation differences, all logits, softmax denominator, exact probabilities. | Implemented transform → logits → output probabilities → original prediction recap. Optional normalization check; explicit Start learning computation · propose one update hands off to the existing workflow. | Implemented release chapter; canonical ReLU/no-bias/RMSNorm, both saved residual sources, all output indices and denominator retained. |
 | Learning | How could this example change a later prediction? Prediction, target and error. | Existing whole-example mean loss, backward contributions/accumulation, Adam moments/schedule, provisional candidate and explicit acceptance/discard. | Sensitivity is not the applied update; candidate is not accepted state; one example improvement is not generalization. | Numerical adjoints where available, complete state/receipt lineage, optimizer arithmetic/source. | Existing bounded proposal/decision workflow. Future chapter should compare matched before/after at the same occurrence. | Existing lifecycle/comparison controls retained. Chapter 5 implemented; progressive explanation with exact optional Values/Math/Source. |
-| Experiment | What changes when we change one thing? Baseline, controlled variable and outcome. | Registered matched interventions/replacements/data experiments, compatible run/arm/state meanings, clean/treatment/defense controls where qualified. | Correlation is not causation; a null result is valid; replacement is not original execution. | Matched state/order/budgets, numerical declarations, receipt/source and explicit missing coverage. | Open existing workbench without finishing lesson. Future release experiment lesson and approachable lab recipes remain proposed. | Existing capabilities reachable; no new recipe/backend or qualification claimed. |
+| Experiment | What changes when we change one thing? Baseline, controlled variable and outcome. | Registered matched interventions/replacements/data experiments, compatible run/arm/state meanings, clean/treatment/defense controls where qualified. | Correlation is not causation; a null result is valid; replacement is not original execution. | Matched state/order/budgets, numerical declarations, receipt/source and explicit missing coverage. | Open Lab directly or after Learn → Explore. Prepare current accepted baseline explicitly, choose one input character/head/native update, then Run and inspect results; return retains computation. | Chapter 6 and the bounded canonical Lab are implemented; existing native recipes/lifecycle remain authoritative. Purpose-specific input output comparison is derived. No new backend or foundation/release qualification claimed. |
 
 ## Continuity and refusals
 
@@ -179,3 +180,63 @@ This pass inventories those issues; it does not redesign the forward tour.
 See the [chapter 5 review](../reviews/release-learning-training-chapter.md) for executed
 checks, rendered evidence, failures and qualification limits. No M5/M6 or learning-gain
 claim follows from implementation or optional-check clicks.
+
+## Implemented chapter 6 contract
+
+“What changes when we change one thing?” is the opt-in Lab chapter. Open Lab is
+available from Learn, Explore and the opt-in workbench without completing the tour;
+`/?experience=learn&activity=lab` enters directly. Learn, Explore and Workbench are
+explicit return paths. The continuous world and its Values / Math / Source remain
+available through identified baseline/result inspection.
+
+Each recipe presents its question, baseline, changed variable, held-fixed conditions,
+explicit Run, measured output and interpretation/limitations. Preparation is a separate
+explicit prediction from the actual current accepted complete state, including any
+chapter-5 acceptance or later training. Selection, draft edits, details, history and
+navigation do not execute. The current accepted step, prepared baseline and historical
+chapter-5 decision remain distinct; a provisional training candidate is never accepted
+by navigation.
+
+- **One input character:** default abca → aaca changes character 2. At prediction p3,
+  effective prefixes are START+abc and START+aac. Supported edits retain length,
+  canonical character lookup and an available position. Two native disposable
+  predictions start from the same complete snapshot, retaining distinct authentic
+  run identities. `input-conditioned-output@1` is a derived output-only view, with
+  explicit inputs/targets/occurrences and complete compatible output-index support.
+  Strict `compareRuns` still refuses differing inputs/targets. Internal tensors are
+  separately sourced, never blindly subtracted, and different objectives are not
+  described as matched training improvement. No new executor receipt is invented.
+- **One head:** layer 0/head 0 or 1 uses the existing registered head-ablation recipe.
+  Its actual receipt declares output zero immediately before concatenation across
+  all positions. Complete starting state, input, targets, budgets, numerical policy
+  and runtime are matched. Output differences lead; original and zeroed internal
+  evidence stays inspectable. This disposable arm leaves accepted state unchanged;
+  viewing accepted computation never performs a model restore. Unchanged outcomes
+  are valid and imply no universal importance or learned specialization.
+- **One update:** the prepared accepted state and supported 3–7-character example
+  enter the existing chapter-5 native proposal, comparison and explicit Accept /
+  Discard workflow at p3. There is no second optimizer or candidate authority.
+  Selected-position probabilities and whole-example derived mean losses are separate.
+  The original chapter-5 session/decision view is preserved while a new Lab teaching
+  activity uses the same controller. Repetition starts from current accepted state.
+
+Completed comparison selections are presentation-only session state, paged eight at a
+time. Input/head selections refer to retained runs/registered receipts; resolved
+training depth uses the existing render-only comparison context, with no executable
+scalar ancestry after resolution. Native accepted training receipts remain archived;
+discarded candidate depth remains a session presentation view, not a new portable
+record. Clear Session and archive replacement clear these selections; browser reload
+has the existing local-session lifetime. Missing retained evidence refuses inspection.
+
+Per-action capability, stale-state, unavailable-coordinate and invalid-draft refusals
+are visible. Active work/candidates block activity changes. Disposable cancellation
+terminates its worker, cancels the reservation and rejects late publication. Existing
+chapter-5 cancellation, acceptance acknowledgement, capacity and archival-failure
+rules remain authoritative. No model/backend support or qualification is inferred
+from these canonical recipes.
+
+See the [Lab chapter review](../reviews/release-learning-lab-chapter.md) for exact
+implementation identities, commands, rendered evidence and retained limits. Earlier
+chapter sections describe their original pass scope; this additive contract implements
+the previously proposed chapter 6. It does not promote the default route or grant
+learning-gain evidence, M5, M6 or release acceptance.

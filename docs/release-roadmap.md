@@ -165,3 +165,14 @@ engineering increment from qualification. Each beat has a readable bound result
 and visible optional Values/Math/Source; exact original numbers remain available.
 Chapter 6 redesign, default-route promotion, M5, learning-gain testing and M6 release
 acceptance remain pending. Forward chapter density is inventoried for later work.
+
+## Chapter 6 implementation increment — 2026-10-02
+
+The opt-in Learn → Explore → Lab handoff and three initial canonical recipes are
+implemented in the [journey's chapter 6 contract](design/release-learning-journey.md#implemented-chapter-6-contract).
+Direct Lab entry, explicit current-accepted-state preparation, derived full-support
+input output comparison, registered head ablation and reused chapter-5 candidate
+decisions are scoped in the [Lab review](reviews/release-learning-lab-chapter.md).
+This increment does not close R3's broader Pythia/heterogeneous witness requirements,
+change the default entry, repair unrelated broad-browser failures, or grant M5/M6
+and release acceptance. Earlier milestone exit criteria remain requirements.
