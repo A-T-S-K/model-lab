@@ -1972,3 +1972,5 @@ body.spatial-mode #exhibit-warning button { min-height:44px; flex-shrink:0; font
 /* The opt-in Classic return header has several actions, not one absolute button. */
 .instrument-header.release-return-header { flex-wrap:wrap; gap:12px; }
 .instrument-header.release-return-header > button { position:static; margin-left:0; }
+.lab-active .learn-collapsed-world ~ .camera-controls,
+.lab-active .learn-collapsed-world ~ .world-minimap { display:none; }
